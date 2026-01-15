@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List
 from database import init_db, get_session
+from fastapi.middleware.cors import CORSMiddleware  # <--- ADD THIS LINE
 from models import (
     Block, Framework, Engine, 
     SiteConfig, HomePage, BlogPost, 
