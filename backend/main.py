@@ -8,11 +8,6 @@ from models import (
     DoctrinePage, ContactPage
 )
 app = FastAPI(title="Resinen Platform API")
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
 app.add_middleware(
     CORSMiddleware,
     # ALLOW_ORIGINS: Who is allowed to talk to this API?
@@ -24,6 +19,11 @@ app.add_middleware(
     allow_methods=["*"], # Allow GET, POST, DELETE, etc.
     allow_headers=["*"], # Allow all headers (Content-Type, Authorization, etc.)
 )
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
 
 @app.get("/")
 def health_check():
