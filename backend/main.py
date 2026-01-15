@@ -13,6 +13,18 @@ app = FastAPI(title="Resinen Platform API")
 def on_startup():
     init_db()
 
+app.add_middleware(
+    CORSMiddleware,
+    # ALLOW_ORIGINS: Who is allowed to talk to this API?
+    # For development, allow ALL ("*").
+    # For production, you can list specific domains: ["https://resinen.com", "https://cms.resinen.com"]
+    allow_origins=["*"], 
+    
+    allow_credentials=True,
+    allow_methods=["*"], # Allow GET, POST, DELETE, etc.
+    allow_headers=["*"], # Allow all headers (Content-Type, Authorization, etc.)
+)
+
 @app.get("/")
 def health_check():
     return {"status": "active"}
