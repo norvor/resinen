@@ -1,26 +1,24 @@
+import os
 from sqlmodel import SQLModel, create_engine, Session
+from dotenv import load_dotenv
 
-# ------------------------------------------------------------------
-# CONFIGURATION
-# ------------------------------------------------------------------
-# Replace with your actual Postgres connection string.
-# Format: postgresql://<user>:<password>@<host>:<port>/<db_name>
-# Example for local default:
-DATABASE_URL = "postgresql://localhost/resinen_platform"
+# 1. Force load the .env file
+load_dotenv()
 
-# Create the engine
-engine = create_engine(DATABASE_URL)
+# 2. Get the URL from the file
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Safety Check: If no URL found, print error
+if not DATABASE_URL:
+    raise ValueError("FATAL: DATABASE_URL not found in .env file.")
+
+# 3. Create Engine
+# pool_pre_ping=True fixes "server closed the connection unexpectedly" errors
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 def init_db():
-    """
-    Creates the tables in the database if they don't exist.
-    Run this once on startup.
-    """
     SQLModel.metadata.create_all(engine)
 
 def get_session():
-    """
-    Dependency to provide a database session to API endpoints.
-    """
     with Session(engine) as session:
         yield session
