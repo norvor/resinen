@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware  # <--- ADD THIS LINE
 from models import (
     Block, Framework, Engine, 
     SiteConfig, HomePage, BlogPost, 
-    DoctrinePage, ContactPage
+    sDoctrinePage, ContactPage
 )
 app = FastAPI(title="Resinen Platform API")
 app.add_middleware(
@@ -117,6 +117,14 @@ def create_framework(data: Framework, session: Session = Depends(get_session)):
 @app.get("/engines", response_model=List[Engine])
 def get_engines(session: Session = Depends(get_session)):
     return session.exec(select(Engine)).all()
+
+@app.get("/engines/{engine_id}", response_model=Engine)
+def get_engine(engine_id: str, session: Session = Depends(get_session)):
+    # session.get looks for the primary key (which is your string ID)
+    engine = session.get(Engine, engine_id)
+    if not engine:
+        raise HTTPException(status_code=404, detail="Engine not found")
+    return engine
 
 @app.post("/engines", response_model=Engine)
 def create_engine(data: Engine, session: Session = Depends(get_session)):
