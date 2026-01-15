@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware  # <--- ADD THIS LINE
 from models import (
     Block, Framework, Engine, 
     SiteConfig, HomePage, BlogPost, 
-    sDoctrinePage, ContactPage
+    DoctrinePage, ContactPage
 )
 app = FastAPI(title="Resinen Platform API")
 app.add_middleware(
