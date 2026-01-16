@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from datetime import datetime
 from database import init_db, get_session
 from fastapi.middleware.cors import CORSMiddleware
-from models import Journey, Stop, UserProgress
+from models import Journey, Stop, UserProgress, SiteConfig
 
 app = FastAPI(title="Life Maintenance Tool")
 
