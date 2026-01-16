@@ -1,171 +1,119 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List
+from datetime import datetime
 from database import init_db, get_session
-from fastapi.middleware.cors import CORSMiddleware  # <--- ADD THIS LINE
-from models import (
-    Block, Framework, Engine, 
-    SiteConfig, HomePage, BlogPost, 
-    DoctrinePage, ContactPage
-)
-app = FastAPI(title="Resinen Platform API")
+from fastapi.middleware.cors import CORSMiddleware
+from models import Journey, Stop, UserProgress
+
+app = FastAPI(title="Life Maintenance Tool")
+
+# --- CORS: Allow your frontend to talk to this backend ---
 app.add_middleware(
     CORSMiddleware,
-    # ALLOW_ORIGINS: Who is allowed to talk to this API?
-    # For development, allow ALL ("*").
-    # For production, you can list specific domains: ["https://resinen.com", "https://cms.resinen.com"]
     allow_origins=["*"], 
-    
     allow_credentials=True,
-    allow_methods=["*"], # Allow GET, POST, DELETE, etc.
-    allow_headers=["*"], # Allow all headers (Content-Type, Authorization, etc.)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 @app.on_event("startup")
 def on_startup():
     init_db()
 
-
-
-@app.get("/")
-def health_check():
-    return {"status": "active"}
-
-# --- SITE CONFIG (SINGLETON) ---
-@app.get("/config", response_model=SiteConfig)
-def get_config(session: Session = Depends(get_session)):
-    config = session.get(SiteConfig, "global")
-    if not config:
-        # Create default if not exists
-        config = SiteConfig(
-            id="global", 
-            logo_url="/logo.svg", 
-            contact_email="contact@resinen.com",
-            footer_text="Architects of Entropy Reduction."
+# --- HELPER: GET CURRENT USER ---
+def get_current_user_progress(session: Session) -> UserProgress:
+    """
+    Fetches the single user 'me'. 
+    Resets daily counter if it's a new day.
+    """
+    user = session.get(UserProgress, "me")
+    
+    if not user:
+        # Initialize the user if they don't exist
+        # Defaulting to 'farming' journey for now
+        user = UserProgress(
+            id="me", 
+            active_journey_id="farming", 
+            current_stop_index=0,
+            daily_care_points=0,
+            last_care_date=datetime.utcnow()
         )
-        session.add(config)
+        session.add(user)
         session.commit()
-    return config
+        session.refresh(user)
+        return user
 
-@app.post("/config", response_model=SiteConfig)
-def update_config(data: SiteConfig, session: Session = Depends(get_session)):
-    data.id = "global" # Force singleton
-    session.merge(data)
-    session.commit()
-    return data
-
-# --- HOMEPAGE (SINGLETON) ---
-@app.get("/homepage", response_model=HomePage)
-def get_homepage(session: Session = Depends(get_session)):
-    home = session.get(HomePage, "home")
-    if not home:
-        home = HomePage(
-            id="home",
-            hero_title="Default Title",
-            hero_subtitle="Default Subtitle",
-            hero_cta_primary="Explore",
-            hero_cta_secondary="Contact"
-        )
-        session.add(home)
+    # CHECK FOR NEW DAY
+    # If the last care date was yesterday (or earlier), reset the counter.
+    if user.last_care_date.date() < datetime.utcnow().date():
+        user.daily_care_points = 0
+        user.last_care_date = datetime.utcnow()
+        session.add(user)
         session.commit()
-    return home
+        session.refresh(user)
 
-@app.post("/homepage", response_model=HomePage)
-def update_homepage(data: HomePage, session: Session = Depends(get_session)):
-    data.id = "home"
-    session.merge(data)
+    return user
+
+# --- ENDPOINTS ---
+
+@app.get("/status", response_model=UserProgress)
+def get_status(session: Session = Depends(get_session)):
+    """
+    Frontend calls this to see:
+    1. How many points today (0-5)
+    2. Which stop index they are at.
+    """
+    return get_current_user_progress(session)
+
+@app.post("/care")
+def submit_care_action(session: Session = Depends(get_session)):
+    """
+    The main button press. 
+    Logic: 
+    - Increment daily points.
+    - If points hit 5, move to next Stop and reset points.
+    """
+    user = get_current_user_progress(session)
+
+    # 1. Update Date to Now
+    user.last_care_date = datetime.utcnow()
+
+    # 2. Increment Progress
+    user.daily_care_points += 1
+    
+    did_level_up = False
+
+    # 3. Check for "Stop Completion" (The 5x Rule)
+    if user.daily_care_points >= 5:
+        user.current_stop_index += 1
+        user.daily_care_points = 0 # Reset for the next cycle
+        did_level_up = True
+
+    session.add(user)
     session.commit()
-    return data
+    session.refresh(user)
 
-# --- BLOG POSTS ---
-@app.get("/posts", response_model=List[BlogPost])
-def get_posts(session: Session = Depends(get_session)):
-    return session.exec(select(BlogPost).order_by(BlogPost.created_at.desc())).all()
+    return {
+        "status": "success",
+        "daily_points": user.daily_care_points,
+        "current_stop": user.current_stop_index,
+        "leveled_up": did_level_up
+    }
 
-@app.get("/posts/{slug}", response_model=BlogPost)
-def get_post(slug: str, session: Session = Depends(get_session)):
-    post = session.get(BlogPost, slug)
-    if not post:
-        raise HTTPException(404, "Post not found")
-    return post
+# --- JOURNEY MANAGEMENT (For your CMS) ---
 
-@app.post("/posts", response_model=BlogPost)
-def create_post(post: BlogPost, session: Session = Depends(get_session)):
-    session.merge(post) # Merge allows create or update based on slug
+@app.get("/journeys", response_model=list[Journey])
+def get_journeys(session: Session = Depends(get_session)):
+    return session.exec(select(Journey)).all()
+
+@app.post("/journeys", response_model=Journey)
+def create_journey(journey: Journey, session: Session = Depends(get_session)):
+    session.merge(journey)
     session.commit()
-    session.refresh(post)
-    return post
+    return journey
 
-@app.delete("/posts/{slug}")
-def delete_post(slug: str, session: Session = Depends(get_session)):
-    post = session.get(BlogPost, slug)
-    if post:
-        session.delete(post)
-        session.commit()
-    return {"ok": True}
-
-# --- EXISTING FRAMEWORKS & ENGINES ---
-@app.get("/frameworks", response_model=List[Framework])
-def get_frameworks(session: Session = Depends(get_session)):
-    return session.exec(select(Framework)).all()
-
-@app.post("/frameworks", response_model=Framework)
-def create_framework(data: Framework, session: Session = Depends(get_session)):
-    session.merge(data)
+@app.post("/stops", response_model=Stop)
+def create_stop(stop: Stop, session: Session = Depends(get_session)):
+    session.merge(stop)
     session.commit()
-    return data
-
-@app.get("/engines", response_model=List[Engine])
-def get_engines(session: Session = Depends(get_session)):
-    return session.exec(select(Engine)).all()
-
-@app.get("/engines/{engine_id}", response_model=Engine)
-def get_engine(engine_id: str, session: Session = Depends(get_session)):
-    # session.get looks for the primary key (which is your string ID)
-    engine = session.get(Engine, engine_id)
-    if not engine:
-        raise HTTPException(status_code=404, detail="Engine not found")
-    return engine
-
-@app.post("/engines", response_model=Engine)
-def create_engine(data: Engine, session: Session = Depends(get_session)):
-    session.merge(data)
-    session.commit()
-    return data
-
-@app.get("/doctrine", response_model=DoctrinePage)
-def get_doctrine(session: Session = Depends(get_session)):
-    page = session.get(DoctrinePage, "doctrine")
-    if not page:
-        page = DoctrinePage(
-            intro_text="We believe in entropy reduction...",
-            principles=[{"title": "Velocity", "desc": "Speed with direction."}]
-        )
-        session.add(page)
-        session.commit()
-    return page
-
-@app.post("/doctrine", response_model=DoctrinePage)
-def update_doctrine(data: DoctrinePage, session: Session = Depends(get_session)):
-    data.id = "doctrine"
-    session.merge(data)
-    session.commit()
-    return data
-
-# --- CONTACT ---
-@app.get("/contact", response_model=ContactPage)
-def get_contact(session: Session = Depends(get_session)):
-    page = session.get(ContactPage, "contact")
-    if not page:
-        page = ContactPage(
-            locations=[{"city": "Zurich", "address": "Prime Tower, Level 5"}]
-        )
-        session.add(page)
-        session.commit()
-    return page
-
-@app.post("/contact", response_model=ContactPage)
-def update_contact(data: ContactPage, session: Session = Depends(get_session)):
-    data.id = "contact"
-    session.merge(data)
-    session.commit()
-    return data
+    return stop
