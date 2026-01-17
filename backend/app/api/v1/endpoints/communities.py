@@ -1,11 +1,11 @@
-from typing import List
+from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api import deps
 from app.models.user import User
-from app.models.community import Community
+from app.models.community import Community, Membership
 from app.schemas.community import CommunityCreate, CommunityRead, CommunityUpdate
 
 router = APIRouter()
@@ -111,3 +111,78 @@ async def read_community(
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     return community
+
+@router.get("/by-slug/{slug}", response_model=Community)
+async def get_community_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(deps.get_db),
+):
+    """
+    Fetch community details using the URL slug.
+    """
+    query = select(Community).where(Community.slug == slug)
+    result = await db.execute(query)
+    community = result.scalars().first()
+    if not community:
+        raise HTTPException(status_code=404, detail="Territory not found")
+    return community
+
+# --- 2. THE MEMBERSHIP (Join/Leave) ---
+@router.get("/{community_id}/membership_status")
+async def get_membership_status(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Check if I am already a citizen here.
+    """
+    query = select(Membership).where(
+        Membership.user_id == current_user.id,
+        Membership.community_id == community_id
+    )
+    result = await db.execute(query)
+    membership = result.scalars().first()
+    return {"status": membership.status if membership else "none", "role": membership.role if membership else None}
+
+@router.post("/{community_id}/join")
+async def join_community(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Apply for citizenship.
+    """
+    # 1. Check if exists
+    community = await db.get(Community, community_id)
+    if not community:
+        raise HTTPException(404, "Community not found")
+
+    # 2. Check if already member
+    existing = await db.execute(select(Membership).where(
+        Membership.user_id == current_user.id, 
+        Membership.community_id == community_id
+    ))
+    if existing.scalars().first():
+        return {"message": "Already a member"}
+
+    # 3. Logic: Private vs Public
+    initial_status = "pending" if community.is_private else "active"
+    
+    new_member = Membership(
+        user_id=current_user.id,
+        community_id=community_id,
+        status=initial_status,
+        role="member"
+    )
+    
+    # Update counts if active immediately
+    if initial_status == "active":
+        community.member_count += 1
+        db.add(community)
+        
+    db.add(new_member)
+    await db.commit()
+    
+    return {"status": initial_status}
