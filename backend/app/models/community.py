@@ -1,39 +1,41 @@
 import uuid
-from typing import Optional, List, Dict
 from datetime import datetime
+from typing import List, Optional
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, JSON
+from app.models.user import User
 
-# Forward reference for type hinting
-from .user import User
+# Avoid circular imports for Social
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.models.social import Post
 
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
     slug: str = Field(unique=True, index=True)
-    description: str
-    settings: Dict = Field(default={}, sa_column=Column(JSON))
+    description: Optional[str] = None
     
-    services: List["MemberService"] = Relationship(back_populates="community")
-    academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
+    creator_id: uuid.UUID = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    creator: User = Relationship(back_populates="communities")
     chapters: List["Chapter"] = Relationship(back_populates="community")
-    memberships: List["Membership"] = Relationship(back_populates="community")
 
 class Chapter(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
-    location: str
     
+    # --- THIS WAS LIKELY MISSING OR MISNAMED ---
+    name: str 
+    # -------------------------------------------
+    
+    location: str = Field(default="Global") 
+    description: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
     community: Community = Relationship(back_populates="chapters")
-    memberships: List["Membership"] = Relationship(back_populates="chapter")
-
-class Membership(SQLModel, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="user.id")
-    community_id: uuid.UUID = Field(foreign_key="community.id")
-    chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
-    role: str = Field(default="member")
-    
-    user: User = Relationship(back_populates="memberships")
-    community: Community = Relationship(back_populates="memberships")
-    chapter: Optional[Chapter] = Relationship(back_populates="memberships")
+    # If you have posts/social logic, link them here
+    # posts: List["Post"] = Relationship(back_populates="chapter")
