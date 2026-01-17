@@ -3,6 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from app.models.community import Community, Membership
 
 from app.api import deps
 from app.core import security
@@ -75,3 +76,19 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+@router.get("/me/communities", response_model=List[Community])
+async def read_my_communities(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Get list of territories (communities) the current user has joined.
+    """
+    # Join Membership -> Community to get the details
+    query = select(Community).join(Membership).where(
+        Membership.user_id == current_user.id,
+        Membership.status == "active"
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
