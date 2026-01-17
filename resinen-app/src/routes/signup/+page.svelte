@@ -19,9 +19,9 @@
         error = '';
 
         try {
-            // 1. Create the User (Hit your FastAPI Backend)
-            // Adjust endpoint '/users/open' depending on your exact backend route
-            const registerRes = await fetch('https://api.resinen.com/api/v1/users/open', {
+            // 1. Create the User (Fixed Endpoint)
+            // CHANGED: Removed '/open'. The backend router is @router.post("/") inside /users
+            const registerRes = await fetch('https://api.resinen.com/api/v1/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -48,18 +48,23 @@
             });
 
             if (!loginRes.ok) throw new Error('Auto-login failed. Please sign in manually.');
+            
             const tokenData = await loginRes.json();
 
             // 3. Get User Profile & Store Session
             const userRes = await fetch('https://api.resinen.com/api/v1/users/me', {
                 headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
             });
+            
+            if (!userRes.ok) throw new Error('Failed to fetch user profile.');
+            
             const userData = await userRes.json();
 
             loginUser(tokenData.access_token, userData);
             goto('/dashboard');
 
         } catch (e: any) {
+            console.error(e);
             error = e.message;
         } finally {
             isLoading = false;
@@ -140,7 +145,7 @@
         
         <div class="mt-8 pt-6 border-t-2 border-dashed border-black text-center">
             <p class="text-sm font-bold text-gray-500">
-                Already have an identity? 
+                Already have an identity?
                 <a href="/login" class="text-sp-blue underline decoration-2 underline-offset-2 hover:bg-sp-yellow">Login here</a>
             </p>
         </div>

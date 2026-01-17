@@ -10,6 +10,21 @@ export const user = writable(storedUser ? JSON.parse(storedUser) : null);
 
 // 3. Helper to make Authenticated Requests
 
+export async function getGovernanceIssues() {
+    // In a real app, you'd get the user's community_id dynamically.
+    // For now, we assume the backend knows the user's community via the Token.
+    // If your backend endpoint requires a community_id param, pass it here.
+    return api('GET', '/governance/issues'); 
+}
+
+export async function createGovernanceIssue(data: { title: string, description: string, kind: string }) {
+    return api('POST', '/governance/issues', data);
+}
+
+export async function castVote(issueId: string, vote: string, reason: string) {
+    return api('POST', `/governance/vote?issue_id=${issueId}&vote_val=${vote}&reason=${reason}`);
+}
+
 export async function getEngines() {
     try {
         // Fetch the Engines you seeded (Talent, Governance, Culture)

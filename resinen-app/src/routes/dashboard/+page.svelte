@@ -1,102 +1,111 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { user, getEngines } from '$lib/api';
+    import { api, user } from '$lib/api';
 
-    // State for Dynamic Data
     let engines: any[] = [];
     let loading = true;
 
+    // GAMIFICATION MATH
+    $: currentXp = $user?.xp || 0;
+    $: currentLevel = $user?.level || 1;
+    // Reverse the formula: XP needed = (Level / 0.1)^2
+    $: nextLevelXp = Math.pow((currentLevel) / 0.1, 2); 
+    $: prevLevelXp = Math.pow((currentLevel - 1) / 0.1, 2);
+    // Calculate percentage for the bar
+    $: progressPercent = ((currentXp - prevLevelXp) / (nextLevelXp - prevLevelXp)) * 100;
+
     onMount(async () => {
-        engines = await getEngines();
-        loading = false;
+        try {
+            // Get available engines (Academic, Social, etc.)
+            engines = await api('GET', '/engines/my-installed');
+        } catch (e) {
+            console.error(e);
+        } finally {
+            loading = false;
+        }
     });
 </script>
 
-<div class="flex flex-col md:flex-row justify-between items-end mb-12 border-b-4 border-black pb-4 gap-4">
-    <div>
-        <h2 class="text-4xl font-black uppercase">Command Center</h2>
-        <p class="font-bold text-gray-600">
-            Welcome back, <span class="text-sp-blue">{$user?.full_name || 'Operator'}</span>.
-        </p>
-    </div>
+<div class="max-w-4xl mx-auto space-y-8">
     
-    <div class="bg-black text-white px-4 py-2 font-mono font-bold text-xs uppercase tracking-widest rounded">
-        System: <span class="text-sp-green">ONLINE</span>
+    <div class="flex justify-between items-center border-b-4 border-black pb-4">
+        <div>
+            <h1 class="text-4xl font-black uppercase tracking-tight">Command Center</h1>
+            <p class="font-mono text-sm text-gray-500">System: <span class="text-green-600 font-bold">ONLINE</span></p>
+        </div>
+        <div class="bg-black text-white px-4 py-2 font-black rotate-2 shadow-hard">
+            v1.0.0
+        </div>
     </div>
-</div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-    
-    <div class="bg-white p-6 border-4 border-black shadow-hard transform rotate-1 h-fit">
-        <h3 class="font-black text-xl uppercase mb-4 border-b-2 border-black pb-2">My Identity</h3>
-        <div class="space-y-6">
-            <div class="text-center">
-                <div class="w-20 h-20 bg-sp-yellow border-4 border-black rounded-full mx-auto flex items-center justify-center text-3xl font-black mb-2">
-                    {$user?.full_name?.charAt(0)}
-                </div>
-                <div class="font-bold text-sm text-gray-500 uppercase">{$user?.email}</div>
+    <div class="bg-white border-4 border-black p-6 shadow-hard flex flex-col md:flex-row gap-6 items-center">
+        
+        <div class="relative">
+            <div class="w-24 h-24 bg-gray-200 border-4 border-black rounded-full overflow-hidden">
+                <img src={$user?.avatar_url || 'https://api.dicebear.com/7.x/notionists/svg'} alt="Profile" />
             </div>
+            <div class="absolute -bottom-2 -right-2 bg-sp-yellow border-4 border-black w-10 h-10 flex items-center justify-center font-black text-xl rounded-full shadow-sm z-10">
+                {currentLevel}
+            </div>
+        </div>
 
-            <div class="space-y-2">
-                <div class="flex justify-between items-center text-sm font-bold">
-                    <span>Reputation</span>
-                    <span>Level 1</span>
+        <div class="flex-grow w-full">
+            <h2 class="text-3xl font-black uppercase">{$user?.full_name || 'Anonymous User'}</h2>
+            <p class="font-mono text-gray-500 mb-4 uppercase">Citizen ID: {$user?.id?.slice(0,8) || 'Unknown'}</p>
+            
+            <div class="w-full bg-gray-200 border-4 border-black h-8 relative mt-2">
+                <div 
+                    class="bg-sp-green h-full border-r-4 border-black transition-all duration-500" 
+                    style="width: {Math.max(progressPercent, 5)}%"
+                ></div>
+                <div class="absolute inset-0 flex items-center justify-center font-bold text-xs uppercase tracking-widest z-10 pointer-events-none">
+                    {currentXp} / {Math.round(nextLevelXp)} XP
                 </div>
-                <div class="w-full bg-gray-200 h-3 border-2 border-black rounded-full overflow-hidden">
-                    <div class="bg-sp-cyan h-full w-[25%]"></div>
-                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-2 w-full md:w-auto">
+            <a href="/identity" class="bg-black text-white px-6 py-3 font-black uppercase text-center hover:bg-sp-cyan hover:text-black transition-colors border-2 border-transparent hover:border-black">
+                View Passport
+            </a>
+            <div class="text-xs text-center font-bold text-gray-400">
+                Reputation Score: {$user?.reputation_score}
             </div>
         </div>
     </div>
 
-    <div class="md:col-span-2 space-y-6">
-        <h3 class="font-black text-xl uppercase text-gray-500 flex items-center gap-2">
-            <span>Installed Modules</span>
-            <div class="flex-grow h-1 bg-black/10"></div>
+    <div>
+        <h3 class="font-black text-xl uppercase mb-6 flex items-center gap-2">
+            <span>Active Modules</span>
+            <div class="h-1 bg-black/10 flex-grow"></div>
         </h3>
 
         {#if loading}
-            <div class="p-12 border-4 border-dashed border-black/20 text-center font-bold text-gray-400 animate-pulse">
-                SYNCING WITH CODEX...
-            </div>
-        {:else if engines.length > 0}
-            <div class="grid grid-cols-1 gap-6">
-                {#each engines as engine}
-                    <div class="bg-sp-paper border-4 border-black p-6 shadow-hard hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-hard-sm transition-all group cursor-pointer relative overflow-hidden">
-                        
-                        <div class="absolute left-0 top-0 bottom-0 w-4 border-r-4 border-black
-                            {engine.id.includes('talent') ? 'bg-sp-red' : 
-                             engine.id.includes('governance') ? 'bg-sp-green' : 'bg-sp-orange'}">
-                        </div>
-
-                        <div class="ml-6">
-                            <div class="flex justify-between items-start mb-2">
-                                <h4 class="text-2xl font-black uppercase">{engine.name}</h4>
-                                <span class="text-xs font-black bg-black text-white px-2 py-1 uppercase">{engine.category}</span>
-                            </div>
-                            
-                            <p class="font-bold text-gray-600 mb-4 line-clamp-2">
-                                {engine.description}
-                            </p>
-
-                            <div class="grid grid-cols-2 gap-2 mt-4">
-                                {#each engine.modules as mod}
-                                    <div class="bg-white border-2 border-black p-2 text-xs font-bold uppercase flex items-center gap-2">
-                                        <div class="w-2 h-2 bg-black rounded-full"></div>
-                                        {mod.title}
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    </div>
-                {/each}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
+                <div class="h-32 bg-gray-200 border-4 border-black/20"></div>
+                <div class="h-32 bg-gray-200 border-4 border-black/20"></div>
+                <div class="h-32 bg-gray-200 border-4 border-black/20"></div>
             </div>
         {:else}
-            <div class="bg-sp-red text-white p-6 border-4 border-black shadow-hard">
-                <h3 class="font-black text-xl">CONNECTION LOST</h3>
-                <p class="font-bold">Could not fetch engines from Codex. Is the backend running?</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <a href="/academy" class="bg-white border-4 border-black p-6 shadow-hard hover:translate-x-1 hover:translate-y-1 transition-transform group">
+                    <div class="w-10 h-10 bg-sp-blue border-2 border-black mb-4 group-hover:bg-sp-yellow transition-colors"></div>
+                    <h4 class="font-black text-lg uppercase">Academic Center</h4>
+                    <p class="text-sm font-bold text-gray-500">Access Courses</p>
+                </a>
+
+                <a href="/governance" class="bg-white border-4 border-black p-6 shadow-hard hover:translate-x-1 hover:translate-y-1 transition-transform group">
+                    <div class="w-10 h-10 bg-sp-red border-2 border-black mb-4 group-hover:bg-sp-yellow transition-colors"></div>
+                    <h4 class="font-black text-lg uppercase">Governance</h4>
+                    <p class="text-sm font-bold text-gray-500">Voting & Jury Duty</p>
+                </a>
+
+                <a href="/communities/my-feed" class="bg-white border-4 border-black p-6 shadow-hard hover:translate-x-1 hover:translate-y-1 transition-transform group">
+                    <div class="w-10 h-10 bg-sp-cyan border-2 border-black mb-4 group-hover:bg-sp-yellow transition-colors"></div>
+                    <h4 class="font-black text-lg uppercase">Town Square</h4>
+                    <p class="text-sm font-bold text-gray-500">Global Feed</p>
+                </a>
             </div>
         {/if}
     </div>
-
 </div>
