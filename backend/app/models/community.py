@@ -22,7 +22,7 @@ class Community(SQLModel, table=True):
 class Chapter(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
-    location_name: str
+    location: str
     
     community: Community = Relationship(back_populates="chapters")
     memberships: List["Membership"] = Relationship(back_populates="chapter")

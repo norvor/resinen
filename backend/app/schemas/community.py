@@ -18,11 +18,11 @@ class CommunityRead(CommunityBase):
 class ChapterCreate(BaseModel):
     community_id: UUID
     name: str
-    location_name: str 
+    location: str 
 
 # FIX: This tells the backend exactly what to return
 class ChapterRead(BaseModel):
     id: UUID
     community_id: UUID
     name: str                     # <--- This was likely missing or hidden
-    location_name: Optional[str] = None
+    location: Optional[str] = None
