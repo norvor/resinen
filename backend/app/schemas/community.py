@@ -26,3 +26,13 @@ class ChapterRead(BaseModel):
     community_id: UUID
     name: str                     # <--- This was likely missing or hidden
     location: Optional[str] = None
+
+    class CommunityUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    description: Optional[str] = None
+
+class ChapterUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None # Assuming we settled on 'location'
+    description: Optional[str] = None
