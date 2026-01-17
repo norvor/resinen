@@ -1,49 +1,21 @@
 import { writable } from 'svelte/store';
 
-// 1. Point to your Backend
-const API_URL = 'https://api.resinen.com/api/v1'; // Local FastAPI
+// 1. POINT TO PRODUCTION
+const API_URL = 'https://api.resinen.com/api/v1'; 
 
-// 2. User Store (Global State)
-// We check LocalStorage to see if they are already logged in
+// 2. User Store
 const storedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('resinen_user') : null;
 export const user = writable(storedUser ? JSON.parse(storedUser) : null);
 
-// 3. Helper to make Authenticated Requests
-
-export async function getGovernanceIssues() {
-    // In a real app, you'd get the user's community_id dynamically.
-    // For now, we assume the backend knows the user's community via the Token.
-    // If your backend endpoint requires a community_id param, pass it here.
-    return api('GET', '/governance/issues'); 
-}
-
-export async function createGovernanceIssue(data: { title: string, description: string, kind: string }) {
-    return api('POST', '/governance/issues', data);
-}
-
-export async function castVote(issueId: string, vote: string, reason: string) {
-    return api('POST', `/governance/vote?issue_id=${issueId}&vote_val=${vote}&reason=${reason}`);
-}
-
-export async function getEngines() {
-    try {
-        // Fetch the Engines you seeded (Talent, Governance, Culture)
-        const res = await fetch(`${API_URL}/marketing/engines`);
-        if (!res.ok) return [];
-        return res.json();
-    } catch (e) {
-        console.error("Failed to load engines:", e);
-        return [];
-    }
-}
-
-
+// 3. API Helper
 export async function api(method: string, endpoint: string, data?: any) {
-    const headers: any = {
-        'Content-Type': 'application/json',
-    };
+    const headers: any = {};
 
-    // Attach Token if we have one
+    // Only set Content-Type to JSON if we aren't sending FormData (for login)
+    if (!(data instanceof URLSearchParams)) {
+        headers['Content-Type'] = 'application/json';
+    }
+
     const token = localStorage.getItem('resinen_token');
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -55,13 +27,12 @@ export async function api(method: string, endpoint: string, data?: any) {
     };
 
     if (data) {
-        config.body = JSON.stringify(data);
+        config.body = data instanceof URLSearchParams ? data : JSON.stringify(data);
     }
 
     try {
         const res = await fetch(`${API_URL}${endpoint}`, config);
         
-        // Handle 401 (Unauthorized) -> Kick them out
         if (res.status === 401) {
             logout();
             return null;
@@ -89,5 +60,5 @@ export function logout() {
     localStorage.removeItem('resinen_token');
     localStorage.removeItem('resinen_user');
     user.set(null);
-    window.location.href = '/login'; // Force redirect
+    window.location.href = '/login';
 }
