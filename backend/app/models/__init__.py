@@ -3,7 +3,7 @@ from app.models.user import User
 from app.models.community import Community, Chapter, Membership
 from app.models.social import Post, Comment, PostLike
 from app.models.content import ContentBlock
-)
+
 
 # Export them for cleaner imports elsewhere
 __all__ = [
