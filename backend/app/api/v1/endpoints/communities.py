@@ -119,13 +119,17 @@ async def get_community_by_slug(
     db: AsyncSession = Depends(deps.get_db),
 ):
     """
-    Fetch community details using the URL slug.
+    Lookup a territory by its URL slug (e.g., 'iron-fortress')
     """
+    # 1. Search DB for the slug
     query = select(Community).where(Community.slug == slug)
     result = await db.execute(query)
     community = result.scalars().first()
+    
+    # 2. If not found, throw error
     if not community:
         raise HTTPException(status_code=404, detail="Territory not found")
+        
     return community
 
 # --- 2. THE MEMBERSHIP (Join/Leave) ---
