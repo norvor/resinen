@@ -7,6 +7,7 @@ from uuid import UUID
 from app.api import deps
 from app.models.community import Chapter, Community
 from app.schemas.community import ChapterCreate, ChapterRead, ChapterUpdate # Import the fixed schema
+from app.models.user import User
 
 router = APIRouter()
 
