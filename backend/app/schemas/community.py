@@ -27,7 +27,7 @@ class ChapterRead(BaseModel):
     name: str                     # <--- This was likely missing or hidden
     location: Optional[str] = None
 
-    class CommunityUpdate(BaseModel):
+class CommunityUpdate(BaseModel):
     name: Optional[str] = None
     slug: Optional[str] = None
     description: Optional[str] = None
