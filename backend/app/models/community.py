@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from app.models.social import Post
     from app.models.referral import MemberService
     from app.models.academic import AcademicResource
-    # Import Engine models only for type checking to avoid circular imports at runtime
+    # We import these ONLY for type checking (development), not runtime
     from app.models.engine import Engine, CommunityEngine
 
 class Community(SQLModel, table=True):
@@ -43,17 +43,15 @@ class Community(SQLModel, table=True):
     services: List["MemberService"] = Relationship(back_populates="community")
     academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
     
-    # --- SOCIAL ENGINE (The Posts Fix) ---
+    # --- SOCIAL ENGINE ---
     posts: List["Post"] = Relationship(back_populates="community")
     
-    # --- ENGINE SYSTEM (The Missing Link) ---
-    # This connects the community to the features it has installed (Academic, Governance, etc.)
-    # We must import CommunityEngine and Engine here to resolve the link_model
-    from app.models.engine import CommunityEngine, Engine
-    
+    # --- ENGINE SYSTEM (Fixed) ---
+    # We use "CommunityEngine" (string) instead of the class object
+    # This prevents the Pydantic error and the circular import error.
     installed_engines: List["Engine"] = Relationship(
         back_populates="communities",
-        link_model=CommunityEngine
+        link_model="CommunityEngine" 
     )
 
 class Chapter(SQLModel, table=True):
