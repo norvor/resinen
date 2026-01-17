@@ -1,38 +1,32 @@
 import uuid
-from typing import Optional, List, Dict, Any
+from datetime import datetime
+from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import Column
 
-# 1. The "Link" Table (Many-to-Many with Payload)
-# This tracks WHICH community has WHICH engine installed
+if TYPE_CHECKING:
+    from app.models.community import Community
+
+# 1. THE LINK MODEL (Must be defined first)
 class CommunityEngine(SQLModel, table=True):
     community_id: uuid.UUID = Field(foreign_key="community.id", primary_key=True)
     engine_id: uuid.UUID = Field(foreign_key="engine.id", primary_key=True)
     
-    is_active: bool = Field(default=True)
-    
-    # Instance-specific config (e.g., "Who are the mentors for this community?")
-    config: Dict[str, Any] = Field(default={}, sa_column=Column(JSONB))
+    is_active: bool = True
+    config_json: str = "{}" # JSON settings for this specific community
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-# 2. The "Blueprint" Table
-# This is the menu of available features (Academic, Referral, etc.)
+# 2. THE ENGINE DEFINITION
 class Engine(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     
-    # System Identifier (e.g., "academic_core", "referral_v1")
-    key: str = Field(unique=True, index=True) 
+    key: str = Field(unique=True, index=True) # "academic", "social", "governance"
+    name: str 
+    description: str
+    icon: str
     
-    # Display Info
-    name: str           # "The Academic Center"
-    description: str    # "LMS and Knowledge Repository"
-    icon: str           # "lucide-book-open"
-    version: str        # "1.0.0"
+    is_global: bool = False # If true, auto-installed for everyone
     
-    # Capabilities (Feature Flags for the UI)
-    features: Dict[str, Any] = Field(default={}, sa_column=Column(JSONB))
-    
-    # Relationships
+    # Relationship
     communities: List["Community"] = Relationship(
         back_populates="installed_engines",
         link_model=CommunityEngine
