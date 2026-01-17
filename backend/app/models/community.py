@@ -1,11 +1,9 @@
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
 from app.models.user import User
 
-# Avoid circular imports for Social
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.models.social import Post
 
@@ -21,25 +19,27 @@ class Community(SQLModel, table=True):
     # Relationships
     creator: User = Relationship(back_populates="communities")
     chapters: List["Chapter"] = Relationship(back_populates="community")
+    
+    # ADDED: Link to Members
+    memberships: List["Membership"] = Relationship(back_populates="community")
 
 class Chapter(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
-    
-    # --- THIS WAS LIKELY MISSING OR MISNAMED ---
     name: str 
-    # -------------------------------------------
-    
     location: str = Field(default="Global") 
     description: Optional[str] = None
-    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
     community: Community = Relationship(back_populates="chapters")
-    # If you have posts/social logic, link them here
+    
+    # If using Social features:
     # posts: List["Post"] = Relationship(back_populates="chapter")
     
+    # ADDED: Link to Members
+    memberships: List["Membership"] = Relationship(back_populates="chapter")
+
 class Membership(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id")
@@ -47,6 +47,7 @@ class Membership(SQLModel, table=True):
     chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
     role: str = Field(default="member")
     
+    # Relationships
     user: User = Relationship(back_populates="memberships")
     community: Community = Relationship(back_populates="memberships")
     chapter: Optional[Chapter] = Relationship(back_populates="memberships")
