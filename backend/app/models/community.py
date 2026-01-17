@@ -14,6 +14,7 @@ class Community(SQLModel, table=True):
     description: str
     settings: Dict = Field(default={}, sa_column=Column(JSON))
     
+    academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
     chapters: List["Chapter"] = Relationship(back_populates="community")
     memberships: List["Membership"] = Relationship(back_populates="community")
 
