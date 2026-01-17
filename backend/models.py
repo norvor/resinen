@@ -1,48 +1,64 @@
-from typing import Optional, List, Dict
+from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, JSON
 from datetime import datetime
+import uuid
 
-# --- CONFIGURATION ---
-class SiteConfig(SQLModel, table=True):
-    id: str = Field(primary_key=True, default="global")
-    brand_name: str = Field(default="Life Journey")
-    # Keep minimal config
+# --- 1. USERS (Global Identity) ---
+class User(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    email: str = Field(index=True, unique=True)
+    full_name: str
+    avatar_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    memberships: List["Membership"] = Relationship(back_populates="user")
 
-# --- GAME CONTENT (Static Data) ---
-# This defines the "Magic Carpet" or "Farming" paths
-class Journey(SQLModel, table=True):
-    id: str = Field(primary_key=True) # e.g., "farming", "carpet"
-    title: str
+# --- 2. COMMUNITIES (The "Worlds") ---
+class Community(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str  # e.g., "Legal Community"
+    slug: str = Field(unique=True, index=True) # e.g., "legal"
     description: str
-    theme_color: str = Field(default="green-500") # UI Helper
     
-    stops: List["Stop"] = Relationship(back_populates="journey")
+    # Settings: JSON to hold "Bylaws", "Enabled Features", "Theme Colors"
+    settings: dict = Field(default={}, sa_column=Column(JSON))
 
-class Stop(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    journey_id: str = Field(foreign_key="journey.id")
-    order_index: int # 1, 2, 3... (The sequence)
-    
-    title: str # e.g., "First Sprout" or "Rome"
-    description: str 
-    visual_asset_url: str # URL to the image/gif for this stage
-    
-    journey: Optional[Journey] = Relationship(back_populates="stops")
+    # Relationships
+    chapters: List["Chapter"] = Relationship(back_populates="community")
+    memberships: List["Membership"] = Relationship(back_populates="community")
 
-# --- USER STATE (Minimal Tracking) ---
-class UserProgress(SQLModel, table=True):
-    id: str = Field(primary_key=True, default="me") 
+# --- 3. CHAPTERS (The Physical Link) ---
+class Chapter(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    community_id: uuid.UUID = Field(foreign_key="community.id")
     
-    # Which journey is active?
-    active_journey_id: str = Field(foreign_key="journey.id", nullable=True)
+    location_name: str # e.g., "Mumbai", "London"
+    geo_lat: Optional[float] = None
+    geo_long: Optional[float] = None
     
-    # How far along are they? (0 = Start)
-    current_stop_index: int = Field(default=0) 
+    # Relationships
+    community: Community = Relationship(back_populates="chapters")
+    memberships: List["Membership"] = Relationship(back_populates="chapter")
+
+# --- 4. MEMBERSHIPS (The "Persona" & Access Control) ---
+class Membership(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     
-    # Daily Progress (The "5 Care Tools" Logic)
-    # We just count points. 5 points = Next Stop.
-    daily_care_points: int = Field(default=0) 
+    user_id: uuid.UUID = Field(foreign_key="user.id")
+    community_id: uuid.UUID = Field(foreign_key="community.id")
+    chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
     
-    # We need this ONLY to know when to reset the daily_care_points (New Day)
-    last_care_date: datetime = Field(default_factory=datetime.utcnow)
+    # Role: 'member', 'moderator', 'admin'
+    role: str = Field(default="member")
+    
+    # Reputation: Specific to THIS community
+    reputation_score: int = Field(default=0)
+    
+    joined_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    user: User = Relationship(back_populates="memberships")
+    community: Community = Relationship(back_populates="memberships")
+    chapter: Optional[Chapter] = Relationship(back_populates="memberships")

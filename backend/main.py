@@ -1,18 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import Session, select
-from datetime import datetime
 from database import init_db, get_session
 from fastapi.middleware.cors import CORSMiddleware
-from models import Journey, Stop, UserProgress
+from typing import List
 
-# --- CRITICAL FIX: Import this to load relationships ---
-from sqlalchemy.orm import selectinload 
+# Import the new Resinen models
+from models import Community, Chapter, User, Membership
 
-app = FastAPI(title="Life Maintenance Tool")
+app = FastAPI(title="Resinen API")
 
+# CORS - Allowing your CMS and App to talk to this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"], # In production, change this to ["https://codex.resinen.com", "https://app.resinen.com"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,81 +20,34 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    # This creates tables if they don't exist.
+    # IMPORTANT: Since we changed models, you might need to drop old tables manually first.
     init_db()
 
 @app.get("/")
 def health_check():
-    return {"status": "active", "mode": "Life Maintenance"}
+    return {"status": "active", "system": "Resinen Core V1"}
 
-# --- HELPER: GET USER ---
-def get_current_user_progress(session: Session) -> UserProgress:
-    user = session.get(UserProgress, "me")
-    if not user:
-        user = UserProgress(
-            id="me", 
-            active_journey_id="farming", 
-            current_stop_index=0,
-            daily_care_points=0,
-            last_care_date=datetime.utcnow()
-        )
-        session.add(user)
+# --- COMMUNITY ENDPOINTS ---
+
+@app.post("/communities/", response_model=Community)
+def create_community(community: Community, session: Session = Depends(get_session)):
+    try:
+        session.add(community)
         session.commit()
-        session.refresh(user)
-        return user
+        session.refresh(community)
+        return community
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if user.last_care_date.date() < datetime.utcnow().date():
-        user.daily_care_points = 0
-        user.last_care_date = datetime.utcnow()
-        session.add(user)
-        session.commit()
-        session.refresh(user)
+@app.get("/communities/", response_model=List[Community])
+def list_communities(session: Session = Depends(get_session)):
+    return session.exec(select(Community)).all()
 
-    return user
-
-# --- GAMEPLAY ENDPOINTS ---
-@app.get("/status", response_model=UserProgress)
-def get_status(session: Session = Depends(get_session)):
-    return get_current_user_progress(session)
-
-@app.post("/care")
-def submit_care_action(session: Session = Depends(get_session)):
-    user = get_current_user_progress(session)
-    user.last_care_date = datetime.utcnow()
-    user.daily_care_points += 1
-    
-    did_level_up = False
-    if user.daily_care_points >= 5:
-        user.current_stop_index += 1
-        user.daily_care_points = 0 
-        did_level_up = True
-
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    return {
-        "status": "success",
-        "daily_points": user.daily_care_points,
-        "current_stop": user.current_stop_index,
-        "leveled_up": did_level_up
-    }
-
-# --- CMS ENDPOINTS ---
-
-@app.get("/journeys", response_model=list[Journey])
-def get_journeys(session: Session = Depends(get_session)):
-    # FIXED: We use .options(selectinload(...)) to ensure 'stops' are included
-    statement = select(Journey).options(selectinload(Journey.stops))
-    return session.exec(statement).all()
-
-@app.post("/journeys", response_model=Journey)
-def create_journey(journey: Journey, session: Session = Depends(get_session)):
-    session.merge(journey)
-    session.commit()
-    return journey
-
-@app.post("/stops", response_model=Stop)
-def create_stop(stop: Stop, session: Session = Depends(get_session)):
-    session.merge(stop)
-    session.commit()
-    return stop
+@app.get("/communities/{slug}")
+def get_community_context(slug: str, session: Session = Depends(get_session)):
+    community = session.exec(select(Community).where(Community.slug == slug)).first()
+    if not community:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return community

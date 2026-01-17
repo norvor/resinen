@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* THEME: Deep Ocean & Sunset */
 body {
-    @apply bg-gray-900 text-gray-300;
+    /* Rich Blue Background */
+    @apply bg-slate-900 text-white font-sans antialiased;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+}
+::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-orange-500;
 }
