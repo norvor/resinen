@@ -4,12 +4,13 @@ from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
 from app.models.user import User
 
+# 1. IMPORT THE ENGINE MODELS (So we can use the Class, not a string)
+from app.models.engine import Engine, CommunityEngine
+
 if TYPE_CHECKING:
     from app.models.social import Post
     from app.models.referral import MemberService
     from app.models.academic import AcademicResource
-    # We import these ONLY for type checking (development), not runtime
-    from app.models.engine import Engine, CommunityEngine
 
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -38,20 +39,15 @@ class Community(SQLModel, table=True):
     creator: User = Relationship(back_populates="communities")
     chapters: List["Chapter"] = Relationship(back_populates="community")
     memberships: List["Membership"] = Relationship(back_populates="community")
-    
-    # --- MODULES ---
     services: List["MemberService"] = Relationship(back_populates="community")
     academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
-    
-    # --- SOCIAL ENGINE ---
     posts: List["Post"] = Relationship(back_populates="community")
     
     # --- ENGINE SYSTEM (Fixed) ---
-    # We use "CommunityEngine" (string) instead of the class object
-    # This prevents the Pydantic error and the circular import error.
-    installed_engines: List["Engine"] = Relationship(
+    # Now we pass the ACTUAL CLASS 'CommunityEngine', which fixes the inspection error.
+    installed_engines: List[Engine] = Relationship(
         back_populates="communities",
-        link_model="CommunityEngine" 
+        link_model=CommunityEngine 
     )
 
 class Chapter(SQLModel, table=True):
@@ -68,11 +64,8 @@ class Chapter(SQLModel, table=True):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
-    # Relationships
     community: Community = Relationship(back_populates="chapters")
     memberships: List["Membership"] = Relationship(back_populates="chapter")
-    
-    # Social Engine for Chapters
     posts: List["Post"] = Relationship(back_populates="chapter")
 
 class Membership(SQLModel, table=True):
