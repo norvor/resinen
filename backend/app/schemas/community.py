@@ -1,25 +1,28 @@
-from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional
 from uuid import UUID
+from pydantic import BaseModel
 
-class CommunityCreate(BaseModel):
+# --- COMMUNITY ---
+class CommunityBase(BaseModel):
     name: str
     slug: str
-    description: str
-    settings: Optional[Dict] = {}
+    description: Optional[str] = None
 
-class CommunityRead(BaseModel):
+class CommunityCreate(CommunityBase):
+    pass
+
+class CommunityRead(CommunityBase):
     id: UUID
-    name: str
-    slug: str
-    description: str
-    settings: Dict
 
+# --- CHAPTER ---
 class ChapterCreate(BaseModel):
     community_id: UUID
-    location_name: str
+    name: str
+    location_name: str 
 
+# FIX: This tells the backend exactly what to return
 class ChapterRead(BaseModel):
     id: UUID
-    location_name: str
     community_id: UUID
+    name: str                     # <--- This was likely missing or hidden
+    location_name: Optional[str] = None
