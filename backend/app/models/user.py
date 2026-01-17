@@ -13,4 +13,6 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Deferred relationship import to avoid circular dependency
+    posts: List["Post"] = Relationship(back_populates="author"
+    services: List["MemberService"] = Relationship(back_populates="user")
     memberships: List["Membership"] = Relationship(back_populates="user")

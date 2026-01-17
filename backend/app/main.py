@@ -3,11 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
 from app.api.v1.api import api_router
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS
 app.add_middleware(
