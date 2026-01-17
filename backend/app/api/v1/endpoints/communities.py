@@ -4,33 +4,66 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api import deps
+from app.models.user import User
 from app.models.community import Community
 from app.schemas.community import CommunityCreate, CommunityRead
 
 router = APIRouter()
-
-@router.post("/", response_model=CommunityRead)
-async def create_community(
-    *,
-    db: AsyncSession = Depends(deps.get_db),
-    community_in: CommunityCreate
-):
-    # Check for slug collision
-    result = await db.execute(select(Community).where(Community.slug == community_in.slug))
-    if result.scalars().first():
-        raise HTTPException(status_code=400, detail="Slug already exists")
-
-    db_community = Community.from_orm(community_in)
-    db.add(db_community)
-    await db.commit()
-    await db.refresh(db_community)
-    return db_community
 
 @router.get("/", response_model=List[CommunityRead])
 async def read_communities(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
 ):
-    result = await db.execute(select(Community).offset(skip).limit(limit))
+    """
+    Retrieve communities.
+    """
+    # Just fetching all for now. You might want to filter by user later.
+    query = select(Community).offset(skip).limit(limit)
+    result = await db.execute(query)
     return result.scalars().all()
+
+@router.post("/", response_model=CommunityRead)
+async def create_community(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    community_in: CommunityCreate,
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Create a new community.
+    """
+    # 1. Check if slug is unique
+    query = select(Community).where(Community.slug == community_in.slug)
+    result = await db.execute(query)
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Community slug already exists")
+
+    # 2. Create the DB Object manually (Fixing the creator_id error)
+    # We unpack the frontend data (**community_in.dict())
+    # AND explicitly add the creator_id from the token
+    db_community = Community(
+        **community_in.dict(),
+        creator_id=current_user.id
+    )
+    
+    db.add(db_community)
+    await db.commit()
+    await db.refresh(db_community)
+    return db_community
+
+@router.get("/{community_id}", response_model=CommunityRead)
+async def read_community(
+    community_id: str,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Get community by ID.
+    """
+    community = await db.get(Community, community_id)
+    if not community:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return community
