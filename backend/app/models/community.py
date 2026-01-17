@@ -39,3 +39,14 @@ class Chapter(SQLModel, table=True):
     community: Community = Relationship(back_populates="chapters")
     # If you have posts/social logic, link them here
     # posts: List["Post"] = Relationship(back_populates="chapter")
+    
+class Membership(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id")
+    community_id: uuid.UUID = Field(foreign_key="community.id")
+    chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
+    role: str = Field(default="member")
+    
+    user: User = Relationship(back_populates="memberships")
+    community: Community = Relationship(back_populates="memberships")
+    chapter: Optional[Chapter] = Relationship(back_populates="memberships")
