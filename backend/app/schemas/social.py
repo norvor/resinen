@@ -3,9 +3,7 @@ from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel
 
-# -------------------------------------------
-# COMMENTS (Dependencies for Posts)
-# -------------------------------------------
+# --- COMMENTS ---
 class CommentBase(BaseModel):
     content: str
 
@@ -15,12 +13,10 @@ class CommentCreate(CommentBase):
 class CommentRead(CommentBase):
     id: UUID
     author_id: UUID
-    author_name: Optional[str] = "Unknown" # Display name in UI
+    author_name: Optional[str] = "Unknown"
     created_at: datetime
 
-# -------------------------------------------
-# POSTS
-# -------------------------------------------
+# --- POSTS ---
 class PostBase(BaseModel):
     content: str
     image_url: Optional[str] = None
@@ -33,14 +29,10 @@ class PostCreate(PostBase):
 class PostRead(PostBase):
     id: UUID
     author_id: UUID
-    
-    # This is the field we manually inject in the endpoint
     author_name: str 
     
     like_count: int
-    created_at: datetime
+    is_liked: bool = False # <--- NEW FIELD
     
-    # Pydantic will try to read 'post.comments' from the database object.
-    # Because we added .options(selectinload(Post.comments)) in the endpoint,
-    # this will work perfectly now.
+    created_at: datetime
     comments: List[CommentRead] = []
