@@ -5,9 +5,11 @@ from sqlmodel import SQLModel, Field, Relationship
 from app.models.user import User
 
 if TYPE_CHECKING:
-    from app.models.social import Post  # <--- Make sure this is imported
+    from app.models.social import Post
     from app.models.referral import MemberService
     from app.models.academic import AcademicResource
+    # Import Engine models only for type checking to avoid circular imports at runtime
+    from app.models.engine import Engine, CommunityEngine
 
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -37,12 +39,22 @@ class Community(SQLModel, table=True):
     chapters: List["Chapter"] = Relationship(back_populates="community")
     memberships: List["Membership"] = Relationship(back_populates="community")
     
-    # Modules
+    # --- MODULES ---
     services: List["MemberService"] = Relationship(back_populates="community")
     academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
     
-    # Social Engine (THE MISSING LINK)
-    posts: List["Post"] = Relationship(back_populates="community") 
+    # --- SOCIAL ENGINE (The Posts Fix) ---
+    posts: List["Post"] = Relationship(back_populates="community")
+    
+    # --- ENGINE SYSTEM (The Missing Link) ---
+    # This connects the community to the features it has installed (Academic, Governance, etc.)
+    # We must import CommunityEngine and Engine here to resolve the link_model
+    from app.models.engine import CommunityEngine, Engine
+    
+    installed_engines: List["Engine"] = Relationship(
+        back_populates="communities",
+        link_model=CommunityEngine
+    )
 
 class Chapter(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -62,7 +74,7 @@ class Chapter(SQLModel, table=True):
     community: Community = Relationship(back_populates="chapters")
     memberships: List["Membership"] = Relationship(back_populates="chapter")
     
-    # Social Engine (Add this too for Chapter feeds)
+    # Social Engine for Chapters
     posts: List["Post"] = Relationship(back_populates="chapter")
 
 class Membership(SQLModel, table=True):
