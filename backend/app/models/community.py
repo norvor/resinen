@@ -6,6 +6,9 @@ from app.models.user import User
 
 if TYPE_CHECKING:
     from app.models.social import Post
+    # ADDED: Missing imports
+    from app.models.referral import MemberService
+    from app.models.academic import AcademicResource
 
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -19,9 +22,13 @@ class Community(SQLModel, table=True):
     # Relationships
     creator: User = Relationship(back_populates="communities")
     chapters: List["Chapter"] = Relationship(back_populates="community")
-    
-    # ADDED: Link to Members
     memberships: List["Membership"] = Relationship(back_populates="community")
+    
+    # ADDED: Fixes referral.py error
+    services: List["MemberService"] = Relationship(back_populates="community")
+    
+    # ADDED: Fixes academic.py error
+    academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
 
 class Chapter(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -33,11 +40,6 @@ class Chapter(SQLModel, table=True):
     
     # Relationships
     community: Community = Relationship(back_populates="chapters")
-    
-    # If using Social features:
-    # posts: List["Post"] = Relationship(back_populates="chapter")
-    
-    # ADDED: Link to Members
     memberships: List["Membership"] = Relationship(back_populates="chapter")
 
 class Membership(SQLModel, table=True):

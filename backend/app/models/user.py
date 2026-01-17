@@ -4,8 +4,10 @@ from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
 
 if TYPE_CHECKING:
-    from app.models.community import Community, Membership # Import Membership
+    from app.models.community import Community, Membership
     from app.models.social import Post
+    # ADDED: Import MemberService
+    from app.models.referral import MemberService
 
 class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -24,3 +26,6 @@ class User(SQLModel, table=True):
     
     # 2. Communities the user JOINED
     memberships: List["Membership"] = Relationship(back_populates="user")
+
+    # 3. ADDED: Services the user OFFERS (Fixes referral.py error)
+    services: List["MemberService"] = Relationship(back_populates="user")
