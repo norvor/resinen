@@ -9,7 +9,7 @@ export type Community = {
     name: string;
     slug: string;
     description: string;
-    settings?: Record<string, any>; // Flexible JSON for bylaws/themes
+    settings?: Record<string, any>;
 };
 
 // --- API CLIENT ---
