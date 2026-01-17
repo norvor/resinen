@@ -27,5 +27,5 @@ class User(SQLModel, table=True):
     communities: List["Community"] = Relationship(back_populates="creator")
 
     # 3. Services / Memberships (If you use them)
-    # services: List["MemberService"] = Relationship(back_populates="user")
-    # memberships: List["Membership"] = Relationship(back_populates="user")
+    #services: List["MemberService"] = Relationship(back_populates="user")
+    memberships: List["Membership"] = Relationship(back_populates="user")
