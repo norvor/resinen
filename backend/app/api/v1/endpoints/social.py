@@ -21,7 +21,7 @@ async def get_feed(
     limit: int = 20,
     db: AsyncSession = Depends(deps.get_db),
 ):
-    # Build Query
+    # Fetch posts with their comments loaded
     query = select(Post).options(selectinload(Post.comments)).order_by(desc(Post.created_at))
     
     if community_id:

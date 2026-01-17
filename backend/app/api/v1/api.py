@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import communities, auth, chapters, academic, referral, social, upload
+from app.api.v1.endpoints import communities, auth, chapters, academic, referral, social
 
 api_router = APIRouter()
 
@@ -8,5 +8,5 @@ api_router.include_router(communities.router, prefix="/communities", tags=["comm
 api_router.include_router(chapters.router, prefix="/chapters", tags=["chapters"])
 api_router.include_router(academic.router, prefix="/academic", tags=["academic"])
 api_router.include_router(referral.router, prefix="/referral", tags=["referral"])
-api_router.include_router(social.router, prefix="/social", tags=["social"])   # <--- Added
-api_router.include_router(upload.router, prefix="/upload", tags=["upload"])   # <--- Added
+api_router.include_router(social.router, prefix="/social", tags=["social"])
+# Upload router removed
