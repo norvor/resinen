@@ -26,17 +26,17 @@
                 <p class="text-xs text-slate-400">Resinen Admin Panel</p>
             </div>
 
-            <nav class="flex-1 p-4 space-y-1">
-                <a href="/" class="block px-4 py-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors">
-                    Dashboard
+            <nav class="...">
+               <a href="/settings" class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all font-bold text-sm">
+                    <span>⚙️ Settings</span>
                 </a>
-                
-                <div class="pt-6 pb-2 text-xs font-bold text-slate-500 uppercase tracking-wider px-4">
-                    Resinen Core
-                </div>
-                
-                <a href="/communities/new" class="block px-4 py-2 rounded-lg hover:bg-orange-500/10 text-slate-300 hover:text-orange-400 font-medium transition-colors">
-                    + Initialize Community
+               
+                <a href="/communities" class="... flex items-center gap-3 ...">
+                    <span>🏰 Communities</span>
+                </a>
+
+                <a href="/cms" class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all font-bold text-sm">
+                    <span>📝 Website CMS</span>
                 </a>
             </nav>
 
