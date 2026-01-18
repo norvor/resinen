@@ -157,22 +157,31 @@ async def get_membership_status(
 
 @router.post("/{community_id}/join")
 async def join_community(
-    community_id: uuid.UUID,
+    community_id: UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    # 1. Fetch the Community to check its settings
+    # 1. Fetch Community
     community = await db.get(Community, community_id)
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
 
-    # 2. Check if already a member
-    existing_membership = await db.get(Membership, (current_user.id, community_id))
+    # 2. FIX: Check for existing membership using 'select' instead of 'get'
+    # We query the table manually because we are looking up by Foreign Keys, not Primary Key.
+    query = select(Membership).where(
+        Membership.user_id == current_user.id,
+        Membership.community_id == community_id
+    )
+    result = await db.execute(query)
+    existing_membership = result.scalars().first()
+
     if existing_membership:
+        # Optional: specific error if they are banned
+        if existing_membership.status == "banned":
+             raise HTTPException(status_code=403, detail="You are banned from this territory.")
         raise HTTPException(status_code=400, detail="Already a member")
 
-    # 3. DETERMINE STATUS BASED ON PRIVACY
-    # This is the fix. If private -> pending. If public -> active.
+    # 3. Determine Status (Gatekeeping Logic)
     initial_status = "pending" if community.is_private else "active"
 
     # 4. Create Membership
@@ -180,12 +189,18 @@ async def join_community(
         user_id=current_user.id,
         community_id=community_id,
         role="member",
-        status=initial_status  # <--- Use the calculated status
+        status=initial_status
     )
 
     db.add(new_membership)
     await db.commit()
     await db.refresh(new_membership)
+
+    return {
+        "status": "success", 
+        "membership_status": initial_status,
+        "message": "Request pending approval" if initial_status == "pending" else "Joined successfully"
+    }
 
     # 5. Return a helpful message so the Frontend knows what to show
     return {
