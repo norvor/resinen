@@ -23,7 +23,5 @@ api_router.include_router(chapters.router, prefix="/chapters", tags=["chapters"]
 # --- ENGINES ---
 api_router.include_router(academic.router, prefix="/academic", tags=["academic"])
 api_router.include_router(referral.router, prefix="/referral", tags=["referral"])
-api_router.include_router(social.router, prefix="/social", tags=["social"])
+api_router.include_router(social.router, tags=["social"])
 api_router.include_router(content.router, prefix="/content", tags=["content"])
-api_router.include_router(social.router, prefix="/posts", tags=["social"])
-api_router.include_router(social.router, prefix="/feed", tags=["social"])
