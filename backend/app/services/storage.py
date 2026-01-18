@@ -2,17 +2,19 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 from fastapi import UploadFile
 import uuid
+import json
 
 from app.core.config import settings
 
 class StorageService:
     def __init__(self):
+        # Connect to MinIO
         self.s3_client = boto3.client(
             's3',
             endpoint_url=settings.MINIO_ENDPOINT,
             aws_access_key_id=settings.MINIO_ACCESS_KEY,
             aws_secret_access_key=settings.MINIO_SECRET_KEY,
-            region_name="us-east-1" # MinIO ignores this, but boto3 requires it
+            region_name="us-east-1" # Required by library, ignored by MinIO
         )
         self.bucket_name = settings.MINIO_BUCKET_NAME
         self._ensure_bucket_exists()
@@ -22,10 +24,11 @@ class StorageService:
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
         except:
-            # If check fails, try creating it
+            # Bucket missing, let's create it
             try:
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
-                # Make it public (Policy to allow reading files)
+                
+                # Make files publicly readable (so users can see images)
                 public_policy = {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -37,22 +40,21 @@ class StorageService:
                         }
                     ]
                 }
-                import json
                 self.s3_client.put_bucket_policy(
                     Bucket=self.bucket_name,
                     Policy=json.dumps(public_policy)
                 )
-                print(f"✅ Created Bucket: {self.bucket_name}")
+                print(f"✅ [MinIO] Created Bucket: {self.bucket_name}")
             except Exception as e:
-                print(f"⚠️ Could not create bucket: {e}")
+                print(f"⚠️ [MinIO] Could not create bucket: {e}")
 
     async def upload_file(self, file: UploadFile) -> str:
         """Uploads a file and returns the Public URL."""
-        # 1. Generate unique filename (uuid + original extension)
+        # Generate unique filename to prevent overwrites
+        # e.g. "avatar.jpg" -> "550e8400-e29b....jpg"
         extension = file.filename.split(".")[-1]
         unique_filename = f"{uuid.uuid4()}.{extension}"
         
-        # 2. Upload
         try:
             self.s3_client.upload_fileobj(
                 file.file,
@@ -63,9 +65,8 @@ class StorageService:
         except NoCredentialsError:
             raise Exception("MinIO Credentials missing")
             
-        # 3. Return URL
-        # Format: http://localhost:9000/resinen-media/filename.jpg
+        # Return the URL
         return f"{settings.MINIO_ENDPOINT}/{self.bucket_name}/{unique_filename}"
 
-# Create a singleton instance to use elsewhere
+# Create a singleton instance
 storage = StorageService()
