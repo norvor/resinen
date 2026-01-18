@@ -1,6 +1,5 @@
 from typing import Any, List
 from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from app.models.community import Community, Membership
@@ -19,22 +18,22 @@ async def read_user_me(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get current user.
+    Get current user profile.
     """
     return current_user
 
-@router.put("/me", response_model=UserRead)
+@router.patch("/me", response_model=UserRead)
 async def update_user_me(
     *,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_session),
     user_in: UserUpdate,
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Update own user.
+    Update own user profile (Avatar, Bio, Name, etc).
     """
-    # 1. Get clean data (ignoring nulls)
-    update_data = user_in.dict(exclude_unset=True)
+    # 1. Get clean data (ignoring nulls) using Pydantic V2 syntax
+    update_data = user_in.model_dump(exclude_unset=True)
     
     # 2. Handle Password Hashing separately
     if "password" in update_data and update_data["password"]:
@@ -42,7 +41,7 @@ async def update_user_me(
         current_user.hashed_password = hashed_password
         del update_data["password"]
 
-    # 3. Update the User Object (Cleaner logic)
+    # 3. Update the User Object dynamically
     for key, value in update_data.items():
         setattr(current_user, key, value)
             
@@ -54,12 +53,13 @@ async def update_user_me(
 @router.post("/", response_model=UserRead)
 async def create_user(
     *,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_session),
     user_in: UserCreate,
 ) -> Any:
     """
-    Create new user.
+    Create new user (Public Registration).
     """
+    # 1. Check if email already exists
     query = select(User).where(User.email == user_in.email)
     result = await db.execute(query)
     if result.scalars().first():
@@ -67,12 +67,17 @@ async def create_user(
             status_code=400,
             detail="The user with this email already exists in the system",
         )
-        
+    
+    # 2. Create User
     user = User(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
         full_name=user_in.full_name or "",
         is_superuser=user_in.is_superuser,
+        # Default gamification stats
+        level=1,
+        xp=0,
+        reputation_score=100
     )
     db.add(user)
     await db.commit()
@@ -81,7 +86,7 @@ async def create_user(
 
 @router.get("/me/communities", response_model=List[CommunityRead])
 async def read_my_communities(
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_session),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """
