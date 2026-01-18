@@ -1,46 +1,43 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 from pydantic import BaseModel
 
-# --- COMMUNITY ---
+# We import the Enum from the model to keep them synced
+from app.models.community import Archetype 
+
 class CommunityBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
-    is_private: bool = False  # <--- FIX 1: Add this here so it exists by default
+    banner_url: Optional[str] = None
+    
+    # --- NEW FIELDS ---
+    archetype: Archetype = Archetype.DEFAULT
+    config: Dict[str, Any] = {} # JSON settings (Tax rate, team names, etc)
+    
+    is_private: bool = False
 
 class CommunityCreate(CommunityBase):
-    pass 
-    # Since it inherits from Base, it now accepts 'is_private'
-
-class CommunityRead(CommunityBase):
-    id: UUID
-    # It inherits 'is_private', so the Frontend will now see the lock icon correctly.
-    member_count: int = 0 # Optional: Useful for dashboard stats
-    creator_id: Optional[UUID] = None  # <--- NEW FIELD: Essential for permissions
-
-    class Config:
-        from_attributes = True
+    pass
 
 class CommunityUpdate(BaseModel):
     name: Optional[str] = None
     slug: Optional[str] = None
     description: Optional[str] = None
-    is_private: Optional[bool] = None # <--- FIX 2: Allow changing privacy later
+    banner_url: Optional[str] = None
+    
+    # Allow updating these
+    archetype: Optional[Archetype] = None
+    config: Optional[Dict[str, Any]] = None
+    
+    is_private: Optional[bool] = None
 
-# --- CHAPTER ---
-class ChapterCreate(BaseModel):
-    community_id: UUID
-    name: str
-    location: str 
-
-class ChapterRead(BaseModel):
+class CommunityRead(CommunityBase):
     id: UUID
-    community_id: UUID
-    name: str
-    location: Optional[str] = None
-
-class ChapterUpdate(BaseModel):
-    name: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
+    creator_id: UUID
+    member_count: int
+    created_at: datetime
+    
+    class Config:
+        orm_mode = True
