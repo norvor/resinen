@@ -221,3 +221,49 @@ async def read_community_members(
     
     # 2. Return standard objects; FastAPI will use MembershipOut to serialize 'user'
     return members
+
+@router.post("/{community_id}/members/{user_id}/process")
+async def process_membership(
+    community_id: UUID,
+    user_id: UUID,
+    action: str = Query(..., regex="^(approve|reject|ban)$"), # Enforce valid actions
+    db: AsyncSession = Depends(deps.get_db),
+    # current_user: User = Depends(deps.get_current_active_user), # Uncomment to secure
+):
+    """
+    Process a membership application.
+    Action must be: 'approve', 'reject', or 'ban'.
+    """
+    # 1. Find the specific membership application
+    query = select(Membership).where(
+        Membership.community_id == community_id,
+        Membership.user_id == user_id
+    )
+    result = await db.execute(query)
+    membership = result.scalars().first()
+
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membership application not found")
+
+    # 2. Execute the Decision
+    if action == "approve":
+        membership.status = "active"
+        membership.role = "member" # Ensure they have a standard role
+        # Optional: membership.joined_at = datetime.utcnow()
+        
+    elif action == "reject":
+        # Hard Delete: Remove the row so they can try again later?
+        # OR Soft Delete: Set status to 'rejected'
+        await db.delete(membership)
+        await db.commit()
+        return {"status": "rejected", "message": "Application removed"}
+        
+    elif action == "ban":
+        membership.status = "banned"
+
+    # 3. Save Changes
+    db.add(membership)
+    await db.commit()
+    await db.refresh(membership)
+
+    return {"status": "success", "new_state": membership.status}
