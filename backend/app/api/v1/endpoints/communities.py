@@ -197,7 +197,7 @@ async def join_community(
 
 @router.get("/{community_id}/members", response_model=List[Any])
 async def read_community_members(
-    community_id: UUID4,
+    community_id: uuid.UUID,
     status: Optional[str] = None,
     db: AsyncSession = Depends(deps.get_db),
     # Optional: Add security if you only want Admins to see this
