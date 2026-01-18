@@ -2,6 +2,7 @@ from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from sqlalchemy.orm import joinedload
 import uuid
 
 from app.api import deps
