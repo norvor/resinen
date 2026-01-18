@@ -67,7 +67,7 @@
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-8 mb-8 flex justify-between items-start">
             <div>
                 <h1 class="text-3xl font-bold text-white mb-2">{community.name}</h1>
-                <div class="text-slate-500 font-mono text-sm">/c/{community.slug}</div>
+                <div class="text-slate-500 font-mono text-sm">{community.slug}</div>
             </div>
             <div class="text-right">
                 <div class="text-4xl font-bold text-white">{activeCitizens.length}</div>

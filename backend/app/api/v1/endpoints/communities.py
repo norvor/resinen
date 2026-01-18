@@ -8,6 +8,7 @@ from app.api import deps
 from app.models.user import User
 from app.models.community import Community, Membership
 from app.schemas.community import CommunityCreate, CommunityRead, CommunityUpdate
+from app.schemas.membership import MembershipOut, Membership
 
 router = APIRouter()
 
@@ -195,16 +196,19 @@ async def join_community(
     
     return {"status": initial_status}
 
-@router.get("/{community_id}/members", response_model=List[Any])
+@router.get("/{community_id}/members", response_model=List[MembershipOut])
 async def read_community_members(
-    community_id: UUID4,
+    community_id: UUID,
     status: Optional[str] = None,
     db: AsyncSession = Depends(deps.get_db),
 ):
-    # 1. Join with User table to get names/emails
+    """
+    Get members and include their public User profile data.
+    """
+    # 1. The Database Query (Must use joinedload)
     query = (
         select(Membership)
-        .options(joinedload(Membership.user))  # <--- CRITICAL: Fetches user details
+        .options(joinedload(Membership.user))  # Fetches the user data from DB
         .where(Membership.community_id == community_id)
     )
     
@@ -214,4 +218,5 @@ async def read_community_members(
     result = await db.execute(query)
     members = result.scalars().all()
     
+    # 2. Return standard objects; FastAPI will use MembershipOut to serialize 'user'
     return members
