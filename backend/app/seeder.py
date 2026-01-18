@@ -92,22 +92,31 @@ WORLDS = [
 ]
 
 async def seed_db():
-    print("☢️  NUCLEAR OPTION: DROPPING ENTIRE SCHEMA...")
+    print("🧹 STARTING SMART WIPE (Permission Friendly)...")
     
     async with engine.begin() as conn:
-        # 1. THIS COMMAND KILLS EVERYTHING. NO EXCEPTIONS.
-        # It deletes the 'public' folder of the database and remakes it.
-        await conn.execute(text("DROP SCHEMA public CASCADE;"))
-        await conn.execute(text("CREATE SCHEMA public;"))
-        await conn.execute(text("GRANT ALL ON SCHEMA public TO public;")) 
+        # 1. FIND ALL TABLES
+        # Query Postgres system tables to find everything in 'public' schema
+        result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public';"))
+        tables = result.scalars().all()
         
-        # 2. Recreate Tables from Scratch
+        if tables:
+            print(f"Found {len(tables)} tables to destroy: {tables}")
+            # 2. DROP THEM WITH CASCADE
+            # We quote table names to handle case sensitivity
+            table_list = ", ".join([f'"{t}"' for t in tables])
+            await conn.execute(text(f"DROP TABLE IF EXISTS {table_list} CASCADE;"))
+            print("💥 All tables dropped successfully.")
+        else:
+            print("Table empty. Nothing to drop.")
+
+        # 3. REBUILD
         await conn.run_sync(SQLModel.metadata.create_all)
         
-    print("✨ Database is 100% Virgin. Rebuilding civilization...")
+    print("✨ Database Rebuilt from Scratch.")
 
     async with async_session_factory() as db:
-        # 3. CREATE SUPERUSER
+        # 4. CREATE SUPERUSER
         print(f"Creating Superuser: {ADMIN_EMAIL}")
         admin = User(
             email=ADMIN_EMAIL,
@@ -122,7 +131,7 @@ async def seed_db():
         await db.commit()
         await db.refresh(admin)
 
-        # 4. CREATE WORLDS
+        # 5. CREATE WORLDS
         print("Initializing 11 Sovereign Worlds...")
         for world_data in WORLDS:
             community = Community(
