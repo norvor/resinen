@@ -157,7 +157,7 @@ async def get_membership_status(
 
 @router.post("/{community_id}/join")
 async def join_community(
-    community_id: UUID,
+    community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
