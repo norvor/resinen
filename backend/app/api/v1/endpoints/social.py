@@ -14,7 +14,7 @@ from app.models.governance import CommunityBylaw
 from app.services.reputation import award_xp, XP_PER_LIKE
 
 # --- IMPORT THE SCHEMAS WE MADE EARLIER ---
-from app.schemas.post import PostCreate, PostRead, CommentRead 
+from app.schemas.social import PostCreate, PostRead, CommentRead 
 
 router = APIRouter()
 
