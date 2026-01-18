@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     
     # SECURITY
     SECRET_KEY: str = "change_this_to_a_very_long_random_string_xyz123"
-    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8 
     
     # CORS
