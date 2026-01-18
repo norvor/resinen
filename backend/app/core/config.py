@@ -3,14 +3,14 @@ from typing import List
 from pydantic_settings import BaseSettings 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Resinen Platform"
+    PROJECT_NAME: str = "Resinen Core"
     API_V1_STR: str = "/api/v1"
     
     # DB
     DATABASE_URL: str = "postgresql+asyncpg://resinen_admin:securepassword@localhost/resinen_platform"
     
     # SECURITY
-    SECRET_KEY: str = "change_this_to_a_secure_random_key_in_production"
+    SECRET_KEY: str = "change_this_to_a_very_long_random_string_xyz123"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8 
     
     # CORS
