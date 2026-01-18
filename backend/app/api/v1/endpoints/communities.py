@@ -198,7 +198,7 @@ async def join_community(
 
 @router.get("/{community_id}/members", response_model=List[MembershipOut])
 async def read_community_members(
-    community_id: UUID,
+    community_id: uuid.UUID,
     status: Optional[str] = None,
     db: AsyncSession = Depends(deps.get_db),
 ):
