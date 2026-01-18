@@ -1,6 +1,7 @@
 import asyncio
+from sqlalchemy import text # Import text for raw SQL
 from sqlmodel import SQLModel, select
-from app.core.database import async_session_factory, engine # Import engine to drop tables
+from app.core.database import async_session_factory, engine 
 from app.models.user import User
 from app.models.community import Community, Archetype
 from app.core.security import get_password_hash
@@ -91,18 +92,27 @@ WORLDS = [
 ]
 
 async def seed_db():
-    print("💣 WAARING: Resetting Database Protocol Initiated...")
+    print("☢️  INITIATING NUCLEAR EXORCISM...")
     
-    # 1. DROP OLD TABLES (The Fix)
     async with engine.begin() as conn:
+        # 1. RAW SQL TO KILL ZOMBIE TABLES
+        # We force drop the tables that are causing the dependency error
+        await conn.execute(text("DROP TABLE IF EXISTS academicresource CASCADE;"))
+        await conn.execute(text("DROP TABLE IF EXISTS memberservice CASCADE;"))
+        await conn.execute(text("DROP TABLE IF EXISTS communitybylaw CASCADE;"))
+        await conn.execute(text("DROP TABLE IF EXISTS product CASCADE;")) 
+        await conn.execute(text("DROP TABLE IF EXISTS engine CASCADE;"))
+        
+        # 2. STANDARD RESET
         await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
-    print("✨ Database Wiped & Rebuilt. Clean Slate.")
+        
+    print("✨ Database Purified. The ghosts are gone.")
 
     print("🌱 Starting Resinen Genesis Seeder...")
     
     async with async_session_factory() as db:
-        # 2. CREATE SUPERUSER
+        # 3. CREATE SUPERUSER
         print(f"Creating Superuser: {ADMIN_EMAIL}")
         admin = User(
             email=ADMIN_EMAIL,
@@ -118,7 +128,7 @@ async def seed_db():
         await db.refresh(admin)
         print("✅ Admin Created.")
 
-        # 3. CREATE WORLDS
+        # 4. CREATE WORLDS
         print("Initializing 11 Sovereign Worlds...")
         for world_data in WORLDS:
             community = Community(
@@ -127,7 +137,7 @@ async def seed_db():
                 description=world_data["description"],
                 archetype=world_data["archetype"],
                 config=world_data["config"],
-                active_engines=[], # Initialize empty list
+                active_engines=[], 
                 creator_id=admin.id,
                 is_private=(world_data["archetype"] == Archetype.BUNKER)
             )
