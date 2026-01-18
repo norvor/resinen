@@ -161,41 +161,40 @@ async def join_community(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """
-    Apply for citizenship.
-    """
-    # 1. Check if exists
+    # 1. Fetch the Community to check its settings
     community = await db.get(Community, community_id)
     if not community:
-        raise HTTPException(404, "Community not found")
+        raise HTTPException(status_code=404, detail="Community not found")
 
-    # 2. Check if already member
-    existing = await db.execute(select(Membership).where(
-        Membership.user_id == current_user.id, 
-        Membership.community_id == community_id
-    ))
-    if existing.scalars().first():
-        return {"message": "Already a member"}
+    # 2. Check if already a member
+    existing_membership = await db.get(Membership, (current_user.id, community_id))
+    if existing_membership:
+        raise HTTPException(status_code=400, detail="Already a member")
 
-    # 3. Logic: Private vs Public
+    # 3. DETERMINE STATUS BASED ON PRIVACY
+    # This is the fix. If private -> pending. If public -> active.
     initial_status = "pending" if community.is_private else "active"
-    
-    new_member = Membership(
+
+    # 4. Create Membership
+    new_membership = Membership(
         user_id=current_user.id,
         community_id=community_id,
-        status=initial_status,
-        role="member"
+        role="member",
+        status=initial_status  # <--- Use the calculated status
     )
-    
-    # Update counts if active immediately
-    if initial_status == "active":
-        community.member_count += 1
-        db.add(community)
-        
-    db.add(new_member)
+
+    db.add(new_membership)
     await db.commit()
-    
-    return {"status": initial_status}
+    await db.refresh(new_membership)
+
+    # 5. Return a helpful message so the Frontend knows what to show
+    return {
+        "status": "success", 
+        "membership_status": initial_status,
+        "message": "Request pending approval" if initial_status == "pending" else "Joined successfully"
+    }
+
+
 
 @router.get("/{community_id}/members", response_model=List[MembershipOut])
 async def read_community_members(
