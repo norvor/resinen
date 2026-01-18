@@ -43,6 +43,7 @@ export type Community = {
     description: string;
     is_private: boolean;
     member_count: number;
+    creator_id: string; // <--- ADD THIS
     settings?: Record<string, any>;
 };
 
