@@ -35,10 +35,11 @@ class CommunityBase(BaseModel):
     slug: str
     description: Optional[str] = None
     banner_url: Optional[str] = None
-    
-    # Archetype fields
     archetype: Archetype = Archetype.DEFAULT
-    config: Dict[str, Any] = {} 
+    
+    # Add installed_engines here too
+    config: Dict[str, Any] = {}
+    installed_engines: List[str] = [] 
     
     is_private: bool = False
 
