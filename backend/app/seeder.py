@@ -1,17 +1,15 @@
 import asyncio
-import logging
-from app.core.database import async_session_factory
+from sqlmodel import SQLModel, select
+from app.core.database import async_session_factory, engine # Import engine to drop tables
 from app.models.user import User
 from app.models.community import Community, Archetype
 from app.core.security import get_password_hash
-from sqlmodel import select
 
 # --- CONFIGURATION ---
 ADMIN_EMAIL = "admin@resinen.com"
-ADMIN_PASS = "admin123" # CHANGE THIS LATER
+ADMIN_PASS = "admin123"
 ADMIN_NAME = "Resinen Architect"
 
-# --- THE 11 SOVEREIGN WORLDS ---
 WORLDS = [
     {
         "name": "The Colosseum",
@@ -24,7 +22,7 @@ WORLDS = [
         "name": "Spotlight Central",
         "slug": "spotlight",
         "archetype": Archetype.STAGE,
-        "description": "Visuals only. Vertical feeds, fancams, and aesthetics. If it isn't beautiful, it doesn't belong.",
+        "description": "Visuals only. Vertical feeds, fancams, and aesthetics.",
         "config": {"view_mode": "vertical_scroll"}
     },
     {
@@ -93,53 +91,47 @@ WORLDS = [
 ]
 
 async def seed_db():
+    print("💣 WAARING: Resetting Database Protocol Initiated...")
+    
+    # 1. DROP OLD TABLES (The Fix)
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.run_sync(SQLModel.metadata.create_all)
+    print("✨ Database Wiped & Rebuilt. Clean Slate.")
+
     print("🌱 Starting Resinen Genesis Seeder...")
     
     async with async_session_factory() as db:
-        # 1. CREATE SUPERUSER
-        print(f"Checking for Admin: {ADMIN_EMAIL}")
-        query = select(User).where(User.email == ADMIN_EMAIL)
-        result = await db.execute(query)
-        admin = result.scalars().first()
-        
-        if not admin:
-            print("Creating Superuser...")
-            admin = User(
-                email=ADMIN_EMAIL,
-                full_name=ADMIN_NAME,
-                hashed_password=get_password_hash(ADMIN_PASS),
-                is_active=True,
-                is_superuser=True,
-                level=99
-            )
-            db.add(admin)
-            await db.commit()
-            await db.refresh(admin)
-            print("✅ Admin Created.")
-        else:
-            print("ℹ️ Admin already exists.")
+        # 2. CREATE SUPERUSER
+        print(f"Creating Superuser: {ADMIN_EMAIL}")
+        admin = User(
+            email=ADMIN_EMAIL,
+            full_name=ADMIN_NAME,
+            hashed_password=get_password_hash(ADMIN_PASS),
+            is_active=True,
+            is_superuser=True,
+            level=99,
+            reputation_score=1000
+        )
+        db.add(admin)
+        await db.commit()
+        await db.refresh(admin)
+        print("✅ Admin Created.")
 
-        # 2. CREATE WORLDS
+        # 3. CREATE WORLDS
         print("Initializing 11 Sovereign Worlds...")
         for world_data in WORLDS:
-            query = select(Community).where(Community.slug == world_data["slug"])
-            result = await db.execute(query)
-            exists = result.scalars().first()
-            
-            if not exists:
-                print(f"Creating {world_data['name']} ({world_data['archetype']})...")
-                community = Community(
-                    name=world_data["name"],
-                    slug=world_data["slug"],
-                    description=world_data["description"],
-                    archetype=world_data["archetype"],
-                    config=world_data["config"],
-                    creator_id=admin.id,
-                    is_private=(world_data["archetype"] == Archetype.BUNKER)
-                )
-                db.add(community)
-            else:
-                print(f"ℹ️ {world_data['name']} exists.")
+            community = Community(
+                name=world_data["name"],
+                slug=world_data["slug"],
+                description=world_data["description"],
+                archetype=world_data["archetype"],
+                config=world_data["config"],
+                active_engines=[], # Initialize empty list
+                creator_id=admin.id,
+                is_private=(world_data["archetype"] == Archetype.BUNKER)
+            )
+            db.add(community)
         
         await db.commit()
         print("🌍 Genesis Complete. The 11 Worlds are live.")
