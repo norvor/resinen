@@ -1,7 +1,13 @@
 import { browser } from '$app/environment';
+import { writable } from 'svelte/store';
 
 // --- CONFIGURATION ---
-const API_URL = 'https://api.resinen.com/api/v1';
+export const API_URL = 'https://api.resinen.com/api/v1';
+
+// --- STORES ---
+export const token = writable<string | null>(
+    browser ? localStorage.getItem('codex_token') : null
+);
 
 // --- TYPES ---
 
@@ -10,8 +16,6 @@ export type User = {
     email: string;
     full_name: string;
     is_superuser: boolean;
-    
-    // New Fields
     headline?: string;
     bio?: string;
     location?: string;
@@ -23,11 +27,22 @@ export type User = {
     level: number;
 };
 
+// FIX: Strict Type for Creation to ensure is_private works
+export type CreateCommunityDTO = {
+    name: string;
+    slug: string;
+    description: string;
+    is_private: boolean; // <--- This ensures the checkbox data sends correctly
+    settings?: Record<string, any>;
+};
+
 export type Community = {
     id: string;
     name: string;
     slug: string;
     description: string;
+    is_private: boolean;
+    member_count: number;
     settings?: Record<string, any>;
 };
 
@@ -64,155 +79,125 @@ export type Post = {
     author_id: string;
     author_name: string;
     created_at: string;
-    
     like_count: number;
-    is_liked: boolean; // <--- ADD THIS
-    
+    is_liked: boolean;
     comments?: Comment[];
 };
 
-// --- HELPERS ---
+// --- CORE REQUEST HELPER (The "Proper" Way) ---
 
-function getHeader() {
-    if (!browser) return { 'Content-Type': 'application/json' };
+async function request(method: string, endpoint: string, data?: any, isForm: boolean = false) {
+    if (!browser) return; // Prevent SSR issues
+
+    const _token = localStorage.getItem('codex_token');
     
-    const token = localStorage.getItem('access_token');
-    return token 
-        ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } 
-        : { 'Content-Type': 'application/json' };
-}
+    const headers: any = {};
+    if (!isForm) headers['Content-Type'] = 'application/json';
+    if (_token) headers['Authorization'] = `Bearer ${_token}`;
 
-async function handleResponse(res: Response) {
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Request failed: ${res.status}`);
+    const config: RequestInit = {
+        method,
+        headers,
+        body: data ? (isForm ? data : JSON.stringify(data)) : undefined
+    };
+
+    try {
+        const res = await fetch(`${API_URL}${endpoint}`, config);
+        
+        // Auto-Logout on 401
+        if (res.status === 401) {
+            localStorage.removeItem('codex_token');
+            window.location.href = '/login';
+            throw new Error('Session expired');
+        }
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `API Error: ${res.status}`);
+        }
+
+        return res.json();
+    } catch (e) {
+        throw e;
     }
-    return res.json();
 }
 
 // --- API CLIENT ---
 
 export const api = {
     // SYSTEM
-    healthCheck: async () => {
-        try { return await (await fetch('https://api.resinen.com/')).json(); } 
-        catch (e) { return { status: "offline" }; }
-    },
+    healthCheck: () => request('GET', '/'), // Root check
 
-    getContentBlock: async (slug: string): Promise<ContentBlock> => {
-        const res = await fetch(`${API_URL}/content/${slug}`, { headers: getHeader() });
-        return handleResponse(res);
-    },
+    // CONTENT BLOCKS (CMS)
+    getContentBlock: (slug: string): Promise<ContentBlock> => request('GET', `/content/${slug}`),
+    getSectionBlocks: (section: string): Promise<ContentBlock[]> => request('GET', `/content/section/${section}`),
+    createContentBlock: (data: Partial<ContentBlock>) => request('POST', '/content/', data),
+    updateContentBlock: (slug: string, data: Partial<ContentBlock>) => request('PUT', `/content/${slug}`, data),
 
-    getSectionBlocks: async (section: string): Promise<ContentBlock[]> => {
-        const res = await fetch(`${API_URL}/content/section/${section}`, { headers: getHeader() });
-        return handleResponse(res);
-    },
+    // USER / PROFILE
+    getMe: (): Promise<User> => request('GET', '/users/me'),
+    updateProfile: (data: Partial<User>) => request('PUT', '/users/me', data),
 
-    createContentBlock: async (data: Partial<ContentBlock>) => {
-        const res = await fetch(`${API_URL}/content/`, {
-            method: 'POST',
-            headers: getHeader(),
-            body: JSON.stringify(data)
-        });
-        return handleResponse(res);
-    },
-
-    updateContentBlock: async (slug: string, data: Partial<ContentBlock>) => {
-        const res = await fetch(`${API_URL}/content/${slug}`, {
-            method: 'PUT',
-            headers: getHeader(),
-            body: JSON.stringify(data)
-        });
-        return handleResponse(res);
-    },
-
-    getMe: async (): Promise<User> => {
-        const res = await fetch(`${API_URL}/users/me`, { headers: getHeader() });
-        return handleResponse(res);
-    },
-
-    updateProfile: async (data: Partial<User>) => {
-        const res = await fetch(`${API_URL}/users/me`, {
-            method: 'PUT',
-            headers: getHeader(),
-            body: JSON.stringify(data)
-        });
-        return handleResponse(res);
-    },
-
-    // AUTH
+    // AUTHENTICATION
     login: async (username, password) => {
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
-        const res = await fetch(`${API_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData
-        });
-        const data = await handleResponse(res);
-        if (browser) localStorage.setItem('access_token', data.access_token);
+        
+        const data = await request('POST', '/auth/login', formData, true);
+        if (browser) {
+            localStorage.setItem('codex_token', data.access_token);
+            token.set(data.access_token);
+        }
         return data;
     },
 
-    signup: async (email, password, fullName) => {
-        const res = await fetch(`${API_URL}/auth/signup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, full_name: fullName })
-        });
-        return handleResponse(res);
+    signup: (email, password, fullName) => {
+        return request('POST', '/auth/signup', { email, password, full_name: fullName });
     },
 
-    // COMMUNITIES
-    getCommunities: async (): Promise<Community[]> => handleResponse(await fetch(`${API_URL}/communities/`, { headers: getHeader() })),
+    // COMMUNITIES (Fixed Logic)
+    getCommunities: (): Promise<Community[]> => request('GET', '/communities/'),
+    
     getCommunity: async (id: string): Promise<Community | undefined> => {
-        const all = await handleResponse(await fetch(`${API_URL}/communities/`, { headers: getHeader() }));
-        return all.find((c: any) => c.id === id);
+        // Optimization: Fetch single if API supports it, otherwise filter list
+        try {
+            return await request('GET', `/communities/${id}`); // Assumes backend supports by ID
+        } catch {
+            const all = await request('GET', '/communities/');
+            return all.find((c: any) => c.id === id);
+        }
     },
-    createCommunity: async (data: Partial<Community>) => handleResponse(await fetch(`${API_URL}/communities/`, { method: 'POST', headers: getHeader(), body: JSON.stringify(data) })),
-    updateCommunity: async (id: string, data: Partial<Community>) => handleResponse(await fetch(`${API_URL}/communities/${id}`, { method: 'PUT', headers: getHeader(), body: JSON.stringify(data) })),
-    deleteCommunity: async (id: string) => handleResponse(await fetch(`${API_URL}/communities/${id}`, { method: 'DELETE', headers: getHeader() })),
+
+    // THE FIX: Use strict DTO to ensure is_private sends correctly
+    createCommunity: (data: CreateCommunityDTO) => request('POST', '/communities/', data),
+    
+    updateCommunity: (id: string, data: Partial<Community>) => request('PUT', `/communities/${id}`, data),
+    deleteCommunity: (id: string) => request('DELETE', `/communities/${id}`),
+    
+    getMembers: (communityId: string, status?: string) => 
+        request('GET', `/communities/${communityId}/members${status ? `?status=${status}` : ''}`),
+
+    processMembership: (communityId: string, userId: string, action: 'approve' | 'reject' | 'ban') => 
+        request('POST', `/communities/${communityId}/members/${userId}/process?action=${action}`),
 
     // CHAPTERS
-    getChapters: async (communityId: string): Promise<Chapter[]> => handleResponse(await fetch(`${API_URL}/chapters/?community_id=${communityId}`, { headers: getHeader() })),
-    getChapter: async (id: string): Promise<Chapter> => handleResponse(await fetch(`${API_URL}/chapters/${id}`, { headers: getHeader() })),
-    createChapter: async (data: { community_id: string, name: string, location: string }) => handleResponse(await fetch(`${API_URL}/chapters/`, { method: 'POST', headers: getHeader(), body: JSON.stringify(data) })),
-    updateChapter: async (id: string, data: Partial<Chapter>) => handleResponse(await fetch(`${API_URL}/chapters/${id}`, { method: 'PUT', headers: getHeader(), body: JSON.stringify(data) })),
-    deleteChapter: async (id: string) => handleResponse(await fetch(`${API_URL}/chapters/${id}`, { method: 'DELETE', headers: getHeader() })),
+    getChapters: (communityId: string): Promise<Chapter[]> => request('GET', `/chapters/?community_id=${communityId}`),
+    getChapter: (id: string): Promise<Chapter> => request('GET', `/chapters/${id}`),
+    createChapter: (data: { community_id: string, name: string, location: string }) => request('POST', '/chapters/', data),
+    updateChapter: (id: string, data: Partial<Chapter>) => request('PUT', `/chapters/${id}`, data),
+    deleteChapter: (id: string) => request('DELETE', `/chapters/${id}`),
 
-    // SOCIAL
-    createPost: async (data: { community_id: string, chapter_id?: string, content: string }) => {
-        const res = await fetch(`${API_URL}/social/`, {
-            method: 'POST',
-            headers: getHeader(),
-            body: JSON.stringify(data)
-        });
-        return handleResponse(res);
+    // SOCIAL ENGINE
+    getFeed: (communityId: string, chapterId?: string): Promise<Post[]> => {
+        let url = `/social/feed?community_id=${communityId}`; // Adjusted to standard endpoint
+        if (chapterId) url += `&chapter_id=${chapterId}`;
+        return request('GET', url);
     },
     
-    toggleLike: async (postId: string) => {
-        const res = await fetch(`${API_URL}/social/posts/${postId}/like`, {
-            method: 'POST',
-            headers: getHeader()
-        });
-        return handleResponse(res);
-    },
-
-    getFeed: async (communityId: string, chapterId?: string): Promise<Post[]> => {
-        let url = `${API_URL}/social/?community_id=${communityId}`;
-        if (chapterId) url += `&chapter_id=${chapterId}`;
-        const res = await fetch(url, { headers: getHeader() });
-        return handleResponse(res);
-    },
-
-    createComment: async (postId: string, content: string) => {
-        const res = await fetch(`${API_URL}/social/comments`, {
-            method: 'POST',
-            headers: getHeader(),
-            body: JSON.stringify({ post_id: postId, content })
-        });
-        return handleResponse(res);
-    },
+    createPost: (data: { community_id: string, chapter_id?: string, content: string, title?: string }) => request('POST', '/social/posts', data),
+    
+    toggleLike: (postId: string) => request('POST', `/social/posts/${postId}/like`),
+    
+    createComment: (postId: string, content: string) => request('POST', '/social/comments', { post_id: postId, content }),
 };

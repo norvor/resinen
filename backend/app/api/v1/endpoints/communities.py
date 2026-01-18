@@ -133,6 +133,32 @@ async def get_community_by_slug(
     return community
 
 # --- 2. THE MEMBERSHIP (Join/Leave) ---
+
+@router.get("/{community_id}/members", response_model=List[Any])
+async def read_community_members(
+    community_id: UUID4,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(deps.get_db),
+    # Optional: Add security if you only want Admins to see this
+    # current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Get all members of a specific community.
+    Optional: Filter by ?status=pending or ?status=active
+    """
+    # 1. Start the Query
+    query = select(Membership).where(Membership.community_id == community_id)
+    
+    # 2. Apply Filter if requested (e.g. "pending")
+    if status:
+        query = query.where(Membership.status == status)
+    
+    # 3. Execute
+    result = await db.execute(query)
+    members = result.scalars().all()
+    
+    return members
+    
 @router.get("/{community_id}/membership_status")
 async def get_membership_status(
     community_id: uuid.UUID,

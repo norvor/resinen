@@ -1,54 +1,59 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { api } from '$lib/api';
+    import { api, type Community } from '$lib/api';
 
-    let communities: any[] = [];
-    let isLoading = true;
+    let communities: Community[] = [];
+    let loading = true;
 
     onMount(async () => {
         try {
             communities = await api.getCommunities();
         } catch (e) {
-            alert('Error loading data');
+            console.error("Failed to load communities", e);
         } finally {
-            isLoading = false;
+            loading = false;
         }
     });
 </script>
 
-<div class="max-w-6xl mx-auto">
-    <div class="flex justify-between items-center mb-8">
-        <div>
-            <h1 class="text-3xl font-bold text-white tracking-tight">Communities</h1>
-            <p class="text-slate-400 mt-1">The root layer of your ecosystem.</p>
-        </div>
-        <a href="/communities/new" class="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-orange-500/20">
-            + Initialize New
+<div class="max-w-6xl mx-auto p-8">
+    <div class="flex justify-between items-center mb-8 border-b border-slate-800 pb-6">
+        <h1 class="text-3xl font-bold text-white">Territories</h1>
+        <a href="/communities/new" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            + New
         </a>
     </div>
 
-    {#if isLoading}
-        <div class="text-slate-500 animate-pulse">Syncing with mainframe...</div>
-    
+    {#if loading}
+        <div class="text-slate-500 animate-pulse">Loading...</div>
     {:else if communities.length === 0}
-        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-12 text-center">
-            <h3 class="text-xl font-bold text-slate-300">System Empty</h3>
-            <p class="text-slate-500 mt-2 mb-6">No communities detected. Start by creating the first one.</p>
-            <a href="/communities/new" class="text-orange-500 hover:underline">Create Genesis Community &rarr;</a>
+        <div class="text-center py-24 border border-dashed border-slate-800 rounded-xl">
+            <h3 class="text-white font-bold">No Territories</h3>
+            <p class="text-slate-500 text-sm mt-1">Initialize your first node to begin.</p>
         </div>
-
     {:else}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {#each communities as c}
-                <a href="/communities/{c.id}" class="group block bg-slate-950 border border-slate-800 hover:border-orange-500/50 rounded-2xl p-6 transition-all hover:-translate-y-1">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="h-12 w-12 bg-slate-900 rounded-full flex items-center justify-center text-xl font-bold text-slate-300 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                            {c.name.charAt(0)}
-                        </div>
-                        <span class="text-xs font-mono text-slate-600 border border-slate-800 rounded px-2 py-1">/{c.slug}</span>
+            {#each communities as comm}
+                <a href="/communities/{comm.id}" class="block bg-slate-950 border border-slate-800 rounded-xl p-6 hover:border-orange-500 transition-colors group">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="font-bold text-lg text-white group-hover:text-orange-500 transition-colors">
+                            {comm.name}
+                        </span>
+                        {#if comm.is_private}
+                            <span class="bg-slate-900 text-orange-500 text-[10px] px-2 py-1 rounded uppercase font-bold border border-slate-800">
+                                Private
+                            </span>
+                        {/if}
                     </div>
-                    <h3 class="text-xl font-bold text-white mb-2">{c.name}</h3>
-                    <p class="text-slate-400 text-sm line-clamp-2">{c.description || "No description provided."}</p>
+                    
+                    <p class="text-slate-400 text-sm line-clamp-2 mb-4 h-10">
+                        {comm.description || 'No description provided.'}
+                    </p>
+
+                    <div class="flex items-center justify-between text-xs text-slate-500 border-t border-slate-900 pt-4">
+                        <span class="font-mono opacity-50">{comm.slug}</span>
+                        <span class="font-bold">{comm.member_count || 0} Citizens</span>
+                    </div>
                 </a>
             {/each}
         </div>
