@@ -37,6 +37,21 @@ class Membership(SQLModel, table=True):
     user: "User" = Relationship(back_populates="memberships")
     community: "Community" = Relationship(back_populates="memberships")
 
+# --- CHAPTERS (Restored for Academy/Library) ---
+class Chapter(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    community_id: uuid.UUID = Field(foreign_key="community.id")
+    
+    title: str
+    description: Optional[str] = None
+    sequence_order: int = Field(default=0) # For ordering modules
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    community: "Community" = Relationship(back_populates="chapters")
+    posts: List["Post"] = Relationship(back_populates="chapter")
+
 # --- COMMUNITIES ---
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -47,11 +62,8 @@ class Community(SQLModel, table=True):
     description: Optional[str] = None
     banner_url: Optional[str] = None
     
-    # --- 2. NEW FIELDS FOR RESINEN V2 ---
+    # Archetype & Config
     archetype: Archetype = Field(default=Archetype.DEFAULT)
-    
-    # Stores world-specific settings (e.g. {"tax_rate": 5, "team_a": "ManUtd"})
-    # We use SQLAlchemy's JSON type to store flexible data
     config: Dict[str, Any] = Field(default_factory=dict, sa_type=JSON) 
     
     is_private: bool = Field(default=False)
@@ -63,7 +75,4 @@ class Community(SQLModel, table=True):
     creator: "User" = Relationship()
     posts: List["Post"] = Relationship(back_populates="community")
     memberships: List["Membership"] = Relationship(back_populates="community")
-    
-    # Chapters (For Academy/Library) - We can define this later if needed, 
-    # but keeping the relationship link if you had it before:
-    # chapters: List["Chapter"] = Relationship(back_populates="community")
+    chapters: List["Chapter"] = Relationship(back_populates="community")
