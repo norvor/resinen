@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { api, loginUser } from '$lib/api';
+    import { api } from '$lib/api'; // We only need 'api'
 
     let fullName = '';
     let email = '';
@@ -19,32 +19,28 @@
         error = '';
 
         try {
-            // 1. Create User (Hits https://api.resinen.com/api/v1/auth/signup)
-            await api('POST', '/auth/signup', {
-                email: email,
-                password: password,
-                full_name: fullName
-            });
+            // 1. Create User
+            // The api.signup function handles the JSON structure for you
+            await api.signup(email, password, fullName);
 
             // 2. Auto-Login
-            const formData = new URLSearchParams();
-            formData.append('username', email);
-            formData.append('password', password);
-
-            const tokenData = await api('POST', '/auth/login', formData);
+            // The api.login function handles the FormData and Token Storage automatically
+            await api.login(email, password);
 
             // 3. Get Profile
-            localStorage.setItem('resinen_token', tokenData.access_token);
-            const userData = await api('GET', '/users/me');
+            // The api.getMe function handles fetching and updating the User store
+            await api.getMe();
 
-            // 4. Success
-            loginUser(tokenData.access_token, userData);
+            // 4. Success -> Redirect
             goto('/dashboard');
 
         } catch (e: any) {
             console.error(e);
-            error = e.message || 'Registration failed';
-            localStorage.removeItem('resinen_token');
+            // Handle specific API error messages
+            error = e.message || e.detail || 'Registration failed';
+            
+            // Clean up if something half-worked
+            localStorage.removeItem('token'); 
         } finally {
             isLoading = false;
         }

@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # ... your existing database service (postgres) ...
+  
+  minio:
+    image: minio/minio
+    container_name: resinen_minio
+    ports:
+      - "9000:9000" # API Port
+      - "9001:9001" # Web Console Port
+    environment:
+      MINIO_ROOT_USER: resinen_minio_admin
+      MINIO_ROOT_PASSWORD: minio_secure_password_123
+    volumes:
+      - ./minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - resinen-network
+
+networks:
+  resinen-network:
+    driver: bridge

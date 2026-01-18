@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { api, loginUser } from '$lib/api';
+    import { api } from '$lib/api'; // We only need the api object
     import { goto } from '$app/navigation';
 
     let email = '';
@@ -12,28 +12,19 @@
         error = '';
 
         try {
-            // 1. Prepare Form Data
-            const formData = new URLSearchParams();
-            formData.append('username', email);
-            formData.append('password', password);
+            // 1. The api.login function already handles FormData and hits /auth/login
+            await api.login(email, password);
 
-            // 2. Authenticate (Hits https://api.resinen.com/api/v1/auth/login)
-            const tokenData = await api('POST', '/auth/login', formData);
+            // 2. The api.getMe function already fetches the user and updates the store
+            await api.getMe();
 
-            // 3. Get Profile (Hits https://api.resinen.com/api/v1/users/me)
-            // We manually set the token in local storage momentarily so the next api() call picks it up
-            localStorage.setItem('resinen_token', tokenData.access_token);
-            
-            const userData = await api('GET', '/users/me');
-
-            // 4. Finalize
-            loginUser(tokenData.access_token, userData);
+            // 3. Redirect
             goto('/dashboard');
 
         } catch (e: any) {
             console.error(e);
-            error = e.message || 'Login failed';
-            localStorage.removeItem('resinen_token'); // Cleanup if failed
+            // Handle specific error messages from your FastAPI backend
+            error = e.detail || e.message || 'Login failed';
         } finally {
             isLoading = false;
         }

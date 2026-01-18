@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { goto } from '$app/navigation'; // Added for smooth search
     import { api, user } from '$lib/api';
 
     let myCommunities: any[] = [];
@@ -8,10 +9,11 @@
 
     onMount(async () => {
         try {
-            // Fetch the territories I am a citizen of
-            myCommunities = await api('GET', '/users/me/communities');
+            // FIX: Call the method on the object, don't call the object itself
+            myCommunities = await api.getMyCommunities();
+            console.log("Loaded Communities:", myCommunities); // Debugging
         } catch (e) {
-            console.error(e);
+            console.error("Failed to load communities:", e);
         } finally {
             loading = false;
         }
@@ -19,7 +21,8 @@
 
     function handleSearch() {
         if(searchQuery.trim()) {
-            window.location.href = `/communities?q=${searchQuery}`;
+            // FIX: Use SvelteKit navigation (faster)
+            goto(`/communities?q=${searchQuery}`);
         }
     }
 </script>
@@ -42,16 +45,16 @@
             
             <div class="bg-white border-4 border-black p-6 shadow-hard relative overflow-hidden group">
                 <div class="absolute top-0 right-0 bg-sp-yellow border-l-4 border-b-4 border-black px-3 py-1 font-black text-xs uppercase">
-                    ID: {$user?.id.slice(0,8)}
+                    ID: {$user?.id ? $user.id.slice(0,8) : '...'}
                 </div>
 
                 <div class="flex flex-col items-center text-center mt-4">
                     <div class="w-32 h-32 bg-gray-200 border-4 border-black rounded-full overflow-hidden mb-4 relative">
-                        <img src={$user?.avatar_url || 'https://api.dicebear.com/7.x/notionists/svg?seed=' + $user?.email} alt="Avatar" class="w-full h-full object-cover" />
+                        <img src={$user?.avatar_url || 'https://api.dicebear.com/7.x/notionists/svg?seed=' + ($user?.email || 'default')} alt="Avatar" class="w-full h-full object-cover" />
                     </div>
                     
-                    <h2 class="text-2xl font-black uppercase leading-none">{$user?.full_name}</h2>
-                    <p class="font-mono text-sm text-gray-500 mt-1">{$user?.email}</p>
+                    <h2 class="text-2xl font-black uppercase leading-none">{$user?.full_name || 'Anonymous'}</h2>
+                    <p class="font-mono text-sm text-gray-500 mt-1">{$user?.email || 'Loading...'}</p>
                     
                     <div class="flex gap-2 mt-4">
                         <span class="bg-black text-white px-3 py-1 font-bold text-xs uppercase">Level {$user?.level || 1}</span>
@@ -125,7 +128,7 @@
 
                             <div class="flex items-center gap-4 mb-4">
                                 <div class="w-12 h-12 bg-sp-purple border-2 border-black flex items-center justify-center font-black text-white text-xl uppercase">
-                                    {community.name.slice(0,1)}
+                                    {community.name ? community.name.slice(0,1) : '?'}
                                 </div>
                                 <div>
                                     <h4 class="font-black text-lg uppercase leading-none group-hover:text-sp-blue transition-colors">
@@ -140,7 +143,7 @@
                             </p>
 
                             <div class="flex justify-between items-center pt-4 border-t-2 border-gray-100 text-xs font-black uppercase">
-                                <span class="bg-gray-100 px-2 py-1 border border-black">{community.member_count} Citizens</span>
+                                <span class="bg-gray-100 px-2 py-1 border border-black">{community.member_count || 0} Citizens</span>
                                 <span class="text-sp-blue group-hover:underline">Enter Territory &rarr;</span>
                             </div>
                         </a>

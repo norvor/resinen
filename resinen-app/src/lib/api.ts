@@ -1,64 +1,168 @@
+import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
 
-// 1. POINT TO PRODUCTION
-const API_URL = 'https://api.resinen.com/api/v1'; 
+// --- CONFIGURATION ---
+export const API_URL = 'https://api.resinen.com/api/v1';
 
-// 2. User Store
-const storedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('resinen_user') : null;
-export const user = writable(storedUser ? JSON.parse(storedUser) : null);
+// --- STORES ---
+export const token = writable<string | null>(
+    browser ? localStorage.getItem('token') : null
+);
 
-// 3. API Helper
-export async function api(method: string, endpoint: string, data?: any) {
+export const user = writable<User | null>(null);
+
+// --- TYPES ---
+export interface User {
+    id: string;
+    email: string;
+    full_name: string;
+    avatar_url?: string;
+    xp: number;
+    level: number;
+    reputation_score: number;
+}
+
+export interface Comment {
+    id: string;
+    post_id: string;
+    author_id: string;
+    author_name: string;
+    author_avatar?: string;
+    author_level: number;
+    content: string;
+    created_at: string;
+    like_count: number;
+    is_liked: boolean;
+    parent_id?: string; // For nested replies
+}
+
+export interface Post {
+    id: string;
+    community_id: string;
+    author_name: string;
+    author_id: string;
+    author_avatar?: string;
+    author_level: number;
+    content: string;
+    created_at: string;
+    like_count: number;
+    comment_count: number;
+    is_liked: boolean;
+    title?: string;
+    image_url?: string;
+    link_url?: string;
+}
+
+// --- CORE REQUEST HELPER ---
+async function request<T>(method: string, endpoint: string, data?: any, isForm: boolean = false): Promise<T> {
+    if (!browser) return {} as T;
+
+    const _token = localStorage.getItem('token');
+    
     const headers: any = {};
+    if (!isForm) headers['Content-Type'] = 'application/json';
+    if (_token) headers['Authorization'] = `Bearer ${_token}`;
 
-    // Only set Content-Type to JSON if we aren't sending FormData (for login)
-    if (!(data instanceof URLSearchParams)) {
-        headers['Content-Type'] = 'application/json';
-    }
-
-    const token = localStorage.getItem('resinen_token');
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const config: any = {
+    const config: RequestInit = {
         method,
         headers,
+        body: data ? (isForm ? data : JSON.stringify(data)) : undefined
     };
 
-    if (data) {
-        config.body = data instanceof URLSearchParams ? data : JSON.stringify(data);
+    const res = await fetch(`${API_URL}${endpoint}`, config);
+
+    if (res.status === 401) {
+        logout();
+        throw new Error('Unauthorized');
     }
 
-    try {
-        const res = await fetch(`${API_URL}${endpoint}`, config);
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'API Request Failed');
+    }
+    return res.json();
+}
+
+// --- STANDALONE FUNCTIONS ---
+
+export const logout = () => {
+    if (browser) {
+        localStorage.removeItem('token');
+        token.set(null);
+        user.set(null);
+        window.location.href = '/login';
+    }
+};
+
+export const loginUser = async (email: string, password: string) => {
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+    
+    const data = await request<any>('POST', '/auth/login', formData, true);
+    
+    if (browser) {
+        localStorage.setItem('token', data.access_token);
+        token.set(data.access_token);
+    }
+    return data;
+};
+
+export const signupUser = async (email: string, password: string, fullName: string) => {
+    return request('POST', '/auth/signup', { 
+        email, 
+        password, 
+        full_name: fullName 
+    });
+};
+
+// --- API OBJECT (The Main Export) ---
+export const api = {
+    // AUTH
+    login: loginUser,   
+    signup: signupUser, 
+    logout: logout,
+
+    getMe: async () => {
+        const data = await request<User>('GET', '/users/me');
+        user.set(data);
+        return data;
+    },
+
+    // COMMUNITIES
+    getMyCommunities: () => request<any[]>('GET', '/users/me/communities'),
+    
+    getCommunity: (id: string) => request<any>('GET', `/communities/${id}`),
+
+    getCommunities: (query?: string) => 
+        request<any[]>('GET', `/communities/${query ? `?q=${query}` : ''}`),
+    
+    getCommunityBySlug: (slug: string) => request<any>('GET', `/communities/by-slug/${slug}`),
+    
+    joinCommunity: (id: string) => request('POST', `/communities/${id}/join`),
+
+    // SOCIAL FEED
+    getFeed: (communityId: string) => 
+        request<Post[]>('GET', `/feed?scope=community&community_id=${communityId}`),
         
-        if (res.status === 401) {
-            logout();
-            return null;
-        }
+    createPost: (communityId: string, content: string) => 
+        request<Post>('POST', '/posts', { community_id: communityId, content }),
+        
+    likePost: (postId: string) => 
+        request<{status: string, likes: number}>('POST', `/posts/${postId}/like`),
 
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Request failed');
-        }
+    // --- COMMENTS SYSTEM (NEW) ---
+    getComments: (postId: string) => 
+        request<Comment[]>('GET', `/posts/${postId}/comments`),
 
-        return res.json();
-    } catch (e) {
-        throw e;
-    }
-}
+    createComment: (postId: string, content: string, parentId?: string) => 
+        request<Comment>('POST', `/posts/${postId}/comments`, { 
+            content, 
+            parent_id: parentId 
+        }),
 
-// 4. Auth Actions
-export function loginUser(token: string, userData: any) {
-    localStorage.setItem('resinen_token', token);
-    localStorage.setItem('resinen_user', JSON.stringify(userData));
-    user.set(userData);
-}
+    likeComment: (commentId: string) => 
+        request<{status: string, likes: number}>('POST', `/comments/${commentId}/like`),
+};
 
-export function logout() {
-    localStorage.removeItem('resinen_token');
-    localStorage.removeItem('resinen_user');
-    user.set(null);
-    window.location.href = '/login';
-}
+export default api;
