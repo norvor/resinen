@@ -28,6 +28,11 @@
             // Sort members
             pendingQueue = allMembers.filter(m => m.status.toLowerCase() === 'pending');
             activeCitizens = allMembers.filter(m => m.status.toLowerCase() === 'active');
+
+            if (community) {
+                community.member_count = activeCitizens.length;
+            }
+
         } catch (e: any) {
             console.error("Intel Failure:", e);
         } finally {
@@ -115,14 +120,36 @@
 
             <div class="space-y-4">
                 <h3 class="text-slate-500 font-bold uppercase text-xs tracking-widest">Active Roster</h3>
-                <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 min-h-[200px] flex flex-wrap gap-2 content-start">
-                    {#each activeCitizens as citizen}
-                        <div class="bg-slate-900 border border-slate-800 text-slate-400 text-xs px-3 py-1 rounded-full font-mono">
-                            {citizen.user_id.slice(0,8)}
-                        </div>
-                    {/each}
+                
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[200px]">
                     {#if activeCitizens.length === 0}
                         <div class="text-slate-600 text-sm italic w-full text-center mt-8">No active citizens.</div>
+                    {:else}
+                        <div class="space-y-2">
+                            {#each activeCitizens as citizen}
+                                <div class="flex items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-lg hover:border-slate-700 transition-colors">
+                                    
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-orange-900/20 text-orange-500 flex items-center justify-center font-bold text-xs border border-orange-900/50">
+                                            {citizen.user?.full_name ? citizen.user.full_name[0] : '?'}
+                                        </div>
+                                        
+                                        <div>
+                                            <div class="text-sm font-bold text-white">
+                                                {citizen.user?.full_name || 'Unknown Citizen'}
+                                            </div>
+                                            <div class="text-xs text-slate-500 font-mono">
+                                                {citizen.user?.email || citizen.user_id}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <span class="text-[10px] uppercase font-bold bg-slate-950 text-slate-400 px-2 py-1 rounded border border-slate-800">
+                                        {citizen.role}
+                                    </span>
+                                </div>
+                            {/each}
+                        </div>
                     {/if}
                 </div>
             </div>
