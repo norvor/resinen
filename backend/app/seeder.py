@@ -1,6 +1,6 @@
 import asyncio
-from sqlalchemy import text # Import text for raw SQL
-from sqlmodel import SQLModel, select
+from sqlalchemy import text
+from sqlmodel import SQLModel
 from app.core.database import async_session_factory, engine 
 from app.models.user import User
 from app.models.community import Community, Archetype
@@ -92,25 +92,20 @@ WORLDS = [
 ]
 
 async def seed_db():
-    print("☢️  INITIATING NUCLEAR EXORCISM...")
+    print("☢️  NUCLEAR OPTION: DROPPING ENTIRE SCHEMA...")
     
     async with engine.begin() as conn:
-        # 1. RAW SQL TO KILL ZOMBIE TABLES
-        # We force drop the tables that are causing the dependency error
-        await conn.execute(text("DROP TABLE IF EXISTS academicresource CASCADE;"))
-        await conn.execute(text("DROP TABLE IF EXISTS memberservice CASCADE;"))
-        await conn.execute(text("DROP TABLE IF EXISTS communitybylaw CASCADE;"))
-        await conn.execute(text("DROP TABLE IF EXISTS product CASCADE;")) 
-        await conn.execute(text("DROP TABLE IF EXISTS engine CASCADE;"))
+        # 1. THIS COMMAND KILLS EVERYTHING. NO EXCEPTIONS.
+        # It deletes the 'public' folder of the database and remakes it.
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO public;")) 
         
-        # 2. STANDARD RESET
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        # 2. Recreate Tables from Scratch
         await conn.run_sync(SQLModel.metadata.create_all)
         
-    print("✨ Database Purified. The ghosts are gone.")
+    print("✨ Database is 100% Virgin. Rebuilding civilization...")
 
-    print("🌱 Starting Resinen Genesis Seeder...")
-    
     async with async_session_factory() as db:
         # 3. CREATE SUPERUSER
         print(f"Creating Superuser: {ADMIN_EMAIL}")
@@ -126,7 +121,6 @@ async def seed_db():
         db.add(admin)
         await db.commit()
         await db.refresh(admin)
-        print("✅ Admin Created.")
 
         # 4. CREATE WORLDS
         print("Initializing 11 Sovereign Worlds...")
