@@ -224,8 +224,8 @@ async def read_community_members(
 
 @router.post("/{community_id}/members/{user_id}/process")
 async def process_membership(
-    community_id: UUID,
-    user_id: UUID,
+    community_id: uuid.UUID,
+    user_id: uuid.UUID,
     action: str = Query(..., regex="^(approve|reject|ban)$"), # Enforce valid actions
     db: AsyncSession = Depends(deps.get_db),
     # current_user: User = Depends(deps.get_current_active_user), # Uncomment to secure
