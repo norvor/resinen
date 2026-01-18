@@ -17,6 +17,10 @@ class CommunityRead(CommunityBase):
     id: UUID
     # It inherits 'is_private', so the Frontend will now see the lock icon correctly.
     member_count: int = 0 # Optional: Useful for dashboard stats
+    creator_id: UUID  # <--- NEW FIELD: Essential for permissions
+
+    class Config:
+        from_attributes = True
 
 class CommunityUpdate(BaseModel):
     name: Optional[str] = None
