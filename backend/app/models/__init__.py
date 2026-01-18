@@ -1,19 +1,10 @@
 # 1. User
 from app.models.user import User
-# 3. Community (SECOND - can now safely use CommunityEngine)
-from app.models.community import Community, Chapter, Membership
-
-# 4. Rest
-from app.models.social import Post, Comment, PostLike
-from app.models.content import ContentBlock
-from app.models.referral import MemberService, Vouch
-from app.models.academic import AcademicResource
+from app.models.community import Community, Membership, Chapter, Archetype
+from app.models.social import Post, Comment, PostLike, CommentLike
 
 __all__ = [
     "User", 
-    "Community", "Chapter", "Membership", 
-    "Post", "Comment", "PostLike",
-    "ContentBlock",
-    "MemberService", "Vouch",
-    "AcademicResource",
+    "Community", "Chapter", "Membership", "Archetype", 
+    "Post", "Comment", "PostLike", "CommentLike",
 ]
