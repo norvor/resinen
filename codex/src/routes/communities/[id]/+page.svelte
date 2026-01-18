@@ -88,27 +88,47 @@
                 <div class="bg-slate-950 border border-slate-800 rounded-xl min-h-[200px]">
                     {#if pendingQueue.length === 0}
                         <div class="h-full flex flex-col items-center justify-center p-8 text-slate-600">
-                            <div class="text-sm">Queue Empty</div>
+                            <div class="text-2xl mb-2">✓</div>
+                            <div class="text-sm font-bold">All Clear</div>
+                            <div class="text-xs">No pending applications.</div>
                         </div>
                     {:else}
                         <div class="divide-y divide-slate-800">
                             {#each pendingQueue as applicant}
-                                <div class="p-4 flex justify-between items-center">
-                                    <div class="font-bold text-white text-sm">User {applicant.user_id.slice(0,6)}...</div>
-                                    <div class="flex gap-2">
+                                <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-900/30 transition-colors">
+                                    
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-white font-bold text-sm uppercase">
+                                            {(applicant.user?.full_name || applicant.user?.email || '?')[0]}
+                                        </div>
+                                        
+                                        <div>
+                                            <div class="font-bold text-white text-sm">
+                                                {applicant.user?.full_name || 'Unknown User'}
+                                            </div>
+                                            <div class="text-xs text-slate-500 font-mono">
+                                                {applicant.user?.email || applicant.user_id}
+                                            </div>
+                                            <div class="text-[10px] text-orange-500 mt-0.5 font-bold uppercase tracking-wider">
+                                                Awaiting Entry
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex gap-2 w-full sm:w-auto">
                                         <button 
                                             on:click={() => handleDecision(applicant.user_id, 'reject')}
                                             disabled={processingId === applicant.user_id}
-                                            class="px-3 py-1 text-xs font-bold text-red-400 border border-red-900/50 bg-red-900/10 rounded hover:bg-red-900/20"
+                                            class="flex-1 sm:flex-none px-4 py-2 text-xs font-bold text-red-400 border border-red-900/30 bg-red-900/10 rounded-lg hover:bg-red-900/20 hover:border-red-500/50 transition-all disabled:opacity-50"
                                         >
                                             REJECT
                                         </button>
                                         <button 
                                             on:click={() => handleDecision(applicant.user_id, 'approve')}
                                             disabled={processingId === applicant.user_id}
-                                            class="px-3 py-1 text-xs font-bold text-green-400 border border-green-900/50 bg-green-900/10 rounded hover:bg-green-900/20"
+                                            class="flex-1 sm:flex-none px-4 py-2 text-xs font-bold text-green-400 border border-green-900/30 bg-green-900/10 rounded-lg hover:bg-green-900/20 hover:border-green-500/50 transition-all disabled:opacity-50 shadow-[0_0_10px_rgba(74,222,128,0.05)]"
                                         >
-                                            APPROVE
+                                            {processingId === applicant.user_id ? 'PROCESSING...' : 'APPROVE'}
                                         </button>
                                     </div>
                                 </div>
