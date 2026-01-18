@@ -1,7 +1,8 @@
 from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, col # <--- Added 'col' import for search
+from sqlmodel import select
+from sqlalchemy import or_ # <--- CHANGED: Import 'or_' from sqlalchemy (Safer)
 from sqlalchemy.orm import joinedload
 import uuid 
 
@@ -29,9 +30,13 @@ async def read_communities(
     
     if q:
         # Search by name or slug (Case insensitive)
+        # We use 'or_' to check both Name OR Slug
+        search_term = f"%{q}%"
         query = query.where(
-            (col(Community.name).ilike(f"%{q}%")) | 
-            (col(Community.slug).ilike(f"%{q}%"))
+            or_(
+                Community.name.ilike(search_term),
+                Community.slug.ilike(search_term)
+            )
         )
         
     query = query.offset(skip).limit(limit)
