@@ -9,6 +9,8 @@ from app.api import deps
 from app.core import security
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
+# We import the Read schema to ensure we send safe data to the frontend
+from app.schemas.community import CommunityRead 
 
 router = APIRouter()
 
@@ -31,18 +33,18 @@ async def update_user_me(
     """
     Update own user.
     """
-    user_data = current_user.dict()
+    # 1. Get clean data (ignoring nulls)
     update_data = user_in.dict(exclude_unset=True)
     
-    # Handle password update separately to hash it
+    # 2. Handle Password Hashing separately
     if "password" in update_data and update_data["password"]:
         hashed_password = security.get_password_hash(update_data["password"])
         current_user.hashed_password = hashed_password
         del update_data["password"]
 
-    for field in user_data:
-        if field in update_data:
-            setattr(current_user, field, update_data[field])
+    # 3. Update the User Object (Cleaner logic)
+    for key, value in update_data.items():
+        setattr(current_user, key, value)
             
     db.add(current_user)
     await db.commit()
@@ -77,7 +79,7 @@ async def create_user(
     await db.refresh(user)
     return user
 
-@router.get("/me/communities", response_model=List[Community])
+@router.get("/me/communities", response_model=List[CommunityRead])
 async def read_my_communities(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
@@ -85,7 +87,8 @@ async def read_my_communities(
     """
     Get list of territories (communities) the current user has joined.
     """
-    # Join Membership -> Community to get the details
+    # We join Membership -> Community to get the actual Community details
+    # We filter for 'active' status so pending/banned communities don't show up in the main list
     query = select(Community).join(Membership).where(
         Membership.user_id == current_user.id,
         Membership.status == "active"
