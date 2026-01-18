@@ -8,7 +8,7 @@ from app.api import deps
 from app.models.user import User
 from app.models.community import Community, Membership
 from app.schemas.community import CommunityCreate, CommunityRead, CommunityUpdate
-from app.schemas.membership import MembershipOut, Membership
+from app.schemas.membership import MembershipOut
 
 router = APIRouter()
 
