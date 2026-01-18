@@ -1,9 +1,9 @@
 from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import select, col # <--- Added 'col' import for search
 from sqlalchemy.orm import joinedload
-import uuid # Import uuid
+import uuid 
 
 from app.api import deps
 from app.models.user import User
@@ -13,15 +13,28 @@ from app.schemas.membership import MembershipOut
 
 router = APIRouter()
 
+# --- PUBLIC ENDPOINT (No Login Required) ---
 @router.get("/", response_model=List[CommunityRead])
 async def read_communities(
+    q: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    # REMOVED: current_user dependency so visitors can search/view the map
 ):
-    """Retrieve communities."""
-    query = select(Community).offset(skip).limit(limit)
+    """
+    Retrieve communities (Public).
+    """
+    query = select(Community)
+    
+    if q:
+        # Search by name or slug (Case insensitive)
+        query = query.where(
+            (col(Community.name).ilike(f"%{q}%")) | 
+            (col(Community.slug).ilike(f"%{q}%"))
+        )
+        
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -48,10 +61,9 @@ async def create_community(
     await db.refresh(db_community)
     return db_community
 
-# --- FIXED: Use uuid.UUID instead of str ---
 @router.put("/{community_id}", response_model=CommunityRead)
 async def update_community(
-    community_id: uuid.UUID, # <--- Fix 1
+    community_id: uuid.UUID,
     community_in: CommunityUpdate,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
@@ -73,10 +85,9 @@ async def update_community(
     await db.refresh(community)
     return community
 
-# --- FIXED: Use uuid.UUID instead of str ---
 @router.delete("/{community_id}")
 async def delete_community(
-    community_id: uuid.UUID, # <--- Fix 2
+    community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
@@ -92,10 +103,9 @@ async def delete_community(
     await db.commit()
     return {"status": "deleted"}
 
-# --- FIXED: Use uuid.UUID instead of str ---
 @router.get("/{community_id}", response_model=CommunityRead)
 async def read_community(
-    community_id: uuid.UUID, # <--- Fix 3 (This was your crasher)
+    community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
@@ -120,7 +130,7 @@ async def get_community_by_slug(
         
     return community
 
-# --- MEMBERSHIP ENDPOINTS (These looked mostly okay, but good to double check) ---
+# --- MEMBERSHIP ENDPOINTS ---
 
 @router.get("/{community_id}/membership_status")
 async def get_membership_status(
