@@ -24,9 +24,9 @@ api_router = APIRouter()
 # --- CORE ---
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(communities.router, tags=["communities"])
+api_router.include_router(communities.router, prefix="/communities", tags=["communities"])
 api_router.include_router(chapters.router, prefix="/chapters", tags=["chapters"])
-api_router.include_router(social.router, tags=["social"]) # Default Feed
+api_router.include_router(social.router, prefix="/social",tags=["social"]) # Default Feed
 api_router.include_router(websockets.router, tags=["websockets"])
 
 # --- THE 10 ENGINES ---
