@@ -12,7 +12,7 @@ logger.setLevel(logging.INFO)
 
 router = APIRouter()
 
-@router.websocket("/ws/{community_id}")
+@router.websocket("/{community_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     community_id: str,
