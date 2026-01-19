@@ -68,7 +68,7 @@ class Community(SQLModel, table=True):
     creator_id: uuid.UUID = Field(foreign_key="user.id")
     member_count: int = Field(default=1)
     
-    # 🚨 THE FIX: Explicit SQLAlchemy Column Definitions for JSON Fields
+    # Explicit SQLAlchemy Column Definitions for JSON Fields
     archetypes: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     config: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     installed_engines: List[str] = Field(default_factory=list, sa_column=Column(JSON))
@@ -81,4 +81,4 @@ class Community(SQLModel, table=True):
     chapters: List["Chapter"] = Relationship(back_populates="community")
     posts: List["Post"] = Relationship(back_populates="community")
     services: List["MemberService"] = Relationship(back_populates="community")
-    academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
+    # DELETED: academic_resources relationship (This was the zombie causing the error)
