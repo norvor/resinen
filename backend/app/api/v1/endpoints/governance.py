@@ -1,90 +1,118 @@
-import uuid
-from datetime import datetime, timedelta
-from typing import List
+from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import Session, select
+from datetime import datetime, timedelta
 
-from app.api import deps
+from app.core.database import get_session
 from app.models.user import User
-from app.models.governance import GovernanceIssue, GovernanceVote
-from app.services.jury import summon_jury
-from app.services.reputation import award_xp, XP_PER_JURY_VOTE
+from app.models.governance import Proposal, ProposalVote, ProposalStatus, VoteType
+from app.schemas.governance import ProposalCreate, ProposalRead, VoteCreate
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
-# 1. CREATE ISSUE (Triggers Jury)
-@router.post("/issues", response_model=GovernanceIssue)
-async def create_issue(
-    issue_in: GovernanceIssue, 
-    db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+# 1. LIST PROPOSALS
+@router.get("/", response_model=List[ProposalRead])
+async def list_proposals(
+    community_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
-    issue_in.creator_id = current_user.id
-    issue_in.created_at = datetime.utcnow()
-    issue_in.expires_at = datetime.utcnow() + timedelta(days=3)
-    
-    db.add(issue_in)
-    await db.commit()
-    await db.refresh(issue_in)
-    
-    if issue_in.kind == "moderation":
-        await summon_jury(issue_in.community_id, issue_in.id, db)
+    # Fetch Proposals
+    statement = select(Proposal).where(Proposal.community_id == community_id).order_by(Proposal.created_at.desc())
+    results = await db.exec(statement)
+    proposals = results.all()
+
+    # Fetch User's Votes for these proposals (Optimization: One query instead of N)
+    # Get all vote records for this user in this list of proposals
+    prop_ids = [p.id for p in proposals]
+    vote_stmt = select(ProposalVote).where(
+        ProposalVote.user_id == current_user.id,
+        ProposalVote.proposal_id.in_(prop_ids)
+    )
+    user_votes_res = await db.exec(vote_stmt)
+    user_votes_map = {v.proposal_id: v.choice for v in user_votes_res.all()}
+
+    # Enrich Response
+    enriched = []
+    for p in proposals:
+        # Check simple expiry logic
+        if p.status == ProposalStatus.ACTIVE and datetime.utcnow() > p.ends_at:
+            # Auto-close logic could go here, but for read-only we just report it
+            pass 
+            
+        p_read = ProposalRead.from_orm(p)
+        p_read.author_name = p.author.full_name if p.author else "Unknown"
+        p_read.user_vote = user_votes_map.get(p.id) # Inject "yes/no" if they voted
+        enriched.append(p_read)
         
-    return issue_in
+    return enriched
 
-# 2. LIST ISSUES
-@router.get("/issues", response_model=List[GovernanceIssue])
-async def list_issues(
-    community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
+# 2. CREATE PROPOSAL
+@router.post("/", response_model=ProposalRead)
+async def create_proposal(
+    prop_in: ProposalCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
-    query = select(GovernanceIssue).where(GovernanceIssue.community_id == community_id)
-    result = await db.execute(query)
-    return result.scalars().all()
+    end_date = datetime.utcnow() + timedelta(days=prop_in.duration_days)
+    
+    new_prop = Proposal(
+        community_id=prop_in.community_id,
+        author_id=current_user.id,
+        title=prop_in.title,
+        description=prop_in.description,
+        ends_at=end_date,
+        status=ProposalStatus.ACTIVE
+    )
+    
+    db.add(new_prop)
+    await db.commit()
+    await db.refresh(new_prop)
+    
+    # Manual enrich for return
+    resp = ProposalRead.from_orm(new_prop)
+    resp.author_name = current_user.full_name
+    return resp
 
-# 3. CAST VOTE (With XP Reward)
-@router.post("/vote")
+# 3. CAST VOTE
+@router.post("/{proposal_id}/vote", response_model=Any)
 async def cast_vote(
-    issue_id: uuid.UUID,
-    vote_val: str, 
-    reason: str,
-    db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    proposal_id: str,
+    vote_in: VoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
-    # Check if user already voted or was summoned
-    query = select(GovernanceVote).where(
-        GovernanceVote.issue_id == issue_id,
-        GovernanceVote.user_id == current_user.id
+    # Check Exists
+    prop = await db.get(Proposal, proposal_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+        
+    if prop.status != ProposalStatus.ACTIVE or datetime.utcnow() > prop.ends_at:
+        raise HTTPException(status_code=400, detail="Voting is closed")
+
+    # Check Duplicate
+    existing = await db.get(ProposalVote, (proposal_id, current_user.id))
+    if existing:
+        raise HTTPException(status_code=400, detail="Already voted")
+
+    # Record Vote
+    new_vote = ProposalVote(
+        proposal_id=proposal_id, 
+        user_id=current_user.id, 
+        choice=vote_in.choice
     )
-    result = await db.execute(query)
-    existing_vote = result.scalars().first()
+    db.add(new_vote)
     
-    if existing_vote:
-        if existing_vote.vote != "pending":
-             raise HTTPException(400, "You have already voted.")
-        # Update the pending jury vote
-        existing_vote.vote = vote_val
-        existing_vote.reason = reason
-        db.add(existing_vote)
+    # Update Counts (Atomic increment not supported in plain SQLModel, using logic)
+    if vote_in.choice == VoteType.YES:
+        prop.votes_yes += 1
+    elif vote_in.choice == VoteType.NO:
+        prop.votes_no += 1
     else:
-        # Open voting
-        new_vote = GovernanceVote(
-            issue_id=issue_id,
-            user_id=current_user.id,
-            vote=vote_val,
-            reason=reason
-        )
-        db.add(new_vote)
+        prop.votes_abstain += 1
         
-    # REWARD THE JUROR
-    await award_xp(
-        user_id=current_user.id,
-        amount=XP_PER_JURY_VOTE,
-        source="jury_duty",
-        source_id=str(issue_id),
-        db=db
-    )
-        
+    db.add(prop)
     await db.commit()
-    return {"status": "vote_cast"}
+    
+    return {"status": "success", "choice": vote_in.choice}
