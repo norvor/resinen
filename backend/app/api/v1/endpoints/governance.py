@@ -1,61 +1,80 @@
+import uuid
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
-from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from sqlalchemy.orm import joinedload
+from datetime import datetime, timedelta, timezone
 
-from app.core.database import get_session
+from app.api import deps
 from app.models.user import User
 from app.models.governance import Proposal, ProposalVote, ProposalStatus, VoteType
 from app.schemas.governance import ProposalCreate, ProposalRead, VoteCreate
-from app.api.deps import get_current_user
 
 router = APIRouter()
 
-# 1. LIST PROPOSALS
+# --- 1. LIST PROPOSALS ---
 @router.get("/", response_model=List[ProposalRead])
 async def list_proposals(
-    community_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    community_id: uuid.UUID,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # Fetch Proposals
-    statement = select(Proposal).where(Proposal.community_id == community_id).order_by(Proposal.created_at.desc())
-    results = await db.exec(statement)
-    proposals = results.all()
-
-    # Fetch User's Votes for these proposals (Optimization: One query instead of N)
-    # Get all vote records for this user in this list of proposals
-    prop_ids = [p.id for p in proposals]
-    vote_stmt = select(ProposalVote).where(
-        ProposalVote.user_id == current_user.id,
-        ProposalVote.proposal_id.in_(prop_ids)
+    """Fetch the active and past ballots for the territory."""
+    
+    # ✅ FIX: Use joinedload(Proposal.author) to prevent async lazy-load errors
+    statement = (
+        select(Proposal)
+        .options(joinedload(Proposal.author))
+        .where(Proposal.community_id == community_id)
+        .order_by(Proposal.created_at.desc())
     )
-    user_votes_res = await db.exec(vote_stmt)
-    user_votes_map = {v.proposal_id: v.choice for v in user_votes_res.all()}
+    
+    # ✅ FIX: Correct Async execution pattern
+    result = await db.execute(statement)
+    proposals = result.scalars().all()
 
-    # Enrich Response
+    # B. Fetch User's Votes (Batch Optimized)
+    prop_ids = [p.id for p in proposals]
+    user_votes_map = {}
+    
+    if prop_ids:
+        vote_stmt = select(ProposalVote).where(
+            ProposalVote.user_id == current_user.id,
+            ProposalVote.proposal_id.in_(prop_ids)
+        )
+        vote_result = await db.execute(vote_stmt)
+        user_votes_map = {v.proposal_id: v.choice for v in vote_result.scalars().all()}
+
+    # C. Assemble the Ballot Papers
     enriched = []
+    now = datetime.now(timezone.utc)
+    
     for p in proposals:
-        # Check simple expiry logic
-        if p.status == ProposalStatus.ACTIVE and datetime.utcnow() > p.ends_at:
-            # Auto-close logic could go here, but for read-only we just report it
-            pass 
+        # Compatibility check for model validation
+        p_read = ProposalRead.model_validate(p) if hasattr(ProposalRead, "model_validate") else ProposalRead.from_orm(p)
+        
+        p_read.author_name = p.author.full_name if p.author else "The Architect"
+        p_read.user_vote = user_votes_map.get(p.id) 
+        
+        # Check if the ballot has expired in real-time
+        if p.status == ProposalStatus.ACTIVE and now > p.ends_at:
+            p_read.status = "EXPIRED" # UI Hint
             
-        p_read = ProposalRead.from_orm(p)
-        p_read.author_name = p.author.full_name if p.author else "Unknown"
-        p_read.user_vote = user_votes_map.get(p.id) # Inject "yes/no" if they voted
         enriched.append(p_read)
         
     return enriched
 
-# 2. CREATE PROPOSAL
+# --- 2. CREATE PROPOSAL ---
 @router.post("/", response_model=ProposalRead)
 async def create_proposal(
     prop_in: ProposalCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    end_date = datetime.utcnow() + timedelta(days=prop_in.duration_days)
+    """Draft a new legislation (Proposal) for the community to vote on."""
+    now = datetime.now(timezone.utc)
+    end_date = now + timedelta(days=prop_in.duration_days)
     
     new_prop = Proposal(
         community_id=prop_in.community_id,
@@ -63,40 +82,52 @@ async def create_proposal(
         title=prop_in.title,
         description=prop_in.description,
         ends_at=end_date,
-        status=ProposalStatus.ACTIVE
+        status=ProposalStatus.ACTIVE,
+        created_at=now,
+        votes_yes=0,
+        votes_no=0,
+        votes_abstain=0
     )
     
     db.add(new_prop)
     await db.commit()
     await db.refresh(new_prop)
     
-    # Manual enrich for return
-    resp = ProposalRead.from_orm(new_prop)
+    # Format for response
+    resp = ProposalRead.model_validate(new_prop) if hasattr(ProposalRead, "model_validate") else ProposalRead.from_orm(new_prop)
     resp.author_name = current_user.full_name
     return resp
 
-# 3. CAST VOTE
+# --- 3. CAST VOTE ---
 @router.post("/{proposal_id}/vote", response_model=Any)
 async def cast_vote(
-    proposal_id: str,
+    proposal_id: uuid.UUID,
     vote_in: VoteCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # Check Exists
+    """Cast a digital ballot. One student, one vote."""
+    
+    # 1. Fetch Proposal logic
     prop = await db.get(Proposal, proposal_id)
     if not prop:
-        raise HTTPException(status_code=404, detail="Proposal not found")
+        raise HTTPException(status_code=404, detail="Ballot not found")
         
-    if prop.status != ProposalStatus.ACTIVE or datetime.utcnow() > prop.ends_at:
-        raise HTTPException(status_code=400, detail="Voting is closed")
+    now = datetime.now(timezone.utc)
+    if prop.status != ProposalStatus.ACTIVE or now > prop.ends_at:
+        raise HTTPException(status_code=400, detail="Voting for this session is closed")
 
-    # Check Duplicate
-    existing = await db.get(ProposalVote, (proposal_id, current_user.id))
-    if existing:
-        raise HTTPException(status_code=400, detail="Already voted")
+    # 2. Check for double-voting
+    # ✅ FIX: Composite key check using explicit select for Async compatibility
+    stmt = select(ProposalVote).where(
+        ProposalVote.proposal_id == proposal_id,
+        ProposalVote.user_id == current_user.id
+    )
+    res = await db.execute(stmt)
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail="You have already cast your vote")
 
-    # Record Vote
+    # 3. Record the Vote
     new_vote = ProposalVote(
         proposal_id=proposal_id, 
         user_id=current_user.id, 
@@ -104,7 +135,7 @@ async def cast_vote(
     )
     db.add(new_vote)
     
-    # Update Counts (Atomic increment not supported in plain SQLModel, using logic)
+    # 4. Atomic-style Increment
     if vote_in.choice == VoteType.YES:
         prop.votes_yes += 1
     elif vote_in.choice == VoteType.NO:

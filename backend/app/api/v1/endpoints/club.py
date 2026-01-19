@@ -1,45 +1,55 @@
+import uuid
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
-from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from datetime import datetime, timezone
 
-from app.core.database import get_session
+from app.api import deps
 from app.models.user import User
 from app.models.club import ClubEvent, ClubRSVP, RSVPStatus
 from app.schemas.club import EventRead, EventCreate, RSVPSubmit
-from app.api.deps import get_current_user
 
 router = APIRouter()
 
 # --- 1. LIST EVENTS (Upcoming) ---
 @router.get("/", response_model=List[EventRead])
 async def list_events(
-    community_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    community_id: uuid.UUID,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # Fetch upcoming events
-    now = datetime.utcnow()
+    """Fetch all upcoming club events for the territory."""
+    # Use timezone-aware UTC
+    now = datetime.now(timezone.utc)
+    
+    # ✅ FIX: Async execution for events
     stmt = (
         select(ClubEvent)
         .where(ClubEvent.community_id == community_id)
-        .where(ClubEvent.start_time > now) # Only future
+        .where(ClubEvent.start_time > now)
         .order_by(ClubEvent.start_time)
     )
-    events = (await db.exec(stmt)).all()
+    result = await db.execute(stmt)
+    events = result.scalars().all()
     
-    # Fetch My RSVPs
+    # ✅ FIX: Async execution for RSVPs
     event_ids = [e.id for e in events]
-    rsvp_stmt = select(ClubRSVP).where(
-        ClubRSVP.user_id == current_user.id,
-        ClubRSVP.event_id.in_(event_ids)
-    )
-    my_rsvps = {r.event_id: r.status for r in (await db.exec(rsvp_stmt)).all()}
+    my_rsvps = {}
+    
+    if event_ids:
+        rsvp_stmt = select(ClubRSVP).where(
+            ClubRSVP.user_id == current_user.id,
+            ClubRSVP.event_id.in_(event_ids)
+        )
+        rsvp_result = await db.execute(rsvp_stmt)
+        my_rsvps = {r.event_id: r.status for r in rsvp_result.scalars().all()}
 
-    # Merge
+    # Merge results for the "Paper" UI
     results = []
     for e in events:
-        e_read = EventRead.from_orm(e)
+        # Compatibility check for SQLModel/Pydantic versioning
+        e_read = EventRead.model_validate(e) if hasattr(EventRead, "model_validate") else EventRead.from_orm(e)
         e_read.my_rsvp = my_rsvps.get(e.id)
         results.append(e_read)
         
@@ -49,11 +59,14 @@ async def list_events(
 @router.post("/", response_model=EventRead)
 async def create_event(
     evt: EventCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
+    """Post a new flyer to the Club board."""
+    event_data = evt.model_dump() if hasattr(evt, "model_dump") else evt.dict()
+    
     new_event = ClubEvent(
-        **evt.dict(),
+        **event_data,
         creator_id=current_user.id,
         count_going=0
     )
@@ -65,20 +78,24 @@ async def create_event(
 # --- 3. RSVP ---
 @router.post("/{event_id}/rsvp", response_model=Any)
 async def rsvp_event(
-    event_id: str,
+    event_id: uuid.UUID,
     rsvp_in: RSVPSubmit,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
+    """Commit to attending or skip an event."""
     event = await db.get(ClubEvent, event_id)
     if not event:
-        raise HTTPException(404, "Event not found")
+        raise HTTPException(404, "Event flyer not found on the board")
         
     # Check if exists
-    existing = await db.get(ClubRSVP, (event_id, current_user.id))
-    
-    # Logic for updating count
-    # (Simplified: We recalculate or delta update. Let's do delta.)
+    # ✅ FIX: Using select for composite key logic in Async
+    stmt = select(ClubRSVP).where(
+        ClubRSVP.event_id == event_id,
+        ClubRSVP.user_id == current_user.id
+    )
+    res = await db.execute(stmt)
+    existing = res.scalars().first()
     
     was_going = existing and existing.status == RSVPStatus.GOING
     is_going = rsvp_in.status == RSVPStatus.GOING
@@ -90,7 +107,7 @@ async def rsvp_event(
         new_rsvp = ClubRSVP(event_id=event_id, user_id=current_user.id, status=rsvp_in.status)
         db.add(new_rsvp)
     
-    # Update Counter
+    # Update "Awesome" Counter (Paper Delta Logic)
     if is_going and not was_going:
         event.count_going += 1
     elif not is_going and was_going:

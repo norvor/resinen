@@ -1,39 +1,49 @@
+import uuid
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from sqlalchemy.orm import joinedload
 
-from app.core.database import get_session
+from app.api import deps # Consistent dependency injection
 from app.models.user import User
 from app.models.stage import StageVideo
 from app.schemas.stage import VideoRead, VideoCreate
-from app.api.deps import get_current_user
 
 router = APIRouter()
 
 # --- 1. GET FEED (Infinite Scroll) ---
 @router.get("/", response_model=List[VideoRead])
 async def get_stage_feed(
-    community_id: str,
+    community_id: uuid.UUID,
     skip: int = 0,
     limit: int = 10,
-    db: Session = Depends(get_session)
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # For "The Stage", random ordering or algorithmic is best,
-    # but for MVP we do newest first.
+    """Fetch the spotlight feed for the territory's Stage."""
+    
+    # ✅ FIX: Use joinedload(StageVideo.author) to prevent async lazy-load errors
+    # Algorithmic sorting can be added here later (e.g., by view_count/age)
     stmt = (
         select(StageVideo)
+        .options(joinedload(StageVideo.author))
         .where(StageVideo.community_id == community_id)
         .order_by(StageVideo.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
-    videos = (await db.exec(stmt)).all()
+    
+    # ✅ FIX: Proper Async execution for the video list
+    result = await db.execute(stmt)
+    videos = result.scalars().all()
     
     results = []
     for v in videos:
-        v_read = VideoRead.from_orm(v)
-        # Populate Author (Assuming simple load)
-        v_read.author_name = v.author.full_name if v.author else "Creator"
+        # Pydantic v2 model_validate or v1 from_orm
+        v_read = VideoRead.model_validate(v) if hasattr(VideoRead, "model_validate") else VideoRead.from_orm(v)
+        
+        # Populate Author data from the pre-joined relation
+        v_read.author_name = v.author.full_name if v.author else "Independent Creator"
         v_read.author_avatar = v.author.avatar_url if v.author else None
         results.append(v_read)
         
@@ -43,19 +53,25 @@ async def get_stage_feed(
 @router.post("/", response_model=VideoRead)
 async def post_video(
     vid_in: VideoCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
+    """Submit a new video entry to the Stage."""
+    
+    vid_data = vid_in.model_dump() if hasattr(vid_in, "model_dump") else vid_in.dict()
+    
     new_vid = StageVideo(
-        **vid_in.dict(),
-        author_id=current_user.id
+        **vid_data,
+        author_id=current_user.id,
+        view_count=0
     )
+    
     db.add(new_vid)
     await db.commit()
     await db.refresh(new_vid)
     
-    # Return with Author info
-    res = VideoRead.from_orm(new_vid)
+    # Return formatted for the "Paper" UI
+    res = VideoRead.model_validate(new_vid) if hasattr(VideoRead, "model_validate") else VideoRead.from_orm(new_vid)
     res.author_name = current_user.full_name
     res.author_avatar = current_user.avatar_url
     return res
@@ -63,13 +79,18 @@ async def post_video(
 # --- 3. VIEW COUNT (Heartbeat) ---
 @router.post("/{video_id}/view", response_model=Any)
 async def record_view(
-    video_id: str,
-    db: Session = Depends(get_session)
+    video_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # This is a "Fire and Forget" endpoint usually
+    """Register a view event. Essential for algorithmic 'Awesome' ranking."""
+    
+    # ✅ FIX: Standard async db.get
     vid = await db.get(StageVideo, video_id)
-    if vid:
-        vid.view_count += 1
-        db.add(vid)
-        await db.commit()
-    return {"status": "ok"}
+    if not vid:
+        raise HTTPException(status_code=404, detail="Performance (Video) not found")
+        
+    vid.view_count += 1
+    db.add(vid)
+    await db.commit()
+    
+    return {"status": "ok", "total_views": vid.view_count}
