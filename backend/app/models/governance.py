@@ -53,3 +53,11 @@ class ProposalVote(SQLModel, table=True):
     
     choice: VoteType
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CommunityBylaw(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    community_id: uuid.UUID = Field(foreign_key="community.id")
+    
+    title: str
+    content: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
