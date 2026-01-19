@@ -14,6 +14,13 @@ class ListingBase(BaseModel):
 class ListingCreate(ListingBase):
     community_id: uuid.UUID
 
+class ListingUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price_display: Optional[str] = None
+    link_url: Optional[str] = None
+    image_url: Optional[str] = None
+
 class ListingRead(ListingBase):
     id: uuid.UUID
     community_id: uuid.UUID
