@@ -3,18 +3,25 @@ from botocore.exceptions import NoCredentialsError
 from fastapi import UploadFile
 import uuid
 import json
+import os
 
 from app.core.config import settings
 
+# --- CONFIGURATION ---
+# The internal URL for Python to connect (Keep as settings.MINIO_ENDPOINT)
+# The external URL for your browser to view images
+# REPLACE THIS with your actual Server IP/Domain, e.g., "http://159.223.x.x:9000" or "https://files.resinen.com"
+MINIO_PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "http://72.61.105.138:9000") 
+
 class StorageService:
     def __init__(self):
-        # Connect to MinIO
+        # Connect to MinIO using the INTERNAL endpoint (Docker-to-Docker)
         self.s3_client = boto3.client(
             's3',
             endpoint_url=settings.MINIO_ENDPOINT,
             aws_access_key_id=settings.MINIO_ACCESS_KEY,
             aws_secret_access_key=settings.MINIO_SECRET_KEY,
-            region_name="us-east-1" # Required by library, ignored by MinIO
+            region_name="us-east-1"
         )
         self.bucket_name = settings.MINIO_BUCKET_NAME
         self._ensure_bucket_exists()
@@ -28,7 +35,7 @@ class StorageService:
             try:
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
                 
-                # Make files publicly readable (so users can see images)
+                # Make files publicly readable
                 public_policy = {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -50,12 +57,11 @@ class StorageService:
 
     async def upload_file(self, file: UploadFile) -> str:
         """Uploads a file and returns the Public URL."""
-        # Generate unique filename to prevent overwrites
-        # e.g. "avatar.jpg" -> "550e8400-e29b....jpg"
         extension = file.filename.split(".")[-1]
         unique_filename = f"{uuid.uuid4()}.{extension}"
         
         try:
+            # Upload using the internal client
             self.s3_client.upload_fileobj(
                 file.file,
                 self.bucket_name,
@@ -65,8 +71,8 @@ class StorageService:
         except NoCredentialsError:
             raise Exception("MinIO Credentials missing")
             
-        # Return the URL
-        return f"{settings.MINIO_ENDPOINT}/{self.bucket_name}/{unique_filename}"
+        # FIXED: Return the PUBLIC URL so the frontend can reach it
+        return f"{MINIO_PUBLIC_URL}/{self.bucket_name}/{unique_filename}"
 
 # Create a singleton instance
 storage = StorageService()
