@@ -1,22 +1,37 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from enum import Enum
 from sqlmodel import Field, SQLModel, Relationship
+from sqlalchemy import JSON, Column
 
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.social import Post
+    from app.models.referral import MemberService
 
 class Archetype(str, Enum):
+    # Core
+    SANCTUARY = "sanctuary" 
+    BAZAAR = "bazaar"
+    SENATE = "senate"
+    ARENA = "arena"
+    
+    # Engines
+    ACADEMY = "academy"
+    CLUB = "club"
+    LIBRARY = "library"
+    STAGE = "stage"
+    BUNKER = "bunker"
+    GUILD = "guild"
+    GARDEN = "garden"
+    
+    # Generic
     LOUNGE = "lounge"
-    SPORTS = "sports"
-    LEARNING = "learning"
-    PROFESSIONAL = "professional"
+    SPOTLIGHT = "spotlight"
 
 class Membership(SQLModel, table=True):
     """Link between User and Community"""
-    # Composite Primary Key handled by logic, or surrogate ID
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id", primary_key=True)
     
@@ -37,6 +52,7 @@ class Chapter(SQLModel, table=True):
     sequence_order: int = 0
     
     community: "Community" = Relationship(back_populates="chapters")
+    posts: List["Post"] = Relationship(back_populates="chapter")
 
 class Community(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -52,9 +68,10 @@ class Community(SQLModel, table=True):
     creator_id: uuid.UUID = Field(foreign_key="user.id")
     member_count: int = Field(default=1)
     
-    # Config JSON for installed engines
-    config: dict = Field(default={}, sa_column_kwargs={"type_": "JSON"})
-    installed_engines: list = Field(default=[], sa_column_kwargs={"type_": "JSON"})
+    # 🚨 THE FIX: Explicit SQLAlchemy Column Definitions for JSON Fields
+    archetypes: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    config: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    installed_engines: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -62,3 +79,6 @@ class Community(SQLModel, table=True):
     creator: "User" = Relationship(back_populates="created_communities")
     memberships: List["Membership"] = Relationship(back_populates="community")
     chapters: List["Chapter"] = Relationship(back_populates="community")
+    posts: List["Post"] = Relationship(back_populates="community")
+    services: List["MemberService"] = Relationship(back_populates="community")
+    academic_resources: List["AcademicResource"] = Relationship(back_populates="community")
