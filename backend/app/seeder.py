@@ -7,7 +7,6 @@ from app.core.database import async_session_factory, engine
 from app.core.security import get_password_hash
 
 # --- CORE MODELS ---
-# Importing these registers them with SQLModel.metadata
 from app.models.user import User
 from app.models.community import Community, Membership, Chapter, Archetype
 from app.models.engine import Engine, CommunityEngine
@@ -15,7 +14,7 @@ from app.models.engine import Engine, CommunityEngine
 # --- ENGINE MODELS ---
 from app.models.social import Post, Comment, PostLike
 from app.models.listing import Listing, ListingVouch
-from app.models.governance import Proposal, ProposalStatus, ProposalVote, VoteType
+from app.models.governance import Proposal, ProposalStatus, ProposalVote, VoteType, PlatformRule, CommunityBylaw
 from app.models.academy import Module, Lesson, LessonCompletion
 from app.models.arena import ArenaTeam, ArenaMatch, MatchStatus, ArenaPrediction
 from app.models.club import ClubEvent, ClubRSVP, RSVPStatus
@@ -87,15 +86,25 @@ WORLDS = [
 async def seed_db():
     print("🌱 STARTING COMPREHENSIVE SEEDER...")
     
-    # 1. WIPE DB (FIXED: The "Soft" Reset)
-    # This drops only the tables defined in your models, avoiding permission errors.
+    # 1. WIPE DB (The "Manual Cascade" Fix)
     async with engine.begin() as conn:
-        print("🔥 Dropping tables...")
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        print("🔥 Forced Wipe in Progress...")
+        
+        # Step A: Get all table names in the public schema
+        result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
+        tables = result.scalars().all()
+        
+        # Step B: Drop each table with CASCADE to ignore dependencies
+        for table in tables:
+            await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+            
+        print("🗑️  All tables dropped successfully.")
+        
+        # Step C: Rebuild
         print("🏗️  Creating tables...")
         await conn.run_sync(SQLModel.metadata.create_all)
         
-    print("✨ Database Wiped & Rebuilt.")
+    print("✨ Database Rebuilt.")
 
     async with async_session_factory() as db:
         
