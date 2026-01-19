@@ -11,18 +11,24 @@ if TYPE_CHECKING:
 
 # Keep Enum for validation, even if DB stores strings
 class Archetype(str, Enum):
-    ARENA = "arena"
-    STAGE = "stage"
-    SANCTUARY = "sanctuary"
-    LIBRARY = "library"
-    GUILD = "guild"
+    # original
+    SANCTUARY = "sanctuary" 
     BAZAAR = "bazaar"
     SENATE = "senate"
-    ACADEMY = "academy"
-    CLUB = "club"
-    BUNKER = "bunker"
-    LOUNGE = "lounge"
-    DEFAULT = "lounge" # Changed default to 'lounge' as it's a safer fallback
+    ARENA = "arena"
+    
+    # NEW ENGINES (Add these lines)
+    ACADEMY = "academy"   # Engine 3
+    CLUB = "club"         # Engine 5
+    LIBRARY = "library"   # Engine 6
+    STAGE = "stage"       # Engine 7
+    BUNKER = "bunker"     # Engine 8
+    GUILD = "guild"       # Engine 9
+    GARDEN = "garden"     # Engine 10
+    
+    # Generic/Mixed
+    LOUNGE = "lounge"     
+    SPOTLIGHT = "spotlight" # Optional alias for Stage
 
 # --- MEMBERSHIPS ---
 class Membership(SQLModel, table=True):
