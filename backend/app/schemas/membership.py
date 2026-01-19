@@ -14,7 +14,7 @@ class UserInMembership(BaseModel):
 
 # 2. Define the Membership output that INCLUDES the User
 class MembershipOut(BaseModel):
-    id: UUID
+    id: UUID | None = None
     user_id: UUID
     community_id: UUID
     role: str
