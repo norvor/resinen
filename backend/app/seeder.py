@@ -11,81 +11,82 @@ ADMIN_EMAIL = "admin@resinen.com"
 ADMIN_PASS = "admin123"
 ADMIN_NAME = "Resinen Architect"
 
+# 🚨 UPDATED: Now using 'archetypes' (List) instead of single value
 WORLDS = [
     {
         "name": "The Colosseum",
         "slug": "colosseum",
-        "archetype": Archetype.ARENA,
+        "archetypes": [Archetype.ARENA], # <--- List
         "description": "The global stage for competitive glory. Live scores, prediction markets, and tribal warfare.",
         "config": {"sport": "football", "team_a": "Red", "team_b": "Blue"}
     },
     {
         "name": "Spotlight Central",
         "slug": "spotlight",
-        "archetype": Archetype.STAGE,
+        "archetypes": [Archetype.STAGE],
         "description": "Visuals only. Vertical feeds, fancams, and aesthetics.",
         "config": {"view_mode": "vertical_scroll"}
     },
     {
         "name": "The Golden Temple",
         "slug": "golden-temple",
-        "archetype": Archetype.SANCTUARY,
+        "archetypes": [Archetype.SANCTUARY],
         "description": "A space for reflection, prayer, and service (Seva). Audio-first and toxicity-free.",
         "config": {"daily_hukam": True}
     },
     {
         "name": "The Great Archives",
         "slug": "archives",
-        "archetype": Archetype.LIBRARY,
+        "archetypes": [Archetype.LIBRARY],
         "description": "Deep lore, theory crafting, and history. Beware of spoilers.",
         "config": {"spoiler_protection": True}
     },
     {
         "name": "Builders Guild",
         "slug": "builders",
-        "archetype": Archetype.GUILD,
+        "archetypes": [Archetype.GUILD],
         "description": "For those who ship code. Q&A, bounties, and technical showcases.",
         "config": {"syntax_highlighting": True}
     },
     {
         "name": "Grand Bazaar",
         "slug": "bazaar",
-        "archetype": Archetype.BAZAAR,
+        "archetypes": [Archetype.BAZAAR],
         "description": "The marketplace. Buy, sell, trade, and verify authenticity.",
         "config": {"currency": "USD", "escrow": True}
     },
     {
         "name": "The Capitol",
         "slug": "capitol",
-        "archetype": Archetype.SENATE,
+        "archetypes": [Archetype.SENATE],
         "description": "Formal debate and governance. Proposals must be seconded.",
         "config": {"debate_mode": True}
     },
     {
         "name": "Training Grounds",
         "slug": "academy",
-        "archetype": Archetype.ACADEMY,
+        "archetypes": [Archetype.ACADEMY],
         "description": "Structured learning. Complete Module 1 to unlock Module 2.",
         "config": {"curriculum_lock": True}
     },
     {
         "name": "Neon Nights",
         "slug": "neon",
-        "archetype": Archetype.CLUB,
+        "archetypes": [Archetype.CLUB],
         "description": "Events, music, and the night. What happens here, stays here.",
         "config": {"ephemeral_content": True}
     },
     {
         "name": "Zero Knowledge",
         "slug": "zk-bunker",
-        "archetype": Archetype.BUNKER,
+        "archetypes": [Archetype.BUNKER],
         "description": "Encrypted. Anon. Burn after reading.",
         "config": {"screenshot_block": True}
     },
     {
         "name": "The Living Room",
         "slug": "lounge",
-        "archetype": Archetype.LOUNGE,
+        "archetypes": [Archetype.LOUNGE],
         "description": "Just chilling. Find friends, plan meetups, relax.",
         "config": {"whos_online": True}
     }
@@ -96,14 +97,12 @@ async def seed_db():
     
     async with engine.begin() as conn:
         # 1. FIND ALL TABLES
-        # Query Postgres system tables to find everything in 'public' schema
         result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public';"))
         tables = result.scalars().all()
         
         if tables:
             print(f"Found {len(tables)} tables to destroy: {tables}")
             # 2. DROP THEM WITH CASCADE
-            # We quote table names to handle case sensitivity
             table_list = ", ".join([f'"{t}"' for t in tables])
             await conn.execute(text(f"DROP TABLE IF EXISTS {table_list} CASCADE;"))
             print("💥 All tables dropped successfully.")
@@ -134,15 +133,21 @@ async def seed_db():
         # 5. CREATE WORLDS
         print("Initializing 11 Sovereign Worlds...")
         for world_data in WORLDS:
+            # 🚨 CHECK: Ensure is_private logic uses the first archetype in the list
+            is_private = (world_data["archetypes"][0] == Archetype.BUNKER)
+
             community = Community(
                 name=world_data["name"],
                 slug=world_data["slug"],
                 description=world_data["description"],
-                archetype=world_data["archetype"],
+                
+                # 🚨 UPDATED FIELD
+                archetypes=world_data["archetypes"], 
+                
                 config=world_data["config"],
-                active_engines=[], 
+                installed_engines=[], # Renamed from active_engines in recent schemas? Check your model.
                 creator_id=admin.id,
-                is_private=(world_data["archetype"] == Archetype.BUNKER)
+                is_private=is_private
             )
             db.add(community)
         
