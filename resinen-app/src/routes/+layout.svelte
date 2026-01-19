@@ -1,76 +1,110 @@
 <script lang="ts">
-    import "../app.css";
-    import { page } from '$app/stores';
-    import { user, logout } from '$lib/api';
+    import '../app.css';
     import { onMount } from 'svelte';
+    import { api, user } from '$lib/api';
     import { goto } from '$app/navigation';
+    import { page } from '$app/stores';
 
-    // Protect Routes (Bouncer Logic)
-    onMount(() => {
-        const unsubscribe = user.subscribe(u => {
-            // FIX 1: Allow both /login AND /signup without redirecting
-            if (!u && $page.url.pathname !== '/login' && $page.url.pathname !== '/signup') {
-                goto('/login');
+    let checkingAuth = true;
+    let communities = [];
+
+    onMount(async () => {
+        const token = localStorage.getItem('token');
+        const isAuthPage = $page.url.pathname === '/login' || $page.url.pathname === '/signup';
+
+        if (!token) {
+            checkingAuth = false;
+            if (!isAuthPage) goto('/login');
+            return;
+        }
+
+        try {
+            if (!$user) {
+                await api.getMe();
             }
-        });
-        return unsubscribe;
+            // Fetch the sidebar communities
+            communities = await api.getCommunities();
+            
+            if (isAuthPage) goto('/');
+        } catch (err) {
+            localStorage.removeItem('token');
+            if (!isAuthPage) goto('/login');
+        } finally {
+            checkingAuth = false;
+        }
     });
 
-    const navItems = [
-        { label: "Dashboard", path: "/dashboard", color: "bg-sp-cyan" },
-        { label: "My Identity", path: "/identity", color: "bg-sp-yellow" },
-        { label: "Governance", path: "/governance", color: "bg-sp-green" },
-        { label: "Treasury", path: "/treasury", color: "bg-sp-orange" },
-    ];
+    function logout() {
+        localStorage.removeItem('token');
+        user.set(null);
+        goto('/login');
+    }
 </script>
 
-{#if $page.url.pathname === '/login' || $page.url.pathname === '/signup'}
+{#if checkingAuth}
+    <div class="min-h-screen bg-black flex items-center justify-center font-mono text-green-500">
+        <span class="animate-pulse">LOADING_SYSTEM_RESOURCES...</span>
+    </div>
+{:else if $page.url.pathname === '/login' || $page.url.pathname === '/signup'}
     <slot />
 {:else}
-    <div class="min-h-screen flex flex-col md:flex-row font-sans">
-        
-        <aside class="w-full md:w-64 bg-sp-blue border-r-4 border-black p-6 flex flex-col gap-6 relative z-20">
-            
-            <div class="bg-white border-4 border-black p-3 shadow-hard transform -rotate-2 text-center">
-                <h1 class="font-black text-2xl uppercase tracking-tighter">RESINEN <span class="text-sp-red">APP</span></h1>
+    <div class="flex h-screen bg-skin-fill text-skin-text overflow-hidden">
+        <aside class="w-20 md:w-64 border-r border-skin-border flex flex-col bg-skin-surface">
+            <div class="p-4 border-b border-skin-border flex items-center gap-3">
+                <div class="w-8 h-8 bg-skin-accent flex items-center justify-center font-black text-white">R</div>
+                <span class="font-black uppercase tracking-tighter hidden md:block">Resinen</span>
             </div>
-
-            <nav class="flex-1 space-y-4 mt-4">
-                {#each navItems as item}
-                    <a 
-                        href={item.path} 
-                        class="block border-4 border-black p-3 shadow-hard font-black uppercase text-sm hover:translate-x-1 hover:translate-y-1 hover:shadow-hard-sm transition-all
-                        {$page.url.pathname.startsWith(item.path) ? item.color : 'bg-white'}"
-                    >
-                        {item.label}
+            
+            <nav class="flex-1 overflow-y-auto p-2 space-y-2">
+                <a href="/" class="flex items-center gap-3 p-3 rounded hover:bg-skin-fill transition-colors {$page.url.pathname === '/' ? 'bg-skin-fill border border-skin-border' : ''}">
+                    <span class="text-xl">🏠</span>
+                    <span class="text-xs font-bold uppercase hidden md:block">Command Center</span>
+                </a>
+                
+                <div class="mt-6 mb-2 px-3 text-[10px] font-black text-skin-muted uppercase tracking-widest hidden md:block">Territories</div>
+                
+                {#each communities as c}
+                    <a href="/c/{c.slug}" class="flex items-center gap-3 p-3 rounded hover:bg-skin-fill transition-colors group">
+                        <div class="w-8 h-8 rounded bg-skin-border flex items-center justify-center group-hover:border-skin-accent border border-transparent transition-all">
+                            {c.name[0]}
+                        </div>
+                        <div class="hidden md:block min-w-0">
+                            <div class="text-xs font-bold truncate">{c.name}</div>
+                            <div class="text-[9px] text-skin-muted uppercase">{c.archetypes[0]}</div>
+                        </div>
                     </a>
                 {/each}
             </nav>
 
-            <div class="mt-auto bg-[#5D3A1F] p-4 border-4 border-black shadow-hard relative group cursor-pointer" on:click={logout}>
-                <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    CLICK TO LOGOUT
-                </div>
-
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-10 h-10 bg-sp-yellow border-2 border-black rounded-full flex items-center justify-center font-black text-xl">
-                        {$user?.full_name?.charAt(0) || '?'}
-                    </div>
-                    
-                    <div class="leading-none overflow-hidden">
-                        <div class="text-white font-bold text-xs uppercase">Operator</div>
-                        <div class="text-[#FFD700] font-black truncate">{$user?.full_name || 'Guest'}</div>
-                    </div>
-                </div>
+            <div class="p-4 border-t border-skin-border">
+                <button on:click={logout} class="w-full text-left text-[10px] font-bold uppercase text-skin-muted hover:text-red-500 transition-colors flex items-center gap-2">
+                    <span>⏻</span> <span class="hidden md:block">Terminate Session</span>
+                </button>
             </div>
         </aside>
 
-        <main class="flex-1 p-8 overflow-y-auto relative">
-            <div class="absolute inset-0 z-0 opacity-10 pointer-events-none" 
-                 style="background-image: radial-gradient(circle, #000 1px, transparent 1px); background-size: 20px 20px;">
-            </div>
-            
-            <div class="relative z-10 max-w-5xl mx-auto">
+        <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <header class="h-16 border-b border-skin-border flex items-center justify-between px-6 bg-skin-surface/50 backdrop-blur-md">
+                <div class="flex items-center gap-4">
+                    <h2 class="font-black uppercase tracking-widest text-sm">
+                        {$page.url.pathname === '/' ? 'Home' : 'Territory_View'}
+                    </h2>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-[10px] font-black text-skin-accent uppercase leading-none">Level {$user?.level || 1}</div>
+                        <div class="text-xs font-bold">{$user?.full_name}</div>
+                    </div>
+                    <div class="w-10 h-10 rounded-full border-2 border-skin-accent p-0.5">
+                        <div class="w-full h-full bg-skin-border rounded-full flex items-center justify-center font-bold">
+                            {$user?.full_name?.[0]}
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-6 md:p-10">
                 <slot />
             </div>
         </main>

@@ -1,95 +1,112 @@
 <script lang="ts">
+    import { api } from '$lib/api';
     import { goto } from '$app/navigation';
-    import { api } from '$lib/api'; // We only need 'api'
 
-    let fullName = '';
     let email = '';
     let password = '';
-    let confirmPassword = '';
+    let full_name = '';
     let error = '';
-    let isLoading = false;
+    let loading = false;
 
     async function handleSignup() {
-        if (password !== confirmPassword) {
-            error = "Passkeys do not match.";
-            return;
-        }
-
-        isLoading = true;
+        loading = true;
         error = '';
-
         try {
-            // 1. Create User
-            // The api.signup function handles the JSON structure for you
-            await api.signup(email, password, fullName);
-
-            // 2. Auto-Login
-            // The api.login function handles the FormData and Token Storage automatically
-            await api.login(email, password);
-
-            // 3. Get Profile
-            // The api.getMe function handles fetching and updating the User store
-            await api.getMe();
-
-            // 4. Success -> Redirect
-            goto('/dashboard');
-
+            await api.signup({ email, password, full_name });
+            // Signup automatically calls login in our API wrapper
+            await api.getMe(); 
+            goto('/'); 
         } catch (e: any) {
             console.error(e);
-            // Handle specific API error messages
-            error = e.message || e.detail || 'Registration failed';
-            
-            // Clean up if something half-worked
-            localStorage.removeItem('token'); 
+            error = e.message || "REGISTRATION FAILED: Email may be in use.";
         } finally {
-            isLoading = false;
+            loading = false;
         }
     }
 </script>
 
-<div class="min-h-screen bg-sp-orange flex items-center justify-center p-4">
-    <div class="bg-white border-4 border-black p-8 max-w-md w-full shadow-hard-lg transform -rotate-1 relative">
-        <h1 class="text-3xl font-black mb-2 uppercase text-center mt-2">Join The Network</h1>
-        <p class="text-center font-bold text-gray-500 mb-8 text-sm">Create your sovereign identity.</p>
+<div class="min-h-screen bg-skin-fill flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div class="absolute inset-0 opacity-[0.03]" 
+         style="background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px); background-size: 40px 40px;">
+    </div>
+
+    <div class="w-full max-w-md relative z-10">
         
-        {#if error}
-            <div class="bg-sp-red text-white p-3 border-2 border-black font-bold text-sm mb-4">
-                ⚠️ {error}
-            </div>
-        {/if}
+        <div class="mb-8 text-center">
+            <h1 class="text-4xl font-black uppercase tracking-tighter text-skin-text">Join The <span class="text-skin-accent underline decoration-4 decoration-skin-accent/30">Corps</span></h1>
+            <div class="text-xs font-mono font-bold text-skin-muted tracking-[0.3em] mt-2">NEW OPERATOR ONBOARDING</div>
+        </div>
 
-        <form on:submit|preventDefault={handleSignup} class="space-y-4">
-            <div>
-                <label class="block font-bold text-sm mb-1 uppercase">Full Name</label>
-                <input bind:value={fullName} type="text" required class="w-full border-4 border-black p-3 font-bold outline-none" placeholder="Stan Marsh" />
-            </div>
-
-            <div>
-                <label class="block font-bold text-sm mb-1 uppercase">Email Identity</label>
-                <input bind:value={email} type="email" required class="w-full border-4 border-black p-3 font-bold outline-none" placeholder="stan@resinen.com" />
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block font-bold text-sm mb-1 uppercase">Passkey</label>
-                    <input bind:value={password} type="password" required class="w-full border-4 border-black p-3 font-bold outline-none" placeholder="••••••" />
-                </div>
-                <div>
-                    <label class="block font-bold text-sm mb-1 uppercase">Confirm</label>
-                    <input bind:value={confirmPassword} type="password" required class="w-full border-4 border-black p-3 font-bold outline-none" placeholder="••••••" />
-                </div>
-            </div>
+        <div class="bg-skin-surface border-2 border-skin-border shadow-hard">
             
-            <button disabled={isLoading} class="w-full bg-sp-cyan text-black font-black py-4 border-4 border-black shadow-hard hover:shadow-none transition-all uppercase disabled:opacity-50 mt-4">
-                {isLoading ? 'Minting Identity...' : 'Initialize Account'}
-            </button>
-        </form>
-        
-        <div class="mt-8 pt-6 border-t-2 border-dashed border-black text-center">
-            <p class="text-sm font-bold text-gray-500">
-                Already have an identity?
-                <a href="/login" class="text-sp-blue underline hover:bg-sp-yellow">Login here</a>
-            </p>
+            <div class="flex border-b border-skin-border">
+                <div class="flex-1 bg-skin-fill p-3 text-center border-r border-skin-border">
+                    <span class="text-xs font-black uppercase text-skin-accent">01. Identity</span>
+                </div>
+                <div class="flex-1 bg-skin-surface p-3 text-center opacity-50">
+                    <span class="text-xs font-black uppercase text-skin-muted">02. Verify</span>
+                </div>
+            </div>
+
+            <div class="p-8">
+                {#if error}
+                    <div class="mb-6 bg-red-500/10 border-l-4 border-red-500 p-4">
+                        <div class="text-xs font-black uppercase text-red-500 flex items-center gap-2">
+                            <span>⚠</span> {error}
+                        </div>
+                    </div>
+                {/if}
+
+                <form on:submit|preventDefault={handleSignup} class="space-y-5">
+                    
+                    <div class="group">
+                        <label class="block text-xs font-black uppercase text-skin-muted mb-1">Designation (Full Name)</label>
+                        <input 
+                            bind:value={full_name} 
+                            type="text" 
+                            required 
+                            class="w-full bg-skin-fill border border-skin-border p-3 font-mono text-sm focus:outline-none focus:border-skin-accent transition-all" 
+                            placeholder="John Doe" 
+                        />
+                    </div>
+                    
+                    <div class="group">
+                        <label class="block text-xs font-black uppercase text-skin-muted mb-1">Comms ID (Email)</label>
+                        <input 
+                            bind:value={email} 
+                            type="email" 
+                            required 
+                            class="w-full bg-skin-fill border border-skin-border p-3 font-mono text-sm focus:outline-none focus:border-skin-accent transition-all" 
+                            placeholder="agent@resinen.com" 
+                        />
+                    </div>
+
+                    <div class="group">
+                        <label class="block text-xs font-black uppercase text-skin-muted mb-1">Passcode</label>
+                        <input 
+                            bind:value={password} 
+                            type="password" 
+                            required 
+                            class="w-full bg-skin-fill border border-skin-border p-3 font-mono text-sm focus:outline-none focus:border-skin-accent transition-all" 
+                            placeholder="••••••••" 
+                        />
+                        <div class="text-[10px] text-skin-muted mt-1 text-right">Must be 8+ chars</div>
+                    </div>
+
+                    <button 
+                        disabled={loading} 
+                        class="w-full bg-skin-accent text-white py-4 font-black uppercase tracking-widest hover:bg-opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-8 shadow-lg shadow-skin-accent/20"
+                    >
+                        {loading ? 'Processing...' : 'Submit Credentials'}
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-skin-fill border-t border-skin-border p-4 text-center">
+                <a href="/login" class="text-xs font-bold font-mono uppercase text-skin-muted hover:text-skin-text transition-colors">
+                    [ Already Registered? Login ]
+                </a>
+            </div>
         </div>
     </div>
 </div>

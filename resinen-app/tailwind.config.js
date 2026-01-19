@@ -3,26 +3,48 @@ export default {
   content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     extend: {
+      // 1. COLORS (Linked to CSS Variables)
+      // The unusual syntax "rgb(var(--x) / <alpha-value>)" allows opacity like bg-skin-fill/50
       colors: {
-        'sp-cyan': '#40E0D0',
-        'sp-yellow': '#F9F447',
-        'sp-red': '#E84A43',
-        'sp-green': '#5BC236',
-        'sp-orange': '#F3752B',
-        'sp-brown': '#7B4C29',
-        'sp-blue': '#2D4F8E',
-        'sp-paper': '#F5F5F5',
-        'sp-paper-dark': '#E5E5E5', // Slightly darker for dashboard bg
+        skin: {
+          fill: 'rgb(var(--color-fill) / <alpha-value>)',
+          text: 'rgb(var(--color-text) / <alpha-value>)',
+          border: 'rgb(var(--color-border) / <alpha-value>)',
+          accent: 'rgb(var(--color-accent) / <alpha-value>)',
+          surface: 'rgb(var(--color-surface) / <alpha-value>)',
+          muted: 'rgb(var(--color-muted) / <alpha-value>)',
+        },
+        // Keep your legacy colors for specific overrides if needed
+        sp: {
+          cyan: '#00FFFF',
+          magenta: '#FF00FF',
+          yellow: '#FFFF00',
+          blue: '#0000FF',
+          green: '#00FF00',
+        }
+      },
+      
+      // 2. PHYSICS (Linked to CSS Variables)
+      borderWidth: {
+        DEFAULT: '1px',
+        skin: 'var(--border-width)',
+      },
+      borderRadius: {
+        'skin-sm': 'var(--radius-sm)',
+        'skin-md': 'var(--radius-md)',
+        'skin-lg': 'var(--radius-lg)',
+        'skin-full': 'var(--radius-full)',
       },
       boxShadow: {
-        'hard': '4px 4px 0px 0px rgba(0,0,0,1)',
-        'hard-lg': '8px 8px 0px 0px rgba(0,0,0,1)',
-        'hard-sm': '2px 2px 0px 0px rgba(0,0,0,1)',
+        'hard': 'var(--shadow-hard)',
       },
       fontFamily: {
-        sans: ['Verdana', 'sans-serif'],
+        header: ['var(--font-header)'],
       }
-    },
+    }
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms'),
+    // require('@tailwindcss/typography'), // Ensure this is installed if you use it
+  ]
 };

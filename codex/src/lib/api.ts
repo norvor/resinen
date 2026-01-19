@@ -25,14 +25,27 @@ export type User = {
     github?: string;
     xp: number;
     level: number;
+    avatar_url?: string; // Added commonly used field
 };
 
-// Strict Type for Creation to ensure is_private works
+export type Membership = {
+    community_id: string;
+    user_id: string;
+    // Optional because the backend might not send the full user object in the list
+    user?: User; 
+    role: 'member' | 'moderator' | 'admin';
+    status: 'pending' | 'active' | 'banned' | 'rejected';
+    joined_at: string;
+};
+
+// Strict Type for Creation
 export type CreateCommunityDTO = {
     name: string;
     slug: string;
     description: string;
     is_private: boolean; 
+    // 🚨 NEW: Array of strings
+    archetypes: string[]; 
     settings?: Record<string, any>;
 };
 
@@ -43,7 +56,11 @@ export type Community = {
     description: string;
     is_private: boolean;
     member_count: number;
-    creator_id: string; // <--- ADD THIS
+    creator_id: string;
+    banner_url?: string;
+    created_at: string;
+    // 🚨 NEW: Array of strings
+    archetypes: string[];
     settings?: Record<string, any>;
 };
 
@@ -54,7 +71,7 @@ export type Chapter = {
     location: string;
 };
 
-// --- UPDATED SOCIAL TYPES (Matches New Backend) ---
+// --- SOCIAL TYPES ---
 
 export type Comment = {
     id: string;
@@ -69,26 +86,18 @@ export type Post = {
     id: string;
     community_id: string;
     chapter_id?: string;
-    
-    // Content
     title?: string;
     content: string;
     image_url?: string;
     link_url?: string;
-    
-    // Metrics
     like_count: number;
     comment_count: number;
     view_count: number;
-    is_liked: boolean; // Did I like this?
+    is_liked: boolean;
     is_pinned: boolean;
-
-    // Metadata
     author_id: string;
     author_name: string;
     created_at: string;
-    
-    // Nested Data
     comments: Comment[];
 };
 
@@ -203,9 +212,9 @@ export const api = {
     updateCommunity: (id: string, data: Partial<Community>) => request('PUT', `/communities/${id}`, data),
     deleteCommunity: (id: string) => request('DELETE', `/communities/${id}`),
     
-    // MEMBERSHIP
+    // MEMBERSHIP (Fixed Types)
     getMembers: (communityId: string, status?: string) => 
-        request<any[]>('GET', `/communities/${communityId}/members${status ? `?status=${status}` : ''}`),
+        request<Membership[]>('GET', `/communities/${communityId}/members${status ? `?status=${status}` : ''}`),
 
     processMembership: (communityId: string, userId: string, action: 'approve' | 'reject' | 'ban') => 
         request('POST', `/communities/${communityId}/members/${userId}/process?action=${action}`),
@@ -217,9 +226,7 @@ export const api = {
     updateChapter: (id: string, data: Partial<Chapter>) => request('PUT', `/chapters/${id}`, data),
     deleteChapter: (id: string) => request('DELETE', `/chapters/${id}`),
 
-    // --- SOCIAL ENGINE (Updated) ---
-    // Matches the new "/feed" and "/posts" endpoints we just built in backend
-    
+    // SOCIAL ENGINE
     getFeed: (communityId: string, chapterId?: string) => {
         let url = `/feed?scope=community&community_id=${communityId}`;
         if (chapterId) url += `&chapter_id=${chapterId}`;
@@ -229,11 +236,9 @@ export const api = {
     createPost: (data: CreatePostDTO) => 
         request<Post>('POST', '/posts', data),
     
-    // Renamed to likePost for clarity, matches new endpoint
     likePost: (postId: string) => 
         request<any>('POST', `/posts/${postId}/like`),
     
-    // Keeping this from your old file (make sure backend supports it or update later)
     createComment: (postId: string, content: string) => 
         request('POST', '/social/comments', { post_id: postId, content }),
 };

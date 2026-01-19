@@ -1,5 +1,44 @@
 <script lang="ts">
-    import { user } from '$lib/api';
+    import { user, token, API_URL } from '$lib/api';
+    import { get } from 'svelte/store';
+    import FileUploader from '$lib/components/FileUploader.svelte';
+
+    let isUpdating = false;
+
+    async function handleUploadSuccess(event: CustomEvent) {
+        const newUrl = event.detail.url;
+        console.log("Vault URL received:", newUrl);
+        
+        await updateProfileAvatar(newUrl);
+    }
+
+    async function updateProfileAvatar(url: string) {
+        isUpdating = true;
+        try {
+            const authToken = get(token);
+            if (!authToken) return;
+
+            // PATCH the user profile in the database
+            const res = await fetch(`${API_URL}/users/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ avatar_url: url })
+            });
+
+            if (res.ok) {
+                const updatedUser = await res.json();
+                // Update the global store so the UI reflects the change instantly
+                user.set(updatedUser);
+            }
+        } catch (err) {
+            console.error("Failed to link avatar to profile:", err);
+        } finally {
+            isUpdating = false;
+        }
+    }
 </script>
 
 <div class="max-w-2xl mx-auto">
@@ -13,11 +52,35 @@
             </div>
         </div>
 
-        <div class="p-8 flex flex-col md:flex-row gap-8 items-center md:items-start">
+        <div class="p-8 flex flex-col md:flex-row gap-8 items-start">
             
-            <div class="flex-shrink-0">
-                <div class="w-32 h-32 bg-sp-yellow border-4 border-black flex items-center justify-center text-5xl font-black shadow-hard">
-                    {$user?.full_name?.charAt(0)}
+            <div class="flex-shrink-0 flex flex-col gap-4 w-full md:w-auto">
+                <div class="w-32 h-32 border-4 border-black shadow-hard overflow-hidden bg-sp-yellow flex items-center justify-center relative">
+                    {#if isUpdating}
+                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-xs z-10">
+                            SAVING...
+                        </div>
+                    {/if}
+
+                    {#if $user?.avatar_url}
+                        <img 
+                            src={$user.avatar_url} 
+                            alt="Avatar" 
+                            class="w-full h-full object-cover"
+                        />
+                    {:else}
+                        <div class="text-5xl font-black">
+                            {$user?.full_name?.charAt(0) || '?'}
+                        </div>
+                    {/if}
+                </div>
+
+                <div class="w-32">
+                    <FileUploader 
+                        label="Update Photo" 
+                        uploadingText="..."
+                        on:success={handleUploadSuccess} 
+                    />
                 </div>
             </div>
 
@@ -34,7 +97,7 @@
 
                 <div>
                     <label class="block text-xs font-black text-gray-400 uppercase">User ID</label>
-                    <div class="text-sm font-bold font-mono bg-gray-100 p-2 border-2 border-black inline-block">
+                    <div class="text-sm font-bold font-mono bg-gray-100 p-2 border-2 border-black inline-block break-all">
                         {$user?.id || 'UNREGISTERED'}
                     </div>
                 </div>

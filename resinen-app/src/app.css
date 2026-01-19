@@ -2,7 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- 1. THE DEFAULT (NEO-BRUTALIST / FUN) --- */
+/* Used by: Bazaar, Guild, Senate */
+:root {
+  /* BACKGROUNDS */
+  --color-fill: 15 23 42;          /* Slate-900 (Deep Command Navy) */
+  --color-surface: 30 41 59;       /* Slate-800 (Panel Grey) */
+  
+  /* TEXT */
+  --color-text: 248 250 252;       /* Slate-50 (Crisp White text) */
+  --color-muted: 148 163 184;      /* Slate-400 (HUD Text) */
+
+  /* BORDERS & DIVIDERS */
+  --color-border: 51 65 85;        /* Slate-700 (Subtle Borders) */
+  
+  /* ACCENT (The "Navy Blue" you requested) */
+  --color-accent: 59 130 246;      /* Blue-500 (Electric Blue - Readable on Dark) */
+  --color-accent-dark: 29 78 216;  /* Blue-700 (Hover states) */
+
+  /* PHYSICS */
+  --border-width: 1px;             /* Sleek, thin lines */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+  
+  /* VIBE */
+  --shadow-hard: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --font-header: 'Inter', sans-serif;
+}
+
+/* Ensure the body takes the dark theme by default */
 body {
-    background-color: #E5E5E5; /* sp-paper-dark */
-    color: black;
+  background-color: rgb(var(--color-fill));
+  color: rgb(var(--color-text));
+}
+
+/* Scrollbar Styling for that Cyberpunk feel */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--color-fill)); 
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-surface)); 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-accent)); 
+}
+/* --- 2. THE SERENITY (CALM / SOFT) --- */
+/* Used by: Sanctuary, Library, Garden */
+.theme-serenity {
+  /* COLORS */
+  --color-fill: 250 250 249;       /* Stone-50 (Cream) */
+  --color-text: 28 25 23;          /* Stone-900 (Soft Black) */
+  --color-border: 231 229 228;     /* Stone-200 (Subtle) */
+  --color-accent: 87 83 78;        /* Stone-600 (Sage/Earth) */
+  --color-surface: 255 255 255;    /* White cards */
+  --color-muted: 245 245 244;      /* Stone-100 */
+
+  /* PHYSICS */
+  --border-width: 1px;             /* Thin, elegant lines */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+
+  /* VIBE */
+  --shadow-hard: 0 10px 30px -10px rgba(0,0,0,0.05); /* Float, don't drop */
+  --font-header: 'Merriweather', serif; /* Optional: If you import a serif font */
+}
+
+/* --- 3. THE VOLTAGE (ENERGETIC / DARK) --- */
+/* Used by: Arena, Club, Stage */
+.theme-voltage {
+  /* COLORS */
+  --color-fill: 2 6 23;            /* Slate-950 (Midnight) */
+  --color-text: 255 255 255;       /* Pure White */
+  --color-border: 30 41 59;        /* Slate-800 */
+  --color-accent: 250 204 21;      /* Yellow-400 (Neon) */
+  --color-surface: 15 23 42;       /* Slate-900 */
+  --color-muted: 30 41 59;         /* Slate-800 */
+
+  /* PHYSICS */
+  --border-width: 1px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-full: 2px;             /* Cyberpunk clipping */
+
+  /* VIBE */
+  --shadow-hard: 0 0 15px rgba(250, 204, 21, 0.15); /* Neon Glow */
+  --font-header: 'JetBrains Mono', monospace; /* Tech feel */
+}
+
+/* --- UTILITIES --- */
+body {
+  background-color: rgb(var(--color-fill));
+  color: rgb(var(--color-text));
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom Class to apply the variables easily */
+.skin-border {
+  border-width: var(--border-width);
+  border-color: rgb(var(--color-border));
+  border-style: solid;
+  border-radius: var(--radius-md);
+}
+
+.skin-card {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  border-width: var(--border-width);
+  border-color: rgb(var(--color-border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-hard);
+}
+
+.skin-btn-primary {
+  background-color: rgb(var(--color-text)); /* Black in default, White in dark */
+  color: rgb(var(--color-fill));           /* White in default, Black in dark */
+  border-radius: var(--radius-full);
+  font-weight: 900;
+  text-transform: uppercase;
+  padding: 0.75rem 1.5rem;
+  border: none; /* Reset */
+  box-shadow: var(--shadow-hard);
+  transition: transform 0.1s;
+}
+
+.skin-btn-primary:hover {
+  transform: translate(-1px, -1px);
+  filter: brightness(1.2);
+}
+
+/* Hide scrollbar for clean UI */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
