@@ -21,12 +21,14 @@ async def get_curriculum(
     # Note: SQLModel relationships don't always auto-sort. 
     # For MVP, we fetch modules and trust the relationship load, or sort in Python.
     stmt = select(Module).where(Module.community_id == community_id).order_by(Module.order_index)
-    modules = (await db.exec(stmt)).all()
+    result = await db.execute(stmt)
+    modules = result.scalars().all()
     
     # B. Fetch User's Completed IDs
     # "SELECT lesson_id FROM completion WHERE user_id = me"
     comp_stmt = select(LessonCompletion.lesson_id).where(LessonCompletion.user_id == current_user.id)
-    completed_ids = (await db.exec(comp_stmt)).all()
+    result = await db.execute(comp_stmt)
+    completed_ids = result.scalars().all()
     completed_set = set(completed_ids)
 
     # C. Assemble & Mark Completed

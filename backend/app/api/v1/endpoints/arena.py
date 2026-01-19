@@ -19,7 +19,8 @@ async def get_matches(
 ):
     # Fetch Matches
     stmt = select(ArenaMatch).where(ArenaMatch.community_id == community_id).order_by(ArenaMatch.start_time.desc())
-    matches = (await db.exec(stmt)).all()
+    result = await db.execute(stmt)
+    matches = result.scalars().all()
     
     # Fetch User's Picks
     user_picks_stmt = select(ArenaPrediction).where(

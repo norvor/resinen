@@ -26,7 +26,8 @@ async def get_bunker_feed(
         .order_by(BunkerMessage.created_at.desc())
         .limit(50)
     )
-    messages = (await db.exec(stmt)).all()
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
     
     results = []
     for m in messages:
