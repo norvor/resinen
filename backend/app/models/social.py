@@ -1,46 +1,86 @@
 import uuid
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import SQLModel, Field, Relationship
+
+# We import User because it is used in ForeignKeys directly
+from app.models.user import User
 
 if TYPE_CHECKING:
-    from app.models.user import User
+    # We only import these for Type Checking to avoid Circular Loops
+    from app.models.community import Community, Chapter
 
-# Many-to-Many for Likes
+# --- JOIN TABLE FOR POST LIKES ---
 class PostLike(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
     post_id: uuid.UUID = Field(foreign_key="post.id", primary_key=True)
-
-class Comment(SQLModel, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    post_id: uuid.UUID = Field(foreign_key="post.id")
-    author_id: uuid.UUID = Field(foreign_key="user.id")
-    parent_id: Optional[uuid.UUID] = Field(default=None, foreign_key="comment.id")
-    
-    content: str
-    like_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    author: "User" = Relationship()
+
+# --- JOIN TABLE FOR COMMENT LIKES ---
+class CommentLike(SQLModel, table=True):
+    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    comment_id: uuid.UUID = Field(foreign_key="comment.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Post(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    community_id: uuid.UUID = Field(foreign_key="community.id", index=True)
+    community_id: uuid.UUID = Field(foreign_key="community.id")
+    
+    # 🚨 THE FIX: Ensure this field exists for the relationship
     chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
+    
     author_id: uuid.UUID = Field(foreign_key="user.id")
     
+    # --- CONTENT ---
     content: str
     title: Optional[str] = None
     image_url: Optional[str] = None
     link_url: Optional[str] = None
     
-    # Metrics
-    view_count: int = 0
-    like_count: int = 0
-    comment_count: int = 0
-    is_pinned: bool = False
+    # --- MODERATION ---
+    is_pinned: bool = Field(default=False)
+    is_locked: bool = Field(default=False)
+    
+    # --- METRICS ---
+    like_count: int = Field(default=0)
+    comment_count: int = Field(default=0)
+    view_count: int = Field(default=0)
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    
+    # Relationships
+    author: "User" = Relationship(back_populates="posts")
+    comments: List["Comment"] = Relationship(back_populates="post")
+    likes: List["PostLike"] = Relationship()
+    
+    # THE LINKS BACK
+    community: "Community" = Relationship(back_populates="posts")
+    
+    # 🚨 THE FIX: The relationship partner to Chapter.posts
+    chapter: Optional["Chapter"] = Relationship(back_populates="posts")
+
+class Comment(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    post_id: uuid.UUID = Field(foreign_key="post.id")
+    author_id: uuid.UUID = Field(foreign_key="user.id")
+    
+    # --- HIERARCHY ---
+    parent_id: Optional[uuid.UUID] = Field(default=None, foreign_key="comment.id")
+    
+    content: str
+    like_count: int = Field(default=0)
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
-    author: "User" = Relationship(back_populates="posts")
-    comments: List["Comment"] = Relationship(back_populates=None)
+    # Relationships
+    post: "Post" = Relationship(back_populates="comments")
+    author: "User" = Relationship()
+    
+    # Self-Referential (Replies)
+    children: List["Comment"] = Relationship(
+        sa_relationship_kwargs={
+            "cascade": "all, delete",
+            "remote_side": "Comment.id"
+        }
+    )
