@@ -3,10 +3,10 @@ from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel
 
-# We import the Enum from the model to keep them synced
+# Import the Enum from models
 from app.models.community import Archetype 
 
-# --- CHAPTER SCHEMAS (Added Back) ---
+# --- CHAPTER SCHEMAS ---
 class ChapterBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -26,7 +26,7 @@ class ChapterRead(ChapterBase):
     created_at: datetime
     
     class Config:
-        from_attributes = True # Fixed Pydantic V2 warning (was orm_mode)
+        from_attributes = True
 
 # --- COMMUNITY SCHEMAS ---
 
@@ -35,9 +35,11 @@ class CommunityBase(BaseModel):
     slug: str
     description: Optional[str] = None
     banner_url: Optional[str] = None
-    archetype: Archetype = Archetype.DEFAULT
     
-    # Add installed_engines here too
+    # 🚨 CHANGED: Plural List
+    # We default to an empty list or ["lounge"]
+    archetypes: List[Archetype] = [Archetype.LOUNGE]
+    
     config: Dict[str, Any] = {}
     installed_engines: List[str] = [] 
     
@@ -52,9 +54,10 @@ class CommunityUpdate(BaseModel):
     description: Optional[str] = None
     banner_url: Optional[str] = None
     
-    archetype: Optional[Archetype] = None
-    config: Optional[Dict[str, Any]] = None
+    # 🚨 CHANGED: Plural List
+    archetypes: Optional[List[Archetype]] = None
     
+    config: Optional[Dict[str, Any]] = None
     is_private: Optional[bool] = None
 
 class CommunityRead(CommunityBase):
@@ -62,9 +65,6 @@ class CommunityRead(CommunityBase):
     creator_id: UUID
     member_count: int
     created_at: datetime
-    
-    # Include chapters if loaded
-    # chapters: List[ChapterRead] = [] 
 
     class Config:
-        from_attributes = True # Fixed Pydantic V2 warning
+        from_attributes = True

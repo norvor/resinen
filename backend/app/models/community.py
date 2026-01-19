@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.social import Post
 
+# Keep Enum for validation, even if DB stores strings
 class Archetype(str, Enum):
     ARENA = "arena"
     STAGE = "stage"
@@ -21,7 +22,7 @@ class Archetype(str, Enum):
     CLUB = "club"
     BUNKER = "bunker"
     LOUNGE = "lounge"
-    DEFAULT = "default"
+    DEFAULT = "lounge" # Changed default to 'lounge' as it's a safer fallback
 
 # --- MEMBERSHIPS ---
 class Membership(SQLModel, table=True):
@@ -56,11 +57,11 @@ class Community(SQLModel, table=True):
     description: Optional[str] = None
     banner_url: Optional[str] = None
     
-    archetype: Archetype = Field(default=Archetype.DEFAULT)
+    # 🚨 CHANGED: From Single Enum to List of Strings (JSON)
+    archetypes: List[str] = Field(default_factory=list, sa_type=JSON)
     
     # --- CONFIG & ENGINES ---
     config: Dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    # 👇 ADDING THIS FIELD FIXES THE CRASH
     installed_engines: List[str] = Field(default_factory=list, sa_type=JSON)
 
     is_private: bool = Field(default=False)
