@@ -7,6 +7,7 @@ from app.core.database import async_session_factory, engine
 from app.core.security import get_password_hash
 
 # --- CORE MODELS ---
+# Importing these registers them with SQLModel.metadata
 from app.models.user import User
 from app.models.community import Community, Membership, Chapter, Archetype
 from app.models.engine import Engine, CommunityEngine
@@ -23,6 +24,8 @@ from app.models.stage import StageVideo
 from app.models.bunker import BunkerMessage
 from app.models.guild import GuildProject, GuildBounty, BountyStatus
 from app.models.garden import GardenHabit, GardenLog
+from app.models.content import ContentBlock
+from app.models.referral import MemberService, Vouch
 
 # --- CONSTANTS ---
 ADMIN_EMAIL = "admin@resinen.com"
@@ -84,12 +87,14 @@ WORLDS = [
 async def seed_db():
     print("🌱 STARTING COMPREHENSIVE SEEDER...")
     
-    # 1. WIPE DB (FIXED: Split commands)
+    # 1. WIPE DB (FIXED: The "Soft" Reset)
+    # This drops only the tables defined in your models, avoiding permission errors.
     async with engine.begin() as conn:
-        # We must split these into two executions for asyncpg
-        await conn.execute(text("DROP SCHEMA public CASCADE;"))
-        await conn.execute(text("CREATE SCHEMA public;"))
+        print("🔥 Dropping tables...")
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        print("🏗️  Creating tables...")
         await conn.run_sync(SQLModel.metadata.create_all)
+        
     print("✨ Database Wiped & Rebuilt.")
 
     async with async_session_factory() as db:
