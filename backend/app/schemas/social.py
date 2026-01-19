@@ -1,68 +1,50 @@
-from typing import List, Optional
-from uuid import UUID
+import uuid
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.user import UserRead
 
-# --- COMMENTS ---
+# --- COMMENT ---
 class CommentBase(BaseModel):
     content: str
-    parent_id: Optional[UUID] = None # For nested replies
+    parent_id: Optional[uuid.UUID] = None
 
 class CommentCreate(CommentBase):
-    pass 
+    post_id: uuid.UUID
 
 class CommentRead(CommentBase):
-    id: UUID
-    post_id: UUID
-    
-    # Author Context (Identity Layer)
-    author_id: UUID
-    author_name: str
-    author_avatar: Optional[str] = None
-    author_level: int = 1
-    
-    # Social Proof
+    id: uuid.UUID
+    post_id: uuid.UUID
     like_count: int
-    is_liked: bool = False 
-    
     created_at: datetime
     
+    author: UserRead
+    
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-# --- POSTS ---
+# --- POST ---
 class PostBase(BaseModel):
+    title: Optional[str] = None
     content: str
     image_url: Optional[str] = None
     link_url: Optional[str] = None
-    title: Optional[str] = None
-    community_id: UUID
-    chapter_id: Optional[UUID] = None
+    chapter_id: Optional[uuid.UUID] = None
 
 class PostCreate(PostBase):
-    pass
-
-class PostUpdate(BaseModel):
-    content: Optional[str] = None
-    is_pinned: Optional[bool] = None
-    is_locked: Optional[bool] = None
+    community_id: uuid.UUID
 
 class PostRead(PostBase):
-    id: UUID
+    id: uuid.UUID
+    community_id: uuid.UUID
     
-    # Author Context
-    author_id: UUID
-    author_name: str 
-    author_avatar: Optional[str] = None
-    author_level: int = 1
-    
-    # Metrics
+    is_pinned: bool
     like_count: int
     comment_count: int
-    view_count: int = 0
-    is_liked: bool = False
-    
+    view_count: int
     created_at: datetime
     
+    author: UserRead
+    
     class Config:
-        orm_mode = True
+        from_attributes = True

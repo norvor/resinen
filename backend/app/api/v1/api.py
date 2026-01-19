@@ -1,42 +1,34 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
-    auth, 
-    users, 
-    communities, 
-    chapters, 
-    social,
-    websockets,
-    # The 10 Engines
-    listings,   # 1. Bazaar
-    governance, # 2. Senate
-    academy,    # 3. Academy
-    arena,      # 4. Arena
-    club,       # 5. Club
-    library,    # 6. Library
-    stage,      # 7. Stage
-    bunker,     # 8. Bunker
-    guild,      # 9. Guild
-    garden      # 10. Garden
+    auth, users, communities, memberships,  # Core
+    social, library, stage,                 # Content Engines
+    arena, club, bunker,                    # Interaction Engines
+    listing, guild, academy, garden,        # Growth Engines
+    upload, engines                         # Utilities
 )
 
 api_router = APIRouter()
 
 # --- CORE ---
-api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(communities.router, prefix="/communities", tags=["communities"])
-api_router.include_router(chapters.router, prefix="/chapters", tags=["chapters"])
-api_router.include_router(social.router, prefix="/social",tags=["social"]) # Default Feed
-api_router.include_router(websockets.router, tags=["websockets"])
+api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+api_router.include_router(users.router, prefix="/users", tags=["Users"])
+api_router.include_router(communities.router, prefix="/communities", tags=["Communities"])
+api_router.include_router(memberships.router, prefix="/communities", tags=["Memberships"]) # Helper endpoints
+api_router.include_router(engines.router, prefix="/engines", tags=["System"])
+api_router.include_router(upload.router, prefix="/media", tags=["Utilities"])
 
-# --- THE 10 ENGINES ---
-api_router.include_router(listings.router, prefix="/listings", tags=["engine-bazaar"])
-api_router.include_router(governance.router, prefix="/governance", tags=["engine-senate"])
-api_router.include_router(academy.router, prefix="/academy", tags=["engine-academy"])
-api_router.include_router(arena.router, prefix="/arena", tags=["engine-arena"])
-api_router.include_router(club.router, prefix="/club", tags=["engine-club"])
-api_router.include_router(library.router, prefix="/library", tags=["engine-library"])
-api_router.include_router(stage.router, prefix="/stage", tags=["engine-stage"])
-api_router.include_router(bunker.router, prefix="/bunker", tags=["engine-bunker"])
-api_router.include_router(guild.router, prefix="/guild", tags=["engine-guild"])
-api_router.include_router(garden.router, prefix="/garden", tags=["engine-garden"])
+# --- CONTENT ENGINES ---
+api_router.include_router(social.router, prefix="/social", tags=["Engine: Social"])
+api_router.include_router(library.router, prefix="/library", tags=["Engine: Library"])
+api_router.include_router(stage.router, prefix="/stage", tags=["Engine: Stage"])
+
+# --- INTERACTION ENGINES ---
+api_router.include_router(arena.router, prefix="/arena", tags=["Engine: Arena"])
+api_router.include_router(club.router, prefix="/club", tags=["Engine: Club"])
+api_router.include_router(bunker.router, prefix="/bunker", tags=["Engine: Bunker"])
+
+# --- GROWTH ENGINES ---
+api_router.include_router(listing.router, prefix="/listings", tags=["Engine: Bazaar"])
+api_router.include_router(guild.router, prefix="/guild", tags=["Engine: Guild"])
+api_router.include_router(academy.router, prefix="/academy", tags=["Engine: Academy"])
+api_router.include_router(garden.router, prefix="/garden", tags=["Engine: Garden"])

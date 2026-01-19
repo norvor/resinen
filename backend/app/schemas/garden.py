@@ -1,21 +1,20 @@
-from typing import Optional
-from uuid import UUID
-from datetime import datetime, date
+import uuid
+from datetime import date
 from pydantic import BaseModel
 
 class HabitCreate(BaseModel):
-    community_id: UUID
+    community_id: uuid.UUID
     title: str
     icon: str = "🌱"
 
 class HabitRead(BaseModel):
-    id: UUID
+    id: uuid.UUID
     title: str
     icon: str
     streak_current: int
     streak_best: int
     
-    # Helper for UI: Did I do this today?
+    # UI helper (needs to be calculated in endpoint)
     is_completed_today: bool = False
     
     class Config:

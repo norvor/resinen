@@ -1,19 +1,14 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
-from sqlmodel import SQLModel, Field, Relationship
 from enum import Enum
-
-if TYPE_CHECKING:
-    from app.models.user import User
-    from app.models.community import Community
+from typing import Optional
+from sqlmodel import Field, SQLModel
 
 class RSVPStatus(str, Enum):
     GOING = "going"
     MAYBE = "maybe"
     NOT_GOING = "not_going"
 
-# --- 1. THE EVENT ---
 class ClubEvent(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
@@ -21,25 +16,14 @@ class ClubEvent(SQLModel, table=True):
     
     title: str
     description: str
-    cover_image_url: Optional[str] = None
-    
-    # Logistics
-    location_name: str # e.g. "Zoom" or "Central Park"
+    location_name: str
     start_time: datetime
     end_time: Optional[datetime] = None
-    max_attendees: Optional[int] = None
+    cover_image_url: Optional[str] = None
     
-    # Stats
-    count_going: int = Field(default=0)
-    
-    # Relationships
-    community: "Community" = Relationship()
-    creator: "User" = Relationship()
+    count_going: int = 0
 
-# --- 2. THE RSVP ---
 class ClubRSVP(SQLModel, table=True):
-    event_id: uuid.UUID = Field(foreign_key="clubevent.id", primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
-    
-    status: RSVPStatus
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    event_id: uuid.UUID = Field(foreign_key="clubevent.id", primary_key=True)
+    status: RSVPStatus = Field(default=RSVPStatus.GOING)

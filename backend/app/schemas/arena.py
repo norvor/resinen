@@ -1,51 +1,47 @@
+import uuid
 from typing import Optional
-from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel
 from app.models.arena import MatchStatus
 
-# --- READ SCHEMAS ---
+# --- TEAMS ---
 class TeamRead(BaseModel):
-    id: UUID
+    id: uuid.UUID
     name: str
-    logo_url: Optional[str]
+    logo_url: Optional[str] = None
     short_code: str
+    class Config:
+        from_attributes = True
 
-class MatchRead(BaseModel):
-    id: UUID
-    status: MatchStatus
+# --- MATCH ---
+class MatchBase(BaseModel):
     start_time: datetime
+    status: MatchStatus = MatchStatus.SCHEDULED
+
+class MatchCreate(MatchBase):
+    community_id: uuid.UUID
+    team_a_id: uuid.UUID
+    team_b_id: uuid.UUID
+
+class MatchRead(MatchBase):
+    id: uuid.UUID
+    community_id: uuid.UUID
     
-    # Teams (Nested for ease)
-    team_a: TeamRead
-    team_b: TeamRead
-    
-    # Scores
     score_a: int
     score_b: int
     time_display: str
     
-    # Metadata
-    total_predictions: int = 0
-    pick_pct_a: int = 50 # Percentage of users who picked A
-    pick_pct_b: int = 50
+    # Returning full objects for UI convenience
+    team_a: TeamRead
+    team_b: TeamRead
     
-    # Did I pick?
-    user_pick_id: Optional[UUID] = None
-
     class Config:
         from_attributes = True
 
-# --- WRITE SCHEMAS ---
-class MatchCreate(BaseModel):
-    community_id: UUID
-    team_a_name: str
-    team_b_name: str
-    start_time: datetime
-
+# --- PREDICTION ---
 class PredictionCreate(BaseModel):
-    match_id: UUID
-    team_id: UUID
+    match_id: uuid.UUID
+    team_id: uuid.UUID
 
 class ScoreUpdate(BaseModel):
     score_a: int

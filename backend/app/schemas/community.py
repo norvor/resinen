@@ -1,12 +1,10 @@
-from typing import Optional, Dict, Any, List
-from uuid import UUID
+import uuid
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.user import UserRead
 
-# Import the Enum from models
-from app.models.community import Archetype 
-
-# --- CHAPTER SCHEMAS ---
+# --- CHAPTERS ---
 class ChapterBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -21,50 +19,61 @@ class ChapterUpdate(BaseModel):
     sequence_order: Optional[int] = None
 
 class ChapterRead(ChapterBase):
-    id: UUID
-    community_id: UUID
-    created_at: datetime
+    id: uuid.UUID
+    community_id: uuid.UUID
     
     class Config:
         from_attributes = True
 
-# --- COMMUNITY SCHEMAS ---
+# --- MEMBERSHIP ---
+class MembershipBase(BaseModel):
+    role: str = "member"
+    status: str = "active"
 
+class MembershipCreate(MembershipBase):
+    user_id: uuid.UUID
+    community_id: uuid.UUID
+
+class MembershipOut(MembershipBase):
+    joined_at: datetime
+    user_id: uuid.UUID
+    community_id: uuid.UUID
+    
+    # Nested User Profile for Admin Tables
+    user: Optional[UserRead] = None
+    
+    class Config:
+        from_attributes = True
+
+# --- COMMUNITY ---
 class CommunityBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
     banner_url: Optional[str] = None
-    
-    # 🚨 CHANGED: Plural List
-    # We default to an empty list or ["lounge"]
-    archetypes: List[Archetype] = [Archetype.LOUNGE]
-    
-    config: Dict[str, Any] = {}
-    installed_engines: List[str] = [] 
-    
+    icon_url: Optional[str] = None
+    primary_color: str = "#000000"
     is_private: bool = False
 
 class CommunityCreate(CommunityBase):
-    pass
+    # Pass 'archetypes' as a list of strings
+    archetypes: List[str] = []
 
-class CommunityUpdate(BaseModel):
+class CommunityUpdate(CommunityBase):
     name: Optional[str] = None
     slug: Optional[str] = None
-    description: Optional[str] = None
-    banner_url: Optional[str] = None
-    
-    # 🚨 CHANGED: Plural List
-    archetypes: Optional[List[Archetype]] = None
-    
-    config: Optional[Dict[str, Any]] = None
-    is_private: Optional[bool] = None
+    config: Dict[str, Any] = {}
+    installed_engines: List[str] = []
 
 class CommunityRead(CommunityBase):
-    id: UUID
-    creator_id: UUID
+    id: uuid.UUID
+    creator_id: uuid.UUID
     member_count: int
     created_at: datetime
-
+    
+    # JSON Fields
+    config: Dict[str, Any] = {}
+    installed_engines: List[str] = []
+    
     class Config:
         from_attributes = True
