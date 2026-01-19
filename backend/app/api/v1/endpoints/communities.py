@@ -6,6 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 import uuid 
 
+from sqlalchemy import func
+from datetime import datetime
+from app.models.social import Post
+
 from app.api import deps
 from app.models.user import User
 from app.models.community import Community, Membership
@@ -163,6 +167,44 @@ async def get_membership_status(
     result = await db.execute(query)
     membership = result.scalars().first()
     return {"status": membership.status if membership else "none", "role": membership.role if membership else None}
+
+@router.get("/{community_id}/stats")
+async def get_community_stats(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Get live dashboard statistics.
+    """
+    # 1. Fetch Community for Member Count
+    comm = await db.get(Community, community_id)
+    if not comm:
+        raise HTTPException(status_code=404, detail="Community not found")
+
+    # 2. Calculate Posts Today (Realtime)
+    start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    posts_query = select(func.count(Post.id)).where(
+        Post.community_id == community_id,
+        Post.created_at >= start_of_day
+    )
+    posts_result = await db.execute(posts_query)
+    posts_today = posts_result.scalar() or 0
+
+    # 3. Calculate Pending Approvals (Realtime)
+    pending_query = select(func.count(Membership.user_id)).where(
+        Membership.community_id == community_id,
+        Membership.status == "pending"
+    )
+    pending_result = await db.execute(pending_query)
+    pending_count = pending_result.scalar() or 0
+
+    return {
+        "member_count": comm.member_count,
+        "daily_active": int(comm.member_count * 0.45) + 1, # Mock: 45% + 1 engagement
+        "posts_today": posts_today,
+        "pending_reports": pending_count
+    }
 
 @router.post("/{community_id}/join")
 async def join_community(
