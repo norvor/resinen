@@ -84,9 +84,11 @@ WORLDS = [
 async def seed_db():
     print("🌱 STARTING COMPREHENSIVE SEEDER...")
     
-    # 1. WIPE DB
+    # 1. WIPE DB (FIXED: Split commands)
     async with engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+        # We must split these into two executions for asyncpg
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
         await conn.run_sync(SQLModel.metadata.create_all)
     print("✨ Database Wiped & Rebuilt.")
 
