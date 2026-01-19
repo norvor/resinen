@@ -120,6 +120,32 @@ async def create_post(
         is_liked=False, comments=[]
     )
 
+@router.get("/posts/{post_id}", response_model=PostRead)
+async def get_post(
+    post_id: uuid.UUID, 
+    db: AsyncSession = Depends(deps.get_db)
+):
+    """Get a single post with all its comments."""
+    
+    # We load the author, the comments, AND the authors of those comments
+    stmt = (
+        select(Post)
+        .options(
+            joinedload(Post.author),
+            selectinload(Post.comments).joinedload(Comment.author)
+        )
+        .where(Post.id == post_id)
+    )
+    
+    result = await db.execute(stmt)
+    post = result.scalars().first()
+    
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+        
+    return post
+
+
 # --- 3. LIKE POST ---
 @router.post("/posts/{post_id}/like")
 async def like_post(
