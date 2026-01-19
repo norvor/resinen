@@ -35,7 +35,7 @@ async def websocket_endpoint(
         # A. Verify Key Integrity (Optional Debugging)
         # This helps check if the server restarted and changed the random key
         key_fingerprint = settings.SECRET_KEY[:5]
-        logger.info(f"🛡️ [WS AUTH] Validating against System Key starting with: {key_fingerprint}***")
+        print(f"🛡️ [WS AUTH] Validating against System Key starting with: {key_fingerprint}***")
 
         # B. Decode Token
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
