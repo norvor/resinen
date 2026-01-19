@@ -8,20 +8,22 @@ class UserInMembership(BaseModel):
     id: UUID
     full_name: Optional[str] = None
     email: Optional[str] = None
+    avatar_url: Optional[str] = None  # Added this as it's often needed for UI
     
     class Config:
         from_attributes = True
 
 # 2. Define the Membership output that INCLUDES the User
 class MembershipOut(BaseModel):
-    id: UUID | None = None
+    # ❌ REMOVED: id field (It does not exist in your composite-key table)
+    
     user_id: UUID
     community_id: UUID
     role: str
     status: str
     joined_at: datetime
     
-    # This is the magic field. If this is missing, the API drops the data.
+    # The magic field for the Admin Panel / UI
     user: Optional[UserInMembership] = None 
 
     class Config:
