@@ -14,9 +14,9 @@ async def websocket_endpoint(
 ):
     try:
         # --- DEBUG LOGS ---
-        # print(f"🔍 [WS DEBUG] Validating Token: {token[:10]}...") 
-        # print(f"🔑 [WS DEBUG] Using Secret: {settings.SECRET_KEY[:5]}***")
-        # print(f"🧮 [WS DEBUG] Using Algo: {ALGORITHM}")
+        print(f"🔍 [WS DEBUG] Validating Token: {token[:10]}...") 
+        print(f"🔑 [WS DEBUG] Using Secret: {settings.SECRET_KEY[:5]}***")
+        print(f"🧮 [WS DEBUG] Using Algo: {ALGORITHM}")
         
         # Validate Token
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
