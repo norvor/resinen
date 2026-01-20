@@ -1,7 +1,7 @@
 import asyncio
 import httpx
 import random
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from sqlmodel import SQLModel
 from app.core.database import async_session_factory, engine 
@@ -9,7 +9,6 @@ from app.core.security import get_password_hash
 from app.models.user import User
 
 # --- CONFIGURATION ---
-# Your main.py mounts api_router at /api/v1
 BASE_URL = "http://localhost:8000/api/v1"
 
 # --- PERSONAS ---
@@ -26,7 +25,6 @@ async def wipe_and_bootstrap_db():
     print("\n🔥 [DB] WIPING DATABASE (Iterative Drop)...")
     async with engine.begin() as conn:
         # 1. DROP ALL TABLES SAFELY
-        # We query existing tables and drop them individually with CASCADE
         result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
         tables = result.scalars().all()
         for table in tables:
@@ -52,10 +50,8 @@ async def wipe_and_bootstrap_db():
         print(f"✅ Created {len(PERSONAS)} users in the database.")
 
 async def login_user(client, email, password):
-    """Logs in and returns the Authorization header."""
-    # CORRECTION: Your auth.py defines this at /login, and api.py mounts it at /auth
-    # Full Path: /api/v1/auth/login
     try:
+        # NOTE: Matches api.py prefix="/auth" and auth.py endpoint="/login"
         res = await client.post("/auth/login", data={"username": email, "password": password})
         
         if res.status_code != 200:
@@ -127,40 +123,44 @@ async def seed_via_api():
             c_bob = await client.post(f"/social/posts/{p1_id}/comments", headers=bob_h, json={"content": "latency seems high..."})
             if c_bob.status_code == 200:
                 c_bob_id = c_bob.json()["id"]
-                # Note: api.py maps social at /social. 
-                # Ensure your endpoints/social.py has correct paths (e.g., /comments/{id}/like)
                 await client.post(f"/social/comments/{c_bob_id}/like", headers=admin_h)
 
         # --- GOVERNANCE ENGINE ---
-        # NOTE: Requires `governance` router in api.py
         print("   ⚖️ [Governance] Holding an election...")
         prop = await client.post(f"/governance/{nexus_id}/proposals", headers=alice_h, json={
             "title": "Adopt Dark Mode by Default?",
             "description": "Should we force dark mode on all new interfaces?",
-            "ends_at": (datetime.utcnow() + timedelta(days=7)).isoformat()
+            "ends_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
         })
         if prop.status_code == 200:
             prop_id = prop.json()["id"]
             await client.post(f"/governance/proposals/{prop_id}/vote", headers=bob_h, json={"choice": "no"})
             await client.post(f"/governance/proposals/{prop_id}/vote", headers=charlie_h, json={"choice": "yes"})
         else:
-            print("   ⚠️ Governance endpoint not found (Did you add it to api.py?)")
+            print(f"   ⚠️ Governance failed: {prop.status_code} (Check api.py!)")
 
         # =========================================================================
-        # 🛡️ WORLD 2: CODE GUILD (Professional, Guild, Listings, Referral)
+        # 🛡️ WORLD 2: CODE GUILD
         # =========================================================================
         print("\n🌍 [COMMUNITY] Creating 'Code Guild'...")
-        guild_res = await client.post("/communities/", headers=diana_h, json={
+        # FIX: Switched from diana_h to admin_h because of "Resinen Federal Authority" lock
+        guild_res = await client.post("/communities/", headers=admin_h, json={
             "name": "Code Guild",
             "slug": "codex",
             "description": "Where builders unite.",
             "primary_color": "#6366f1",
             "icon_url": "code"
         })
+        
+        if guild_res.status_code != 200:
+            print(f"❌ Failed to create Code Guild: {guild_res.text}")
+            return
+            
         guild_id = guild_res.json()["id"]
 
         # --- GUILD ENGINE ---
         print("   💰 [Guild] Posting bounties & projects...")
+        # Diana can POST content, she just couldn't create the community
         await client.post(f"/guild/{guild_id}/bounties", headers=diana_h, json={
             "title": "Fix the Memory Leak",
             "description": "There is a leak in the websocket service.",
@@ -168,7 +168,6 @@ async def seed_via_api():
         })
 
         # --- REFERRAL/SERVICE ENGINE ---
-        # NOTE: Requires `referral` router in api.py
         print("   🤝 [Referral] Setting up member services...")
         svc = await client.post(f"/referral/{guild_id}/services", headers=bob_h, json={
             "title": "Senior Code Auditor",
@@ -180,11 +179,8 @@ async def seed_via_api():
             await client.post(f"/referral/services/{svc_id}/vouch", headers=admin_h, json={
                 "comment": "Bob is mean but accurate."
             })
-        else:
-            print("   ⚠️ Referral endpoint not found (Did you add it to api.py?)")
 
         # --- LISTINGS (BAZAAR) ENGINE ---
-        # CORRECTION: api.py uses prefix="/listings"
         print("   🏷️ [Listings] Posting items for sale...")
         await client.post(f"/listings/{guild_id}/items", headers=alice_h, json={
             "title": "Mechanical Keyboard",
@@ -194,7 +190,7 @@ async def seed_via_api():
         })
 
         # =========================================================================
-        # ⚔️ WORLD 3: THUNDERDOME (Arena, Bunker, Club)
+        # ⚔️ WORLD 3: THUNDERDOME
         # =========================================================================
         print("\n🌍 [COMMUNITY] Creating 'Thunderdome'...")
         arena_res = await client.post("/communities/", headers=admin_h, json={
@@ -204,6 +200,11 @@ async def seed_via_api():
             "primary_color": "#ef4444",
             "icon_url": "zap"
         })
+        
+        if arena_res.status_code != 200:
+            print(f"❌ Failed to create Thunderdome: {arena_res.text}")
+            return
+
         arena_id = arena_res.json()["id"]
 
         # --- ARENA ENGINE ---
@@ -214,7 +215,7 @@ async def seed_via_api():
         match = await client.post(f"/arena/{arena_id}/matches", headers=admin_h, json={
             "team_a_id": t1["id"],
             "team_b_id": t2["id"],
-            "start_time": (datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            "start_time": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
             "status": "scheduled"
         })
         if match.status_code == 200:
@@ -227,7 +228,7 @@ async def seed_via_api():
             "title": "Finals Watch Party",
             "description": "Free drinks for winners.",
             "location_name": "The Metaverse Bar",
-            "start_time": (datetime.utcnow() + timedelta(days=2)).isoformat()
+            "start_time": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
         })
         if event.status_code == 200:
             event_id = event.json()["id"]
