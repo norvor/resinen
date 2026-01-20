@@ -2,6 +2,7 @@ from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from sqlalchemy.orm import joinedload
 
 from app.api import deps
 from app.models.user import User
@@ -122,3 +123,40 @@ async def update_score(
     await db.commit()
     
     return {"status": "updated"}
+
+@router.get("/{community_id}/matches", response_model=List[ArenaMatchRead])
+async def read_matches(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+):
+    """
+    Fetch all matches for a community.
+    Includes the 'teams' relationship so the frontend can display names.
+    """
+    # 1. Query Matches with Joined Loads for Teams
+    query = (
+        select(ArenaMatch)
+        .where(ArenaMatch.community_id == community_id)
+        .options(
+            joinedload(ArenaMatch.team_a),
+            joinedload(ArenaMatch.team_b)
+        )
+        .order_by(ArenaMatch.start_time.desc())
+    )
+    
+    result = await db.execute(query)
+    matches = result.scalars().all()
+    return matches
+
+@router.post("/{community_id}/matches", response_model=ArenaMatchRead)
+async def create_match(
+    community_id: uuid.UUID,
+    match_in: ArenaMatchCreate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    match_obj = ArenaMatch.model_validate(match_in, update={"community_id": community_id})
+    db.add(match_obj)
+    await db.commit()
+    await db.refresh(match_obj)
+    return match_obj
