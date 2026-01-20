@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 from app.schemas.user import UserRead
@@ -10,7 +10,8 @@ class CommentBase(BaseModel):
     parent_id: Optional[uuid.UUID] = None
 
 class CommentCreate(CommentBase):
-    post_id: uuid.UUID
+    # We remove post_id from here since it will be in the URL
+    pass
 
 class CommentRead(CommentBase):
     id: uuid.UUID
@@ -19,6 +20,9 @@ class CommentRead(CommentBase):
     created_at: datetime
     
     author: UserRead
+    
+    # NEW: UI State
+    is_liked: bool = False
     
     class Config:
         from_attributes = True
@@ -45,6 +49,9 @@ class PostRead(PostBase):
     created_at: datetime
     
     author: UserRead
+    
+    # UI State
+    is_liked: bool = False
     
     class Config:
         from_attributes = True
