@@ -59,11 +59,16 @@ class CommunityCreate(CommunityBase):
     # Pass 'archetypes' as a list of strings
     archetypes: List[str] = []
 
-class CommunityUpdate(CommunityBase):
+class CommunityUpdate(SQLModel):
     name: Optional[str] = None
-    slug: Optional[str] = None
-    config: Dict[str, Any] = {}
-    installed_engines: List[str] = []
+    description: Optional[str] = None
+    banner_url: Optional[str] = None
+    icon_url: Optional[str] = None
+    primary_color: Optional[str] = None
+    is_private: Optional[bool] = None
+    # Allow updating config/engines if needed
+    installed_engines: Optional[List[str]] = None
+    config: Optional[Dict[str, Any]] = None
 
 class CommunityRead(CommunityBase):
     id: uuid.UUID
