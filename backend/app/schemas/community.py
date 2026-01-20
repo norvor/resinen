@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 from app.schemas.user import UserRead
+from sqlmodel import SQLModel
 
 # --- CHAPTERS ---
 class ChapterBase(BaseModel):
