@@ -45,7 +45,7 @@ class Post(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
     author_id: uuid.UUID = Field(foreign_key="user.id")
-    
+    chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
     title: Optional[str] = None
     content: str
     image_url: Optional[str] = None
