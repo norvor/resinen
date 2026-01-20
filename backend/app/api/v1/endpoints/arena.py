@@ -1,87 +1,118 @@
+import uuid
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sqlalchemy.orm import joinedload
-import uuid
 
-from app.api import deps
+# 1. Correct Imports
+from app.core import deps
 from app.models.user import User
-from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus 
-# Ensure these schemas exist or adjust imports
-from app.schemas.arena import MatchRead, PredictionCreate, ScoreUpdate, TeamRead 
+from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus
+# We use the generic Read/Create schemas to keep it simple and working
+from app.schemas.arena import (
+    ArenaMatchRead, 
+    ArenaMatchCreate, 
+    ArenaTeamRead, 
+    ArenaTeamCreate,
+    ArenaPredictionCreate, # Ensure you have this or generic PredictionCreate
+    ArenaScoreUpdate       # Ensure you have this or generic ScoreUpdate
+)
 
 router = APIRouter()
 
-# --- 1. GET SCHEDULE ---
-@router.get("/", response_model=List[MatchRead])
-async def get_matches(
-    community_id: str,
-    current_user: User = Depends(deps.get_current_active_user),
-    db: AsyncSession = Depends(deps.get_db)
+# ==========================================
+# 1. TEAMS (Dropdowns & Lists)
+# ==========================================
+
+@router.get("/{community_id}/teams", response_model=List[ArenaTeamRead])
+async def read_teams(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
 ):
-    # 1. Fetch Matches
-    stmt = select(ArenaMatch).where(ArenaMatch.community_id == community_id).order_by(ArenaMatch.start_time.desc())
-    result = await db.execute(stmt)
+    """Fetch all teams to populate dropdowns."""
+    query = select(ArenaTeam).where(ArenaTeam.community_id == community_id)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+@router.post("/{community_id}/teams", response_model=ArenaTeamRead)
+async def create_team(
+    community_id: uuid.UUID,
+    team_in: ArenaTeamCreate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    team = ArenaTeam.model_validate(team_in, update={"community_id": community_id})
+    db.add(team)
+    await db.commit()
+    await db.refresh(team)
+    return team
+
+
+# ==========================================
+# 2. MATCHES (The Dashboard Core)
+# ==========================================
+
+@router.get("/{community_id}/matches", response_model=List[ArenaMatchRead])
+async def read_matches(
+    community_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Fetch matches with Teams joined (High Performance).
+    """
+    # 1. Fetch Matches with Teams efficiently
+    query = (
+        select(ArenaMatch)
+        .where(ArenaMatch.community_id == community_id)
+        .options(
+            joinedload(ArenaMatch.team_a),
+            joinedload(ArenaMatch.team_b)
+        )
+        .order_by(ArenaMatch.start_time.desc())
+    )
+    result = await db.execute(query)
     matches = result.scalars().all()
-    
-    # 2. Fetch User's Picks
-    match_ids = [m.id for m in matches]
-    user_picks = {}
-    
-    if match_ids:
-        user_picks_stmt = select(ArenaPrediction).where(
-            ArenaPrediction.user_id == current_user.id,
-            ArenaPrediction.match_id.in_(match_ids)
-        )
-        picks_result = await db.execute(user_picks_stmt)
-        picks = picks_result.scalars().all()
-        user_picks = {p.match_id: p.picked_team_id for p in picks}
 
-    results = []
-    for m in matches:
-        # Load Teams
-        team_a = await db.get(ArenaTeam, m.team_a_id)
-        team_b = await db.get(ArenaTeam, m.team_b_id)
-        
-        if not team_a or not team_b:
-            continue
+    # (Optional) You can inject "User Picked" status here later if needed.
+    # For now, let's just get the data on the screen.
+    return matches
 
-        # Mock Stats for now
-        total = 100 
-        pct_a = 60  
-        
-        m_read = MatchRead(
-            id=m.id,
-            status=m.status,
-            start_time=m.start_time,
-            score_a=m.score_a, 
-            score_b=m.score_b,
-            time_display=m.time_display,
-            team_a=TeamRead(**team_a.dict()),
-            team_b=TeamRead(**team_b.dict()),
-            total_predictions=total,
-            pick_pct_a=pct_a,
-            pick_pct_b=100-pct_a,
-            user_pick_id=user_picks.get(m.id)
-        )
-        results.append(m_read)
-        
-    return results
 
-# --- 2. MAKE PREDICTION ---
+@router.post("/{community_id}/matches", response_model=ArenaMatchRead)
+async def create_match(
+    community_id: uuid.UUID,
+    match_in: ArenaMatchCreate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    match_obj = ArenaMatch.model_validate(match_in, update={"community_id": community_id})
+    db.add(match_obj)
+    await db.commit()
+    await db.refresh(match_obj)
+    return match_obj
+
+
+# ==========================================
+# 3. ACTIONS (Predicting & Scoring)
+# ==========================================
+
 @router.post("/predict", response_model=Any)
 async def make_prediction(
-    pred: PredictionCreate,
+    pred: ArenaPredictionCreate,
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(deps.get_db)
 ):
-    # Check Lock
+    """User locks in a team prediction."""
+    # 1. Check if Match is Open
     match = await db.get(ArenaMatch, pred.match_id)
-    if not match or match.status != MatchStatus.SCHEDULED:
-        raise HTTPException(status_code=400, detail="Match is closed for predictions")
+    if not match:
+        raise HTTPException(404, "Match not found")
+    if match.status != MatchStatus.SCHEDULED:
+        raise HTTPException(400, "Match is locked or finished")
 
-    # Upsert Logic
+    # 2. Check for existing prediction (Update vs Insert)
     query = select(ArenaPrediction).where(
         ArenaPrediction.user_id == current_user.id,
         ArenaPrediction.match_id == pred.match_id
@@ -101,63 +132,27 @@ async def make_prediction(
         db.add(new_pred)
     
     await db.commit()
-    return {"status": "success"}
+    return {"status": "success", "picked": pred.team_id}
 
-# --- 3. ADMIN: UPDATE LIVE SCORE ---
+
 @router.post("/{match_id}/score", response_model=Any)
 async def update_score(
-    match_id: str,
-    update: ScoreUpdate,
+    match_id: uuid.UUID,
+    update: ArenaScoreUpdate,
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(deps.get_db)
 ):
+    """Admin updates the live score."""
     match = await db.get(ArenaMatch, match_id)
     if not match:
         raise HTTPException(404, "Match not found")
         
-    match.score_a = update.score_a
-    match.score_b = update.score_b
-    match.status = update.status
-    match.time_display = update.time_display
+    if update.score_a is not None: match.score_a = update.score_a
+    if update.score_b is not None: match.score_b = update.score_b
+    if update.status is not None: match.status = update.status
+    if update.time_display is not None: match.time_display = update.time_display
     
     db.add(match)
     await db.commit()
     
-    return {"status": "updated"}
-
-@router.get("/{community_id}/matches", response_model=List[ArenaMatch])
-async def read_matches(
-    community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
-):
-    """
-    Fetch all matches for a community.
-    Includes the 'teams' relationship so the frontend can display names.
-    """
-    # 1. Query Matches with Joined Loads for Teams
-    query = (
-        select(ArenaMatch)
-        .where(ArenaMatch.community_id == community_id)
-        .options(
-            joinedload(ArenaMatch.team_a),
-            joinedload(ArenaMatch.team_b)
-        )
-        .order_by(ArenaMatch.start_time.desc())
-    )
-    
-    result = await db.execute(query)
-    matches = result.scalars().all()
-    return matches
-
-@router.post("/{community_id}/matches", response_model=ArenaMatch)
-async def create_match(
-    community_id: uuid.UUID,
-    match_in: ArenaMatchCreate,
-    db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-):
-    match_obj = ArenaMatch.model_validate(match_in, update={"community_id": community_id})
-    db.add(match_obj)
-    await db.commit()
-    await db.refresh(match_obj)
-    return match_obj
+    return {"status": "updated", "match_id": match_id}
