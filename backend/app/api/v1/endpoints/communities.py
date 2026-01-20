@@ -19,7 +19,7 @@ from app.schemas.membership import MembershipOut
 
 router = APIRouter()
 
-# --- PUBLIC MAP (Anyone can see) ---
+# --- PUBLIC MAP ---
 @router.get("/", response_model=List[CommunityRead])
 async def read_communities(
     q: Optional[str] = None,
@@ -27,23 +27,30 @@ async def read_communities(
     limit: int = 100,
     db: AsyncSession = Depends(deps.get_db),
 ):
-    """
-    Retrieve communities (Public).
-    """
+    """Retrieve communities with their installed engines."""
+    # 1. Fetch Communities
     query = select(Community)
-    
     if q:
         search_term = f"%{q}%"
-        query = query.where(
-            or_(
-                Community.name.ilike(search_term),
-                Community.slug.ilike(search_term)
-            )
-        )
-        
+        query = query.where(or_(Community.name.ilike(search_term), Community.slug.ilike(search_term)))
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
-    return result.scalars().all()
+    communities = result.scalars().all()
+
+    # 2. Populate 'installed_engines' for the list view
+    # This is an N+1 query optimization (simplified loop for now)
+    for comm in communities:
+        stmt = (
+            select(Engine.key)
+            .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
+            .where(CommunityEngine.community_id == comm.id)
+            .where(CommunityEngine.is_active == True)
+        )
+        engines_res = await db.execute(stmt)
+        # Manually attach the list so the Pydantic model serializes it
+        setattr(comm, "installed_engines", engines_res.scalars().all())
+
+    return communities
 
 # --- ADMIN ONLY: CREATE ---
 @router.post("/", response_model=CommunityRead)
@@ -53,30 +60,45 @@ async def create_community(
     community_in: CommunityCreate,
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Create a new community (ADMIN ONLY)."""
+    """Create a new community and INSTALL requested engines."""
     
-    # 1. THE LOCK
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403, 
-            detail="Resinen Federal Authority Required. Only Admins can create territories."
-        )
+        raise HTTPException(status_code=403, detail="Resinen Federal Authority Required.")
 
-    # 2. Check Slug
+    # 1. Check Slug
     query = select(Community).where(Community.slug == community_in.slug)
-    result = await db.execute(query)
-    if result.scalars().first():
+    if (await db.execute(query)).scalars().first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
-    # 3. Create
-    db_community = Community(
-        **community_in.dict(),
-        creator_id=current_user.id
-    )
-    
+    # 2. Create Community
+    db_community = Community(**community_in.dict(exclude={"archetypes"}), creator_id=current_user.id)
     db.add(db_community)
     await db.commit()
     await db.refresh(db_community)
+
+    # 3. INSTALL ENGINES (The Fix)
+    installed_keys = []
+    if community_in.archetypes:
+        # We treat 'archetypes' as a list of engine keys (e.g. ['social', 'arena'])
+        stmt = select(Engine).where(Engine.key.in_(community_in.archetypes))
+        engines_result = await db.execute(stmt)
+        engines_to_install = engines_result.scalars().all()
+        
+        for engine in engines_to_install:
+            link = CommunityEngine(
+                community_id=db_community.id,
+                engine_id=engine.id,
+                is_active=True,
+                config={} 
+            )
+            db.add(link)
+            installed_keys.append(engine.key)
+        
+        await db.commit()
+
+    # 4. Attach keys for response so UI sees them immediately
+    setattr(db_community, "installed_engines", installed_keys)
+    
     return db_community
 
 # --- ADMIN ONLY: UPDATE ---
