@@ -26,7 +26,7 @@ async def read_posts(
     limit: int = 20
 ):
     """Fetch feed with 'is_liked' status populated for the current user."""
-    # 1. Fetch Posts
+    # 1. Fetch Posts (Database Models)
     query = (
         select(Post)
         .where(Post.community_id == community_id)
@@ -35,11 +35,10 @@ async def read_posts(
         .offset(skip)
         .limit(limit)
     )
-    posts = (await db.execute(query)).scalars().all()
+    posts_db = (await db.execute(query)).scalars().all()
 
-    # 2. Populate 'is_liked' efficiently
-    # Fetch all PostLike IDs for this user in this batch
-    post_ids = [p.id for p in posts]
+    # 2. Get Like Status efficiently
+    post_ids = [p.id for p in posts_db]
     liked_ids = set()
     if post_ids:
         like_stmt = select(PostLike.post_id).where(
@@ -49,11 +48,16 @@ async def read_posts(
         liked_result = await db.execute(like_stmt)
         liked_ids = set(liked_result.scalars().all())
 
-    # 3. Attach state
-    for p in posts:
-        p.is_liked = p.id in liked_ids
+    # 3. CONVERT & ATTACH STATE (The Fix)
+    results = []
+    for p in posts_db:
+        # Convert DB Model -> Pydantic Schema
+        post_read = PostRead.model_validate(p)
+        # Now we can safely add the UI state
+        post_read.is_liked = (p.id in liked_ids)
+        results.append(post_read)
 
-    return posts
+    return results
 
 @router.post("/posts", response_model=PostRead)
 async def create_post(
@@ -79,10 +83,14 @@ async def create_post(
     await db.commit()
     await db.refresh(new_post)
     
-    # Populate Author for response
+    # Return directly (or use model_validate if you need extra computed fields)
+    # We manually attach author since we just created it
     new_post.author = current_user
-    new_post.is_liked = False
-    return new_post
+    
+    # Convert to schema to attach is_liked
+    response = PostRead.model_validate(new_post)
+    response.is_liked = False
+    return response
 
 @router.get("/posts/{post_id}", response_model=PostRead)
 async def get_post(
@@ -90,22 +98,23 @@ async def get_post(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Get single post + Increment View Count."""
     post = await db.get(Post, post_id)
     if not post:
         raise HTTPException(404, "Post not found")
         
-    # Increment View (Atomic-ish)
+    # Increment View
     post.view_count += 1
     db.add(post)
-    
-    # Check Like Status
-    like_check = await db.get(PostLike, (current_user.id, post_id))
-    post.is_liked = bool(like_check)
-    
     await db.commit()
     await db.refresh(post)
-    return post
+    
+    # Check Like
+    like_check = await db.get(PostLike, (current_user.id, post_id))
+    
+    # Convert & Return
+    response = PostRead.model_validate(post)
+    response.is_liked = bool(like_check)
+    return response
 
 @router.post("/posts/{post_id}/like")
 async def like_post(
@@ -113,7 +122,6 @@ async def like_post(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    # Toggle Like
     existing = await db.get(PostLike, (current_user.id, post_id))
     post = await db.get(Post, post_id)
     if not post: raise HTTPException(404, "Post not found")
@@ -150,7 +158,7 @@ async def delete_post(
 
 
 # ==========================================
-# 2. COMMENTS (The Missing Engine Parts)
+# 2. COMMENTS
 # ==========================================
 
 @router.get("/posts/{post_id}/comments", response_model=List[CommentRead])
@@ -159,17 +167,16 @@ async def read_comments(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Fetch comments for a post."""
     query = (
         select(Comment)
         .where(Comment.post_id == post_id)
         .options(joinedload(Comment.author))
         .order_by(Comment.created_at.asc())
     )
-    comments = (await db.execute(query)).scalars().all()
+    comments_db = (await db.execute(query)).scalars().all()
     
-    # Populate is_liked for comments
-    comment_ids = [c.id for c in comments]
+    # Get Likes
+    comment_ids = [c.id for c in comments_db]
     liked_ids = set()
     if comment_ids:
         res = await db.execute(select(CommentLike.comment_id).where(
@@ -178,10 +185,15 @@ async def read_comments(
         ))
         liked_ids = set(res.scalars().all())
 
-    for c in comments:
-        c.is_liked = c.id in liked_ids
+    # Convert & Attach
+    results = []
+    for c in comments_db:
+        # Fix for Comments too
+        comment_read = CommentRead.model_validate(c)
+        comment_read.is_liked = (c.id in liked_ids)
+        results.append(comment_read)
         
-    return comments
+    return results
 
 @router.post("/posts/{post_id}/comments", response_model=CommentRead)
 async def create_comment(
@@ -193,7 +205,6 @@ async def create_comment(
     post = await db.get(Post, post_id)
     if not post: raise HTTPException(404, "Post not found")
 
-    # Create Comment
     comment = Comment(
         **comment_in.model_dump(),
         post_id=post_id,
@@ -201,17 +212,18 @@ async def create_comment(
     )
     db.add(comment)
     
-    # Update Post Counter
     post.comment_count += 1
     db.add(post)
     
     await db.commit()
     await db.refresh(comment)
     
-    # Return with Author populated
     comment.author = current_user
-    comment.is_liked = False
-    return comment
+    
+    # Return schema
+    response = CommentRead.model_validate(comment)
+    response.is_liked = False
+    return response
 
 @router.post("/comments/{comment_id}/like")
 async def like_comment(
@@ -231,10 +243,6 @@ async def like_comment(
         db.add(CommentLike(user_id=current_user.id, comment_id=comment_id))
         action = "liked"
     
-    # Recalculate count (safer than incrementing blindly)
-    # Or simple increment for speed:
-    # comment.like_count += 1 if action == "liked" else -1
-    
     await db.commit()
     return {"status": action}
 
@@ -250,7 +258,6 @@ async def delete_comment(
     if comment.user_id != current_user.id and not current_user.is_superuser:
         raise HTTPException(403)
         
-    # Decrement post count
     post = await db.get(Post, comment.post_id)
     if post:
         post.comment_count = max(0, post.comment_count - 1)
