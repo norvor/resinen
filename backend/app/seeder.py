@@ -2,26 +2,30 @@ import asyncio
 import httpx
 from datetime import datetime, timedelta
 from sqlalchemy import text
-from sqlmodel import SQLModel, Session
-from app.core.database import engine
+from sqlmodel import SQLModel
+from app.core.database import async_session_factory, engine 
 from app.core.security import get_password_hash
-from app.models.user import User # Still need the model for the very first user
+from app.models.user import User
 
 BASE_URL = "http://localhost:8000/api/v1"
 ADMIN_EMAIL = "admin@resinen.com"
 ADMIN_PASS = "admin123"
 
 async def bootstrap_admin():
-    """Wipes the DB and creates the first admin so the API has someone to talk to."""
+    """Wipes the DB and creates the first admin using AsyncSession."""
     print("🔥 WIPING DATABASE...")
     async with engine.begin() as conn:
+        # Get all table names
         result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
-        for table in result.scalars().all():
+        tables = result.scalars().all()
+        for table in tables:
             await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+        
+        # Re-create all tables
         await conn.run_sync(SQLModel.metadata.create_all)
     
-    print("👤 BOOTSTRAPPING ADMIN...")
-    with Session(engine) as session:
+    print("👤 BOOTSTRAPPING ADMIN (ASYNC)...")
+    async with async_session_factory() as session:
         admin = User(
             email=ADMIN_EMAIL,
             full_name="Resinen Architect",
@@ -30,15 +34,17 @@ async def bootstrap_admin():
             is_active=True
         )
         session.add(admin)
-        session.commit()
+        await session.commit()
+        print("✅ Admin created successfully.")
 
 async def seed_via_api():
+    # 1. Prepare Database & Admin
     await bootstrap_admin()
     
     print(f"🚀 EVOLVING THE NEXUS VIA API: {BASE_URL}")
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
         
-        # 1. AUTHENTICATION
+        # 2. AUTHENTICATION
         print("🔑 Authenticating...")
         login_res = await client.post("/login/access-token", data={
             "username": ADMIN_EMAIL, 
@@ -52,7 +58,7 @@ async def seed_via_api():
         token = login_res.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
 
-        # 2. CREATE WORLD
+        # 3. CREATE WORLD
         print("🌍 Creating 'The Nexus'...")
         comm_res = await client.post("/communities/", headers=headers, json={
             "name": "The Nexus",
@@ -60,9 +66,10 @@ async def seed_via_api():
             "description": "Total System Validation World.",
             "primary_color": "#000000"
         })
-        cid = comm_res.json()["id"]
+        community = comm_res.json()
+        cid = community["id"]
 
-        # 3. SOCIAL (💬)
+        # 4. SOCIAL (💬)
         print("💬 Seeding Social...")
         post = await client.post("/social/posts", headers=headers, json={
             "community_id": cid,
@@ -72,10 +79,10 @@ async def seed_via_api():
         pid = post.json()["id"]
         await client.post(f"/social/posts/{pid}/comments", headers=headers, json={"content": "Verified."})
 
-        # 4. ARENA (🏆)
+        # 5. ARENA (🏆)
         print("🏆 Seeding Arena...")
-        t1 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Titans", "short_code": "TTN", "color": "#FF0000"})).json()
-        t2 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Phantoms", "short_code": "PHM", "color": "#0000FF"})).json()
+        t1 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Titans", "short_code": "TTN", "color": "#FF4444"})).json()
+        t2 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Phantoms", "short_code": "PHM", "color": "#4444FF"})).json()
         await client.post(f"/arena/{cid}/matches", headers=headers, json={
             "team_a_id": t1["id"],
             "team_b_id": t2["id"],
@@ -86,7 +93,7 @@ async def seed_via_api():
             "start_time": datetime.utcnow().isoformat()
         })
 
-        # 5. GUILD (💰)
+        # 6. GUILD (💰)
         print("💰 Seeding Guild...")
         await client.post(f"/guild/{cid}/bounties", headers=headers, json={
             "title": "Middleware Audit",
@@ -94,7 +101,29 @@ async def seed_via_api():
             "reward_text": "5000 CR"
         })
 
-        # 6. STAGE (🎥)
+        # 7. ACADEMY (🎓)
+        print("🎓 Seeding Academy...")
+        # Create Course/Module
+        module_res = await client.post(f"/academy/{cid}/modules", headers=headers, json={
+            "title": "Introduction to Nexus",
+            "order_index": 0
+        })
+        mid = module_res.json()["id"]
+        await client.post(f"/academy/modules/{mid}/lessons", headers=headers, json={
+            "title": "The First Step",
+            "content_body": "This is how you master the Nexus.",
+            "duration_min": 10
+        })
+
+        # 8. LIBRARY (📚)
+        print("📚 Seeding Library...")
+        await client.post(f"/library/{cid}/pages", headers=headers, json={
+            "title": "The Manifesto",
+            "slug": "manifesto",
+            "content": "# The Nexus Rules \n 1. Build. 2. Verify. 3. Ship."
+        })
+
+        # 9. STAGE (🎥)
         print("🎥 Seeding Stage...")
         await client.post(f"/stage/{cid}/videos", headers=headers, json={
             "title": "Nexus Cinematic",
@@ -102,7 +131,7 @@ async def seed_via_api():
             "thumbnail_url": "https://images.unsplash.com/photo-1611162617474-5b21e879e113"
         })
 
-        # 7. CLUB (🎉)
+        # 10. CLUB (🎉)
         print("🎉 Seeding Club...")
         await client.post(f"/club/{cid}/events", headers=headers, json={
             "title": "Launch Gala",
@@ -111,25 +140,7 @@ async def seed_via_api():
             "start_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
         })
 
-        # 8. BAZAAR (🛍️)
-        print("🛍️  Seeding Bazaar...")
-        await client.post(f"/bazaar/{cid}/listings", headers=headers, json={
-            "title": "Nexus Keycard",
-            "description": "Access to the high-tier bunker.",
-            "price_display": "100 Gold",
-            "link_url": "https://resinen.com/nexus-key",
-            "domain": "resinen.com"
-        })
-
-        # 9. SENATE (⚖️)
-        print("⚖️  Seeding Senate...")
-        await client.post(f"/governance/{cid}/proposals", headers=headers, json={
-            "title": "Nexus Protocol v1",
-            "description": "Adopt API-first seeding standards.",
-            "ends_at": (datetime.utcnow() + timedelta(days=7)).isoformat()
-        })
-
-    print("✅ THE NEXUS IS LIVE. ALL ENDPOINTS VALIDATED.")
+    print("\n✅ THE NEXUS IS LIVE. EVERY ENDPOINT VALIDATED.")
 
 if __name__ == "__main__":
     asyncio.run(seed_via_api())
