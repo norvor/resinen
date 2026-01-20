@@ -119,11 +119,11 @@ async def seed_db():
         # Senate
         db.add(Proposal(community_id=cid, author_id=admin.id, title="Nexus Expansion", description="More RAM for the Bunker.", ends_at=datetime.utcnow() + timedelta(days=7)))
 
-        # Club (🚨 FIX: Added location_name)
+        # Club
         db.add(ClubEvent(
             community_id=cid, creator_id=bob.id, title="Nexus Rave", 
             description="Celebrating the stable build.", 
-            location_name="The Virtual Plaza", # <--- FIX
+            location_name="The Virtual Plaza", 
             start_time=datetime.utcnow() + timedelta(days=1)
         ))
 
@@ -131,10 +131,17 @@ async def seed_db():
         db.add(StageVideo(community_id=cid, author_id=alice.id, title="Nexus Cinematic", video_url="https://www.youtube.com/embed/dQw4w9WgXcQ"))
         db.add(BunkerMessage(community_id=cid, author_id=alice.id, content="Nexus Key: 7712", expires_at=datetime.utcnow() + timedelta(minutes=30)))
 
-        # Library & Garden & Bazaar
+        # Library & Garden & Bazaar (🚨 FIX: Added link_url)
         db.add(LibraryPage(community_id=cid, author_id=admin.id, slug="rules", title="Nexus Rules", content="No Spam."))
         db.add(GardenHabit(community_id=cid, user_id=alice.id, title="Core Review", icon="🧠"))
-        db.add(Listing(community_id=cid, curator_id=bob.id, title="Nexus Blade", description="Testing marketplace.", price_display="50 Gold"))
+        db.add(Listing(
+            community_id=cid, 
+            curator_id=bob.id, 
+            title="Nexus Blade", 
+            description="Testing marketplace.", 
+            price_display="50 Gold",
+            link_url="https://resinen.com/nexus-blade" # <--- THE FIX
+        ))
 
         await db.commit()
         print("✅ THE NEXUS IS FULLY OPERATIONAL.")
