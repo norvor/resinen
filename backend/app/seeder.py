@@ -110,7 +110,7 @@ async def seed_via_api():
             "name": "The Nexus", "slug": "nexus", 
             "description": "Validation World.",
             "primary_color": "#000000", "icon_url": "globe",
-            "archetypes": ["social", "governance", "library", "garden"] # <--- NOW THESE EXIST!
+            "installed_engines": ["social", "governance", "library", "garden"] # <--- NOW THESE EXIST!
         })
         
         if nexus.status_code == 200:
@@ -134,7 +134,7 @@ async def seed_via_api():
             "name": "Code Guild", "slug": "codex", 
             "description": "Builders only.",
             "primary_color": "#6366f1", "icon_url": "code",
-            "archetypes": ["guild", "listings", "referral", "academy"]
+            "installed_engines": ["guild", "listings", "referral", "academy"]
         })
 
         if guild_res.status_code == 200:
@@ -151,7 +151,7 @@ async def seed_via_api():
             "name": "Thunderdome", "slug": "thunder", 
             "description": "Enter the Arena.",
             "primary_color": "#ef4444", "icon_url": "zap",
-            "archetypes": ["arena", "club", "bunker"]
+            "installed_engines": ["arena", "club", "bunker"]
         })
         
         if arena_res.status_code == 200:
