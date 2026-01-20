@@ -24,8 +24,10 @@ async def wipe_and_bootstrap_db():
     """Wipes the DB and creates the initial users directly via SQLModel."""
     print("\n🔥 [DB] WIPING DATABASE & RESETTING SCHEMA...")
     async with engine.begin() as conn:
-        # Disable foreign key checks to allow dropping tables out of order if needed
-        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+        # FIX: Execute these as separate commands
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+        
         # Re-create all tables
         await conn.run_sync(SQLModel.metadata.create_all)
     
