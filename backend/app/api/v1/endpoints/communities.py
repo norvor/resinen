@@ -12,6 +12,7 @@ from app.models.social import Post
 
 from app.api import deps
 from app.models.user import User
+from app.models.community_engine import CommunityEngine, Engine
 from app.models.community import Community, Membership
 from app.schemas.community import CommunityCreate, CommunityRead, CommunityUpdate
 from app.schemas.membership import MembershipOut
@@ -124,16 +125,30 @@ async def delete_community(
     await db.commit()
     return {"status": "deleted"}
 
-# --- PUBLIC: READ SINGLE ---
 @router.get("/{community_id}", response_model=CommunityRead)
 async def read_community(
     community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
 ):
-    """Get community by ID."""
+    # 1. Fetch Community
     community = await db.get(Community, community_id)
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
+    
+    # 2. ⚡ DYNAMIC ENGINE SYNC ⚡
+    # Join CommunityEngine -> Engine to get the keys (e.g., "arena", "guild")
+    statement = (
+        select(Engine.key)
+        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
+        .where(CommunityEngine.community_id == community_id)
+        .where(CommunityEngine.is_active == True)
+    )
+    result = await db.execute(statement)
+    active_keys = result.scalars().all()
+    
+    # Overwrite the JSON field on the fly so the frontend receives the real list
+    setattr(community, "installed_engines", active_keys)
+    
     return community
 
 @router.get("/by-slug/{slug}", response_model=CommunityRead)
