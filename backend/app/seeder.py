@@ -11,6 +11,11 @@ from app.models.user import User
 # --- CONFIGURATION ---
 BASE_URL = "http://localhost:8000/api/v1"
 
+# --- HELPER: Strict UTC Naive Time (Fixes asyncpg DataError) ---
+def utc_now_naive():
+    """Returns a naive UTC timestamp compatible with Postgres TIMESTAMP columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 # --- PERSONAS ---
 PERSONAS = [
     {"email": "admin@resinen.com", "pass": "admin123", "name": "Resinen Architect", "role": "superuser"},
@@ -101,16 +106,39 @@ async def seed_via_api():
 
         # GOVERNANCE
         print("   ⚖️ [Governance] Holding election...")
+        # FIX: Use utc_now_naive()
         prop = await client.post(f"/governance/{nexus_id}/proposals", headers=alice_h, json={
-            "title": "Dark Mode?", "description": "Enable it?",
-            "ends_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            "title": "Adopt Dark Mode by Default?", "description": "Enable it?",
+            "ends_at": (utc_now_naive() + timedelta(days=7)).isoformat()
         })
         if prop.status_code == 200:
             prop_id = prop.json()["id"]
             await client.post(f"/governance/proposals/{prop_id}/vote", headers=bob_h, json={"choice": "no"})
 
         # =========================================================================
-        # ⚔️ WORLD 3: THUNDERDOME (The Crash Fix)
+        # 🛡️ WORLD 2: CODE GUILD
+        # =========================================================================
+        print("\n🌍 [COMMUNITY] Creating 'Code Guild'...")
+        guild_res = await client.post("/communities/", headers=admin_h, json={
+            "name": "Code Guild", "slug": "codex", "description": "Where builders unite.",
+            "primary_color": "#6366f1", "icon_url": "code"
+        })
+        guild_id = guild_res.json()["id"]
+
+        # GUILD
+        print("   💰 [Guild] Posting bounties...")
+        await client.post(f"/guild/{guild_id}/bounties", headers=diana_h, json={
+            "title": "Fix the Memory Leak", "description": "Leak in websocket service.", "reward_text": "$500 USD"
+        })
+
+        # LISTINGS
+        print("   🏷️ [Listings] Posting items...")
+        await client.post(f"/listings/{guild_id}/items", headers=alice_h, json={
+            "title": "Mechanical Keyboard", "description": "Cherry MX Blue.", "price_display": "$100", "link_url": "https://example.com"
+        })
+
+        # =========================================================================
+        # ⚔️ WORLD 3: THUNDERDOME
         # =========================================================================
         print("\n🌍 [COMMUNITY] Creating 'Thunderdome'...")
         arena_res = await client.post("/communities/", headers=admin_h, json={
@@ -119,47 +147,40 @@ async def seed_via_api():
         })
         arena_id = arena_res.json()["id"]
 
-        # --- ARENA ENGINE ---
+        # ARENA
         print("   🏆 [Arena] Configuring teams & matches...")
+        t1 = (await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={"name": "Red Dragons", "color": "#ff0000"})).json()
+        t2 = (await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={"name": "Blue Knights", "color": "#0000ff"})).json()
         
-        # FIX 1: Removed 'short_code' (It doesn't exist in the DB model)
-        # We handle the response safely now
-        t1_res = await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={
-            "name": "Red Dragons", "color": "#ff0000"
-        })
-        t2_res = await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={
-            "name": "Blue Knights", "color": "#0000ff"
-        })
-
-        if t1_res.status_code != 200 or t2_res.status_code != 200:
-            print(f"❌ Team Creation Failed: {t1_res.text} / {t2_res.text}")
-            return
-
-        t1 = t1_res.json()
-        t2 = t2_res.json()
-        
-        # Create Match
+        # FIX: Use utc_now_naive()
         match_res = await client.post(f"/arena/{arena_id}/matches", headers=admin_h, json={
             "team_a_id": t1["id"],
             "team_b_id": t2["id"],
-            "start_time": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            "start_time": (utc_now_naive() + timedelta(hours=1)).isoformat(),
             "status": "scheduled"
         })
         
         if match_res.status_code == 200:
             match_id = match_res.json()["id"]
-            
-            # FIX 2: Correct Prediction Endpoint and Body
-            # Endpoint: /arena/predict (Global for engine)
-            # Body: {match_id, team_id} (Matches ArenaPredictionCreate)
+            # PREDICT
             pred_res = await client.post(f"/arena/predict", headers=charlie_h, json={
-                "match_id": match_id,
-                "team_id": t1["id"]
+                "match_id": match_id, "team_id": t1["id"]
             })
             if pred_res.status_code != 200:
                 print(f"⚠️ Prediction failed: {pred_res.text}")
         else:
             print(f"❌ Match Creation Failed: {match_res.text}")
+
+        # CLUB
+        print("   🎉 [Club] Organizing a watch party...")
+        # FIX: Use utc_now_naive()
+        event = await client.post(f"/club/{arena_id}/events", headers=admin_h, json={
+            "title": "Finals Watch Party", "description": "Free drinks.", "location_name": "The Bar",
+            "start_time": (utc_now_naive() + timedelta(days=2)).isoformat()
+        })
+        if event.status_code == 200:
+            event_id = event.json()["id"]
+            await client.post(f"/club/events/{event_id}/rsvp", headers=bob_h, json={"status": "going"})
 
     print("\n✅ SUPER SEED COMPLETE. THE SIMULATION IS RUNNING.")
 
