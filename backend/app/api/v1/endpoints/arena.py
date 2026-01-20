@@ -149,7 +149,7 @@ async def read_matches(
     matches = result.scalars().all()
     return matches
 
-@router.post("/{community_id}/matches", response_model=ArenaMatchRead)
+@router.post("/{community_id}/matches", response_model=ArenaMatch)
 async def create_match(
     community_id: uuid.UUID,
     match_in: ArenaMatchCreate,
