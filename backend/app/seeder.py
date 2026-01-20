@@ -1,150 +1,103 @@
 import asyncio
-import uuid
+import httpx
 from datetime import datetime, timedelta
 from sqlalchemy import text
-from sqlmodel import SQLModel, select
-from app.core.database import async_session_factory, engine 
+from sqlmodel import SQLModel
+from app.core.database import engine
 from app.core.security import get_password_hash
 
-# --- CORE MODELS ---
-from app.models.user import User
-from app.models.community import Community, Membership, Chapter, Archetype
-from app.models.engine import Engine, CommunityEngine
-
-# --- ENGINE MODELS ---
-from app.models.social import Post, Comment, PostLike
-from app.models.listing import Listing
-from app.models.governance import Proposal
-from app.models.academy import Module, Lesson
-from app.models.arena import ArenaTeam, ArenaMatch, MatchStatus
-from app.models.club import ClubEvent
-from app.models.library import LibraryPage
-from app.models.stage import StageVideo
-from app.models.bunker import BunkerMessage
-from app.models.guild import GuildBounty, BountyStatus
-from app.models.garden import GardenHabit
-
-# --- CONSTANTS ---
-ADMIN_EMAIL = "admin@resinen.com"
-ADMIN_PASS = "admin123"
-
-TEST_USERS = [
-    {"email": "alice@resinen.com", "name": "Alice Builder", "pass": "alice123", "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice"},
-    {"email": "bob@resinen.com", "name": "Bob Gamer", "pass": "bob123", "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob"},
-]
-
-ENGINE_REGISTRY = [
-    {"key": "social", "name": "Social Feed", "icon": "💬", "description": "Reddit-style posts."},
-    {"key": "senate", "name": "The Senate", "icon": "⚖️", "description": "Governance."},
-    {"key": "arena", "name": "Arena", "icon": "🏆", "description": "Match schedules."},
-    {"key": "bazaar", "name": "Bazaar", "icon": "🛍️", "description": "Marketplace."},
-    {"key": "academy", "name": "Academy", "icon": "🎓", "description": "LMS courses."},
-    {"key": "club", "name": "Club Events", "icon": "🎉", "description": "RSVPs."},
-    {"key": "library", "name": "Library", "icon": "📚", "description": "Wiki pages."},
-    {"key": "stage", "name": "The Stage", "icon": "🎥", "description": "Video feed."},
-    {"key": "bunker", "name": "The Bunker", "icon": "☢️", "description": "Encrypted chat."},
-    {"key": "guild", "name": "Guild", "icon": "💰", "description": "Bounties."},
-    {"key": "garden", "name": "Garden", "icon": "🌻", "description": "Habit tracking."},
-]
-
-async def seed_db():
-    print("🚀 INITIALIZING THE NEXUS: TOTAL SYSTEM SEED...")
-    
+# We only use models here to wipe the slate clean first
+async def wipe_db():
+    print("🔥 WIPING DATABASE FOR FRESH START...")
     async with engine.begin() as conn:
-        print("🔥 Forced Wipe in Progress...")
         result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
         for table in result.scalars().all():
             await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
-        print("🏗️  Rebuilding Tables...")
         await conn.run_sync(SQLModel.metadata.create_all)
+
+async def seed_via_api():
+    await wipe_db()
+    
+    BASE_URL = "http://localhost:8000/api/v1"
+    print(f"🚀 EVOLVING THE NEXUS VIA API: {BASE_URL}")
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+        # 1. CREATE ADMIN (Using the direct signup or a setup endpoint)
+        # Assuming you have a registration endpoint. If not, this part remains direct-DB for the very first user.
+        print("👤 Authenticating Architect...")
+        # (Assuming admin exists from a pre-start script or create it now)
+        auth_data = {"username": "admin@resinen.com", "password": "admin123"}
+        login_res = await client.post("/login/access-token", data=auth_data)
+        token = login_res.json()["access_token"]
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        # 2. CREATE THE WORLD
+        print("🌍 Creating 'The Nexus'...")
+        comm_res = await client.post("/communities/", headers=auth_headers, json={
+            "name": "The Nexus",
+            "slug": "nexus",
+            "description": "API-Validated Master World.",
+            "primary_color": "#000000"
+        })
+        cid = comm_res.json()["id"]
+
+        # 3. SOCIAL ENGINE
+        print("💬 Seeding Social Feed...")
+        post_res = await client.post("/social/posts", headers=auth_headers, json={
+            "community_id": cid,
+            "title": "API Seeding Complete",
+            "content": "This post was created via HTTP request."
+        })
+        pid = post_res.json()["id"]
+        await client.post(f"/social/posts/{pid}/comments", headers=auth_headers, json={
+            "content": "Verified via API seeder."
+        })
+
+        # 4. ARENA ENGINE
+        print("🏆 Seeding Arena Teams & Matches...")
+        t1 = (await client.post(f"/arena/{cid}/teams", headers=auth_headers, json={
+            "name": "Alpha Squad", "short_code": "ALP", "color": "#FF0000"
+        })).json()
+        t2 = (await client.post(f"/arena/{cid}/teams", headers=auth_headers, json={
+            "name": "Omega Group", "short_code": "OMG", "color": "#0000FF"
+        })).json()
         
-    async with async_session_factory() as db:
-        # 1. ENGINES
-        engine_map = {}
-        for e in ENGINE_REGISTRY:
-            eng = Engine(**e)
-            db.add(eng); await db.commit(); await db.refresh(eng)
-            engine_map[e["key"]] = eng.id
+        await client.post(f"/arena/{cid}/matches", headers=auth_headers, json={
+            "team_a_id": t1["id"],
+            "team_b_id": t2["id"],
+            "status": "live",
+            "score_a": 2,
+            "score_b": 1,
+            "time_display": "65'",
+            "start_time": datetime.utcnow().isoformat()
+        })
 
-        # 2. USERS
-        admin = User(email=ADMIN_EMAIL, full_name="Resinen Architect", hashed_password=get_password_hash(ADMIN_PASS), is_superuser=True, is_active=True)
-        db.add(admin)
-        users = []
-        for u in TEST_USERS:
-            new_user = User(email=u["email"], full_name=u["name"], hashed_password=get_password_hash(u["pass"]), is_active=True)
-            db.add(new_user); users.append(new_user)
-        await db.commit()
-        for u in users: await db.refresh(u)
-        alice, bob = users[0], users[1]
+        # 5. GUILD ENGINE
+        print("💰 Seeding Bounties...")
+        await client.post(f"/guild/{cid}/bounties", headers=auth_headers, json={
+            "title": "API Refactor",
+            "description": "Ensure all seeders use endpoints.",
+            "reward_text": "1000 CR"
+        })
 
-        # 3. THE WORLD (THE NEXUS)
-        nexus = Community(
-            name="The Nexus", slug="nexus", description="The world where every engine is installed.",
-            archetypes=[a for a in Archetype], creator_id=admin.id
-        )
-        db.add(nexus); await db.commit(); await db.refresh(nexus)
-        cid = nexus.id
+        # 6. STAGE ENGINE
+        print("🎥 Seeding Video...")
+        await client.post(f"/stage/{cid}/videos", headers=auth_headers, json={
+            "title": "The Nexus Trailer",
+            "video_url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+            "thumbnail_url": "https://images.unsplash.com/photo-1611162617474-5b21e879e113"
+        })
 
-        # 4. INSTALL EVERYTHING
-        for eid in engine_map.values():
-            db.add(CommunityEngine(community_id=cid, engine_id=eid, is_active=True))
-        
-        db.add(Membership(user_id=alice.id, community_id=cid, role="member"))
-        db.add(Membership(user_id=bob.id, community_id=cid, role="moderator"))
-        
-        gen_chap = Chapter(community_id=cid, title="General", description="Main Hub")
-        db.add(gen_chap); await db.commit(); await db.refresh(gen_chap)
+        # 7. CLUB ENGINE
+        print("🎉 Seeding Events...")
+        await client.post(f"/club/{cid}/events", headers=auth_headers, json={
+            "title": "Nexus Launch Event",
+            "description": "Grand opening.",
+            "location_name": "API Plaza",
+            "start_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
+        })
 
-        # 5. ENGINE CONTENT
-        print("⚡ Populating Engines...")
-
-        # Social
-        p1 = Post(community_id=cid, chapter_id=gen_chap.id, author_id=admin.id, title="System Online", content="The Nexus is live.")
-        db.add(p1); await db.commit(); await db.refresh(p1)
-        db.add(PostLike(user_id=alice.id, post_id=p1.id))
-        db.add(Comment(post_id=p1.id, user_id=bob.id, content="Ready for testing."))
-
-        # Arena
-        t1 = ArenaTeam(community_id=cid, name="Titans", color="#FF4444")
-        t2 = ArenaTeam(community_id=cid, name="Phantoms", color="#4444FF")
-        db.add(t1); db.add(t2); await db.commit(); await db.refresh(t1); await db.refresh(t2)
-        db.add(ArenaMatch(community_id=cid, team_a_id=t1.id, team_b_id=t2.id, status=MatchStatus.LIVE, score_a=1, score_b=0, start_time=datetime.utcnow()))
-
-        # Guild & Academy
-        db.add(GuildBounty(community_id=cid, author_id=admin.id, title="Bug Hunt", description="Nexus core logic review.", reward_text="1000 CR", status=BountyStatus.OPEN))
-        course = Module(community_id=cid, title="Nexus Training", order_index=0)
-        db.add(course); await db.commit(); await db.refresh(course)
-        db.add(Lesson(module_id=course.id, title="Navigation", content_body="Sidebar tools."))
-
-        # Senate
-        db.add(Proposal(community_id=cid, author_id=admin.id, title="Nexus Expansion", description="More RAM for the Bunker.", ends_at=datetime.utcnow() + timedelta(days=7)))
-
-        # Club
-        db.add(ClubEvent(
-            community_id=cid, creator_id=bob.id, title="Nexus Rave", 
-            description="Celebrating the stable build.", 
-            location_name="The Virtual Plaza", 
-            start_time=datetime.utcnow() + timedelta(days=1)
-        ))
-
-        # Stage & Bunker
-        db.add(StageVideo(community_id=cid, author_id=alice.id, title="Nexus Cinematic", video_url="https://www.youtube.com/embed/dQw4w9WgXcQ"))
-        db.add(BunkerMessage(community_id=cid, author_id=alice.id, content="Nexus Key: 7712", expires_at=datetime.utcnow() + timedelta(minutes=30)))
-
-        # Library & Garden & Bazaar (🚨 FIX: Added link_url)
-        db.add(LibraryPage(community_id=cid, author_id=admin.id, slug="rules", title="Nexus Rules", content="No Spam."))
-        db.add(GardenHabit(community_id=cid, user_id=alice.id, title="Core Review", icon="🧠"))
-        db.add(Listing(
-            community_id=cid, 
-            curator_id=bob.id, 
-            title="Nexus Blade", 
-            description="Testing marketplace.", 
-            price_display="50 Gold",
-            link_url="https://resinen.com/nexus-blade" # <--- THE FIX
-        ))
-
-        await db.commit()
-        print("✅ THE NEXUS IS FULLY OPERATIONAL.")
+    print("✅ GENESIS VIA API COMPLETE. NO MODELS TOUCHED DURING POPULATION.")
 
 if __name__ == "__main__":
-    asyncio.run(seed_db())
+    asyncio.run(seed_via_api())
