@@ -57,6 +57,7 @@ class Post(SQLModel, table=True):
 
     # Relationships
     author: "User" = Relationship(back_populates="posts")
+    chapter: Optional["Chapter"] = Relationship(back_populates="posts")
     
     # The Cascades we added earlier
     comments: List["Comment"] = Relationship(
