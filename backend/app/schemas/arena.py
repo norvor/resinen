@@ -1,50 +1,58 @@
-import uuid
-from typing import Optional
+from uuid import UUID
+from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from sqlmodel import SQLModel
 from app.models.arena import MatchStatus
 
-# --- TEAMS ---
-class TeamRead(BaseModel):
-    id: uuid.UUID
+# =======================
+# 1. TEAMS
+# =======================
+class ArenaTeamBase(SQLModel):
     name: str
     logo_url: Optional[str] = None
-    short_code: str
-    class Config:
-        from_attributes = True
+    color: str = "#000000"
 
-# --- MATCH ---
-class MatchBase(BaseModel):
+class ArenaTeamCreate(ArenaTeamBase):
+    pass
+
+class ArenaTeamRead(ArenaTeamBase):
+    id: UUID
+    community_id: UUID
+
+
+# =======================
+# 2. MATCHES
+# =======================
+class ArenaMatchBase(SQLModel):
+    team_a_id: UUID
+    team_b_id: UUID
     start_time: datetime
     status: MatchStatus = MatchStatus.SCHEDULED
+    score_a: int = 0
+    score_b: int = 0
+    time_display: str = "00:00"
 
-class MatchCreate(MatchBase):
-    community_id: uuid.UUID
-    team_a_id: uuid.UUID
-    team_b_id: uuid.UUID
+class ArenaMatchCreate(ArenaMatchBase):
+    pass
 
-class MatchRead(MatchBase):
-    id: uuid.UUID
-    community_id: uuid.UUID
-    
-    score_a: int
-    score_b: int
-    time_display: str
-    
-    # Returning full objects for UI convenience
-    team_a: TeamRead
-    team_b: TeamRead
-    
-    class Config:
-        from_attributes = True
+# The "Read" model needs to include the nested Team objects
+# so the Frontend can show "Red Dragons" instead of "uuid-1234"
+class ArenaMatchRead(ArenaMatchBase):
+    id: UUID
+    community_id: UUID
+    team_a: Optional[ArenaTeamRead] = None
+    team_b: Optional[ArenaTeamRead] = None
 
-# --- PREDICTION ---
-class PredictionCreate(BaseModel):
-    match_id: uuid.UUID
-    team_id: uuid.UUID
 
-class ScoreUpdate(BaseModel):
-    score_a: int
-    score_b: int
-    time_display: str
-    status: MatchStatus
+# =======================
+# 3. ACTIONS (Predict & Score)
+# =======================
+class ArenaPredictionCreate(SQLModel):
+    match_id: UUID
+    team_id: UUID
+
+class ArenaScoreUpdate(SQLModel):
+    score_a: Optional[int] = None
+    score_b: Optional[int] = None
+    status: Optional[MatchStatus] = None
+    time_display: Optional[str] = None
