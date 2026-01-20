@@ -25,7 +25,7 @@ class CommentLike(SQLModel, table=True):
 class Post(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     community_id: uuid.UUID = Field(foreign_key="community.id")
-    
+
     # 🚨 THE FIX: Ensure this field exists for the relationship
     chapter_id: Optional[uuid.UUID] = Field(default=None, foreign_key="chapter.id")
     
@@ -51,8 +51,14 @@ class Post(SQLModel, table=True):
     
     # Relationships
     author: "User" = Relationship(back_populates="posts")
-    comments: List["Comment"] = Relationship(back_populates="post")
-    likes: List["PostLike"] = Relationship()
+    comments: List["Comment"] = Relationship(
+        back_populates="post",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"} 
+    )
+    likes: List["PostLike"] = Relationship(
+        back_populates="post",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     
     # THE LINKS BACK
     community: "Community" = Relationship(back_populates="posts")
@@ -75,7 +81,7 @@ class Comment(SQLModel, table=True):
     
     # Relationships
     post: "Post" = Relationship(back_populates="comments")
-    author: "User" = Relationship()
+    author: "User" = Relationship(back_populates="posts")
     
     # Self-Referential (Replies)
     children: List["Comment"] = Relationship(
