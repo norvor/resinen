@@ -69,6 +69,7 @@ class Post(SQLModel, table=True):
     # Parent Relationships
     author: "User" = Relationship(back_populates="posts")
     chapter: Optional["Chapter"] = Relationship(back_populates="posts")
+    community: "Community" = Relationship(back_populates="posts")
     
     # Child Relationships with Cascade Deletion
     comments: List["Comment"] = Relationship(
