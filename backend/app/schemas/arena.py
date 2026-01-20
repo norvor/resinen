@@ -1,12 +1,10 @@
-from uuid import UUID
-from typing import Optional, List
+import uuid
 from datetime import datetime
+from typing import Optional
 from sqlmodel import SQLModel
 from app.models.arena import MatchStatus
 
-# =======================
-# 1. TEAMS
-# =======================
+# --- TEAMS ---
 class ArenaTeamBase(SQLModel):
     name: str
     logo_url: Optional[str] = None
@@ -16,40 +14,33 @@ class ArenaTeamCreate(ArenaTeamBase):
     pass
 
 class ArenaTeamRead(ArenaTeamBase):
-    id: UUID
-    community_id: UUID
+    id: uuid.UUID
+    community_id: uuid.UUID
 
-
-# =======================
-# 2. MATCHES
-# =======================
+# --- MATCHES ---
 class ArenaMatchBase(SQLModel):
-    team_a_id: UUID
-    team_b_id: UUID
-    start_time: datetime
-    status: MatchStatus = MatchStatus.SCHEDULED
+    team_a_id: uuid.UUID
+    team_b_id: uuid.UUID
     score_a: int = 0
     score_b: int = 0
+    status: MatchStatus = MatchStatus.SCHEDULED
+    start_time: datetime
     time_display: str = "00:00"
 
 class ArenaMatchCreate(ArenaMatchBase):
     pass
 
-# The "Read" model needs to include the nested Team objects
-# so the Frontend can show "Red Dragons" instead of "uuid-1234"
 class ArenaMatchRead(ArenaMatchBase):
-    id: UUID
-    community_id: UUID
-    team_a: Optional[ArenaTeamRead] = None
-    team_b: Optional[ArenaTeamRead] = None
+    id: uuid.UUID
+    community_id: uuid.UUID
+    # We include team details for the dashboard
+    team_a: ArenaTeamRead
+    team_b: ArenaTeamRead
 
-
-# =======================
-# 3. ACTIONS (Predict & Score)
-# =======================
+# --- ACTIONS ---
 class ArenaPredictionCreate(SQLModel):
-    match_id: UUID
-    team_id: UUID
+    match_id: uuid.UUID
+    team_id: uuid.UUID
 
 class ArenaScoreUpdate(SQLModel):
     score_a: Optional[int] = None
