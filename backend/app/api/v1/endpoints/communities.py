@@ -52,7 +52,6 @@ async def read_communities(
 
     return communities
 
-# --- ADMIN ONLY: CREATE ---
 @router.post("/", response_model=CommunityRead)
 async def create_community(
     *,
@@ -62,41 +61,50 @@ async def create_community(
 ):
     """Create a new community and INSTALL requested engines."""
     
+    # 1. Permission Check
     if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Resinen Federal Authority Required.")
+        raise HTTPException(
+            status_code=403, 
+            detail="Resinen Federal Authority Required. Only Admins can create territories."
+        )
 
-    # 1. Check Slug
+    # 2. Check Slug Uniqueness
     query = select(Community).where(Community.slug == community_in.slug)
     if (await db.execute(query)).scalars().first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
-    # 2. Create Community
-    db_community = Community(**community_in.dict(exclude={"archetypes"}), creator_id=current_user.id)
+    # 3. Create Community Record
+    # Use model_dump to safely unpack Pydantic v2 model
+    db_community = Community(
+        **community_in.model_dump(exclude={"archetypes"}), 
+        creator_id=current_user.id
+    )
+    
     db.add(db_community)
     await db.commit()
     await db.refresh(db_community)
 
-    # 3. INSTALL ENGINES (The Fix)
+    # 4. INSTALL ENGINES
     installed_keys = []
     if community_in.archetypes:
-        # We treat 'archetypes' as a list of engine keys (e.g. ['social', 'arena'])
+        # Query for all matching engines (e.g. "social", "arena")
         stmt = select(Engine).where(Engine.key.in_(community_in.archetypes))
-        engines_result = await db.execute(stmt)
-        engines_to_install = engines_result.scalars().all()
+        result = await db.execute(stmt)
+        engines_to_install = result.scalars().all()
         
-        for engine in engines_to_install:
+        for engine_obj in engines_to_install:
             link = CommunityEngine(
                 community_id=db_community.id,
-                engine_id=engine.id,
+                engine_id=engine_obj.id,
                 is_active=True,
                 config={} 
             )
             db.add(link)
-            installed_keys.append(engine.key)
+            installed_keys.append(engine_obj.key)
         
         await db.commit()
 
-    # 4. Attach keys for response so UI sees them immediately
+    # 5. Attach keys for response so UI sees them immediately
     setattr(db_community, "installed_engines", installed_keys)
     
     return db_community
