@@ -16,75 +16,31 @@ from app.schemas.social import PostCreate, PostRead, CommentRead
 
 router = APIRouter()
 
-# --- 1. THE FEED ---
+# ==========================================
+# 1. GET FEED (The Fix)
+# ==========================================
 @router.get("/feed", response_model=List[PostRead])
-async def get_feed(
-    scope: str = Query(..., regex="^(global|community)$"),
-    community_id: Optional[uuid.UUID] = None,
-    limit: int = 20,
-    skip: int = 0,
+async def read_posts(
+    # 🚨 THIS NAME MUST MATCH THE URL QUERY PARAM (?community_id=...)
+    community_id: uuid.UUID, 
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    skip: int = 0,
+    limit: int = 20
 ):
-    # FIX 2: Use 'Comment.author' instead of "author"
-    query = select(Post).options(
-        joinedload(Post.author), 
-        joinedload(Post.comments).joinedload(Comment.author) 
-    ).order_by(desc(Post.created_at))
-
-    if scope == "community":
-        if not community_id:
-            raise HTTPException(400, "Community ID required for local feed")
-        query = query.where(Post.community_id == community_id)
-    
-    else: 
-        # Global feed logic
-        my_communities = select(Membership.community_id).where(
-            Membership.user_id == current_user.id,
-            Membership.status == "active"
-        )
-        query = query.where(Post.community_id.in_(my_communities))
-
-    result = await db.execute(query.offset(skip).limit(limit))
-    posts = result.scalars().unique().all()
-
-    # B. Get "My Likes"
-    post_ids = [p.id for p in posts]
-    my_likes = set()
-    if post_ids:
-        likes_result = await db.execute(
-            select(PostLike.post_id).where(
-                PostLike.user_id == current_user.id,
-                PostLike.post_id.in_(post_ids)
-            )
-        )
-        my_likes = set(likes_result.scalars().all())
-
-    # C. Manual Mapping
-    final_posts = []
-    for p in posts:
-        formatted_comments = [
-            CommentRead(
-                id=c.id, content=c.content, author_id=c.author_id,
-                author_name=c.author.full_name or "Unknown",
-                created_at=c.created_at, post_id=c.post_id
-            ) for c in p.comments
-        ]
-
-        final_posts.append(
-            PostRead(
-                id=p.id, community_id=p.community_id, chapter_id=p.chapter_id,
-                title=p.title, content=p.content, image_url=p.image_url, link_url=p.link_url,
-                is_pinned=p.is_pinned, like_count=p.like_count, 
-                comment_count=len(p.comments), view_count=p.view_count, created_at=p.created_at,
-                author_id=p.author_id, 
-                author_name=p.author.full_name or "Unknown",
-                is_liked=(p.id in my_likes),
-                comments=formatted_comments
-            )
-        )
-
-    return final_posts
+    """
+    Fetch posts for a community. 
+    Expects URL: /api/v1/social/feed?community_id=123...
+    """
+    query = (
+        select(Post)
+        .where(Post.community_id == community_id)
+        .options(joinedload(Post.author)) # Join author so we see names
+        .order_by(Post.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
 
 # --- 2. CREATE POST ---
 @router.post("/posts", response_model=PostRead)
