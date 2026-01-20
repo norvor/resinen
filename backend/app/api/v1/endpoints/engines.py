@@ -4,6 +4,7 @@ from sqlmodel import select
 from app.api import deps
 from app.models.engine import Engine, CommunityEngine
 from app.models.community import Community
+from api import deps
 
 router = APIRouter()
 
