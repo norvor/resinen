@@ -186,7 +186,8 @@ async def get_community_by_slug(
     slug: str,
     db: AsyncSession = Depends(deps.get_db),
 ):
-    """Lookup a territory by its URL slug"""
+    """Lookup a territory by its URL slug and sync installed engines."""
+    # 1. Fetch Community
     query = select(Community).where(Community.slug == slug)
     result = await db.execute(query)
     community = result.scalars().first()
@@ -194,10 +195,22 @@ async def get_community_by_slug(
     if not community:
         raise HTTPException(status_code=404, detail="Territory not found")
         
+    # 2. ⚡ DYNAMIC ENGINE SYNC ⚡
+    # (Exactly matching read_community logic)
+    statement = (
+        select(Engine.key)
+        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
+        # Note: We use community.id here, since we just fetched it
+        .where(CommunityEngine.community_id == community.id)
+        .where(CommunityEngine.is_active == True)
+    )
+    result = await db.execute(statement)
+    active_keys = result.scalars().all()
+    
+    # 3. Attach keys to response
+    setattr(community, "installed_engines", active_keys)
+    
     return community
-
-# --- MEMBERSHIP ENDPOINTS (UNCHANGED) ---
-# Users still need to join/leave freely
 
 @router.get("/{community_id}/membership_status")
 async def get_membership_status(
