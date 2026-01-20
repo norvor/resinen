@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from app.api import deps
 from app.models.user import User
-from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus, 
+from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus 
 # Ensure these schemas exist or adjust imports
 from app.schemas.arena import MatchRead, PredictionCreate, ScoreUpdate, TeamRead 
 
