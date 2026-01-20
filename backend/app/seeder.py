@@ -1,146 +1,246 @@
 import asyncio
 import httpx
-from datetime import datetime, timedelta
+import random
+from datetime import datetime, timedelta, date
 from sqlalchemy import text
 from sqlmodel import SQLModel
 from app.core.database import async_session_factory, engine 
 from app.core.security import get_password_hash
 from app.models.user import User
 
+# --- CONFIGURATION ---
 BASE_URL = "http://localhost:8000/api/v1"
-ADMIN_EMAIL = "admin@resinen.com"
-ADMIN_PASS = "admin123"
 
-async def bootstrap_admin():
-    """Wipes the DB and creates the first admin using AsyncSession."""
-    print("🔥 WIPING DATABASE...")
+# --- PERSONAS ---
+PERSONAS = [
+    {"email": "admin@resinen.com", "pass": "admin123", "name": "Resinen Architect", "role": "superuser"},
+    {"email": "alice@resinen.com", "pass": "password123", "name": "Alice Builder", "role": "user"},
+    {"email": "bob@resinen.com", "pass": "password123", "name": "Bob The Critic", "role": "user"},
+    {"email": "charlie@resinen.com", "pass": "password123", "name": "Charlie Newbie", "role": "user"},
+    {"email": "diana@resinen.com", "pass": "password123", "name": "Diana Pro", "role": "user"},
+]
+
+async def wipe_and_bootstrap_db():
+    """Wipes the DB and creates the initial users directly via SQLModel."""
+    print("\n🔥 [DB] WIPING DATABASE & RESETTING SCHEMA...")
     async with engine.begin() as conn:
-        # Get all table names
-        result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
-        tables = result.scalars().all()
-        for table in tables:
-            await conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
-        
+        # Disable foreign key checks to allow dropping tables out of order if needed
+        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
         # Re-create all tables
         await conn.run_sync(SQLModel.metadata.create_all)
     
-    print("👤 BOOTSTRAPPING ADMIN (ASYNC)...")
+    print("👤 [DB] BOOTSTRAPPING USER PERSONAS...")
     async with async_session_factory() as session:
-        admin = User(
-            email=ADMIN_EMAIL,
-            full_name="Resinen Architect",
-            hashed_password=get_password_hash(ADMIN_PASS),
-            is_superuser=True,
-            is_active=True
-        )
-        session.add(admin)
+        for p in PERSONAS:
+            user = User(
+                email=p["email"],
+                full_name=p["name"],
+                hashed_password=get_password_hash(p["pass"]),
+                is_superuser=(p["role"] == "superuser"),
+                is_active=True,
+                reputation_score=random.randint(50, 500) if p["role"] != "superuser" else 9999
+            )
+            session.add(user)
         await session.commit()
-        print("✅ Admin created successfully.")
+        print(f"✅ Created {len(PERSONAS)} users in the database.")
+
+async def login_user(client, email, password):
+    """Helper to login and get headers for a specific user."""
+    res = await client.post("/login/access-token", data={"username": email, "password": password})
+    if res.status_code != 200:
+        print(f"❌ Login failed for {email}: {res.text}")
+        return None
+    token = res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 async def seed_via_api():
-    # 1. Prepare Database & Admin
-    await bootstrap_admin()
+    # 1. Reset DB
+    await wipe_and_bootstrap_db()
     
-    print(f"🚀 EVOLVING THE NEXUS VIA API: {BASE_URL}")
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+    print(f"\n🚀 [API] STARTING EVOLUTION VIA: {BASE_URL}")
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=60.0) as client:
         
-        # 2. AUTHENTICATION
-        print("🔑 Authenticating...")
-        login_res = await client.post("/login/access-token", data={
-            "username": ADMIN_EMAIL, 
-            "password": ADMIN_PASS
-        })
+        # 2. AUTHENTICATION (Get Tokens for Everyone)
+        print("🔑 [AUTH] Logging in all personas...")
+        tokens = {}
+        for p in PERSONAS:
+            tokens[p["email"]] = await login_user(client, p["email"], p["pass"])
         
-        if login_res.status_code != 200:
-            print(f"❌ Login Failed: {login_res.text}")
-            return
-            
-        token = login_res.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
+        # Shortcuts for headers
+        admin_h = tokens["admin@resinen.com"]
+        alice_h = tokens["alice@resinen.com"]
+        bob_h = tokens["bob@resinen.com"]
+        charlie_h = tokens["charlie@resinen.com"]
+        diana_h = tokens["diana@resinen.com"]
 
-        # 3. CREATE WORLD
-        print("🌍 Creating 'The Nexus'...")
-        comm_res = await client.post("/communities/", headers=headers, json={
+        # =========================================================================
+        # 🌍 WORLD 1: THE NEXUS (Social & Governance Focus)
+        # =========================================================================
+        print("\n🌍 [COMMUNITY] Creating 'The Nexus'...")
+        nexus_res = await client.post("/communities/", headers=admin_h, json={
             "name": "The Nexus",
             "slug": "nexus",
             "description": "Total System Validation World.",
-            "primary_color": "#000000"
+            "primary_color": "#000000",
+            "icon_url": "globe"
         })
-        community = comm_res.json()
-        cid = community["id"]
+        nexus_id = nexus_res.json()["id"]
 
-        # 4. SOCIAL (💬)
-        print("💬 Seeding Social...")
-        post = await client.post("/social/posts", headers=headers, json={
-            "community_id": cid,
-            "title": "API Genesis",
-            "content": "Every byte of this world was validated by the API layer."
+        # --- SOCIAL ENGINE ---
+        print("   💬 [Social] Creating threaded conversations...")
+        # Post by Admin
+        p1 = await client.post("/social/posts", headers=admin_h, json={
+            "community_id": nexus_id,
+            "title": "Welcome to the Simulation",
+            "content": "This world is being generated by code. Confirm existence.",
+            "is_pinned": True
         })
-        pid = post.json()["id"]
-        await client.post(f"/social/posts/{pid}/comments", headers=headers, json={"content": "Verified."})
+        p1_id = p1.json()["id"]
+        
+        # Interactions
+        await client.post(f"/social/posts/{p1_id}/comments", headers=alice_h, json={"content": "Alice reporting in! 🫡"})
+        c_bob = await client.post(f"/social/posts/{p1_id}/comments", headers=bob_h, json={"content": "latency seems high..."})
+        c_bob_id = c_bob.json()["id"]
+        await client.post(f"/social/posts/{p1_id}/like", headers=charlie_h) # Charlie likes the post
+        await client.post(f"/social/comments/{c_bob_id}/like", headers=admin_h) # Admin likes Bob's snark
 
-        # 5. ARENA (🏆)
-        print("🏆 Seeding Arena...")
-        t1 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Titans", "short_code": "TTN", "color": "#FF4444"})).json()
-        t2 = (await client.post(f"/arena/{cid}/teams", headers=headers, json={"name": "Phantoms", "short_code": "PHM", "color": "#4444FF"})).json()
-        await client.post(f"/arena/{cid}/matches", headers=headers, json={
+        # --- GOVERNANCE ENGINE ---
+        print("   ⚖️ [Governance] Holding an election...")
+        prop = await client.post(f"/governance/{nexus_id}/proposals", headers=alice_h, json={
+            "title": "Adopt Dark Mode by Default?",
+            "description": "Should we force dark mode on all new interfaces?",
+            "ends_at": (datetime.utcnow() + timedelta(days=7)).isoformat()
+        })
+        prop_id = prop.json()["id"]
+        
+        # Voting
+        await client.post(f"/governance/proposals/{prop_id}/vote", headers=bob_h, json={"choice": "no"})
+        await client.post(f"/governance/proposals/{prop_id}/vote", headers=charlie_h, json={"choice": "yes"})
+        await client.post(f"/governance/proposals/{prop_id}/vote", headers=diana_h, json={"choice": "yes"})
+
+        # =========================================================================
+        # 🛡️ WORLD 2: CODE GUILD (Professional, Guild, Listing, Referral)
+        # =========================================================================
+        print("\n🌍 [COMMUNITY] Creating 'Code Guild'...")
+        guild_res = await client.post("/communities/", headers=diana_h, json={
+            "name": "Code Guild",
+            "slug": "codex",
+            "description": "Where builders unite.",
+            "primary_color": "#6366f1",
+            "icon_url": "code"
+        })
+        guild_id = guild_res.json()["id"]
+
+        # --- GUILD ENGINE ---
+        print("   💰 [Guild] Posting bounties & projects...")
+        # Bounty
+        bounty = await client.post(f"/guild/{guild_id}/bounties", headers=diana_h, json={
+            "title": "Fix the Memory Leak",
+            "description": "There is a leak in the websocket service.",
+            "reward_text": "$500 USD"
+        })
+        # Project Showcase
+        await client.post(f"/guild/{guild_id}/projects", headers=alice_h, json={
+            "title": "Resinen Autoscaler",
+            "description": "An open source tool I made.",
+            "tech_stack": "Python, Rust"
+        })
+
+        # --- REFERRAL/SERVICE ENGINE ---
+        print("   🤝 [Referral] Setting up member services...")
+        svc = await client.post(f"/referral/{guild_id}/services", headers=bob_h, json={
+            "title": "Senior Code Auditor",
+            "description": "I will ruthlessly judge your codebase.",
+            "contact_info": "bob@audit.com"
+        })
+        svc_id = svc.json()["id"]
+        # Vouching
+        await client.post(f"/referral/services/{svc_id}/vouch", headers=admin_h, json={
+            "comment": "Bob is mean but accurate."
+        })
+
+        # --- ACADEMY ENGINE ---
+        print("   🎓 [Academy] Building a curriculum...")
+        mod = await client.post(f"/academy/{guild_id}/modules", headers=diana_h, json={"title": "System Design 101"})
+        mod_id = mod.json()["id"]
+        await client.post(f"/academy/modules/{mod_id}/lessons", headers=diana_h, json={
+            "title": "Load Balancing",
+            "content_body": "Round robin is just the beginning...",
+            "duration_min": 15
+        })
+
+        # =========================================================================
+        # ⚔️ WORLD 3: THUNDERDOME (Arena, Bunker, Club)
+        # =========================================================================
+        print("\n🌍 [COMMUNITY] Creating 'Thunderdome'...")
+        arena_res = await client.post("/communities/", headers=admin_h, json={
+            "name": "Thunderdome",
+            "slug": "thunder",
+            "description": "Sports, Bets, and Secrets.",
+            "primary_color": "#ef4444",
+            "icon_url": "zap"
+        })
+        arena_id = arena_res.json()["id"]
+
+        # --- ARENA ENGINE ---
+        print("   🏆 [Arena] Configuring teams & matches...")
+        t1 = (await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={"name": "Red Dragons", "short_code": "RED", "color": "#ff0000"})).json()
+        t2 = (await client.post(f"/arena/{arena_id}/teams", headers=admin_h, json={"name": "Blue Knights", "short_code": "BLU", "color": "#0000ff"})).json()
+        
+        match = await client.post(f"/arena/{arena_id}/matches", headers=admin_h, json={
             "team_a_id": t1["id"],
             "team_b_id": t2["id"],
-            "status": "live",
-            "score_a": 1,
-            "score_b": 0,
-            "time_display": "45'",
-            "start_time": datetime.utcnow().isoformat()
+            "start_time": (datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            "status": "scheduled"
+        })
+        match_id = match.json()["id"]
+        
+        # Predictions
+        await client.post(f"/arena/matches/{match_id}/predict", headers=charlie_h, json={"picked_team_id": t1["id"]})
+
+        # --- BUNKER ENGINE ---
+        print("   ☢️ [Bunker] Dropping anonymous intel...")
+        await client.post(f"/bunker/{arena_id}/messages", headers=alice_h, json={
+            "content": "The Red Dragons striker is injured. Bet on Blue.",
+            "is_anonymous": True,
+            "expires_in_hours": 24
         })
 
-        # 6. GUILD (💰)
-        print("💰 Seeding Guild...")
-        await client.post(f"/guild/{cid}/bounties", headers=headers, json={
-            "title": "Middleware Audit",
-            "description": "Ensure no null pointers in engine logic.",
-            "reward_text": "5000 CR"
+        # --- CLUB ENGINE ---
+        print("   🎉 [Club] Organizing a watch party...")
+        event = await client.post(f"/club/{arena_id}/events", headers=admin_h, json={
+            "title": "Finals Watch Party",
+            "description": "Free drinks for winners.",
+            "location_name": "The Metaverse Bar",
+            "start_time": (datetime.utcnow() + timedelta(days=2)).isoformat()
         })
+        event_id = event.json()["id"]
+        
+        # RSVPs
+        await client.post(f"/club/events/{event_id}/rsvp", headers=bob_h, json={"status": "going"})
+        await client.post(f"/club/events/{event_id}/rsvp", headers=charlie_h, json={"status": "maybe"})
 
-        # 7. ACADEMY (🎓)
-        print("🎓 Seeding Academy...")
-        # Create Course/Module
-        module_res = await client.post(f"/academy/{cid}/modules", headers=headers, json={
-            "title": "Introduction to Nexus",
-            "order_index": 0
-        })
-        mid = module_res.json()["id"]
-        await client.post(f"/academy/modules/{mid}/lessons", headers=headers, json={
-            "title": "The First Step",
-            "content_body": "This is how you master the Nexus.",
-            "duration_min": 10
-        })
-
-        # 8. LIBRARY (📚)
-        print("📚 Seeding Library...")
-        await client.post(f"/library/{cid}/pages", headers=headers, json={
-            "title": "The Manifesto",
+        # =========================================================================
+        # 📚 EXTRAS (Garden & Library in Nexus)
+        # =========================================================================
+        print("\n🌱 [EXTRAS] Seeding Garden & Library in Nexus...")
+        
+        # Library
+        await client.post(f"/library/{nexus_id}/pages", headers=admin_h, json={
+            "title": "Manifesto",
             "slug": "manifesto",
-            "content": "# The Nexus Rules \n 1. Build. 2. Verify. 3. Ship."
+            "content": "# We build."
         })
 
-        # 9. STAGE (🎥)
-        print("🎥 Seeding Stage...")
-        await client.post(f"/stage/{cid}/videos", headers=headers, json={
-            "title": "Nexus Cinematic",
-            "video_url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
-            "thumbnail_url": "https://images.unsplash.com/photo-1611162617474-5b21e879e113"
+        # Garden (Habits)
+        habit = await client.post(f"/garden/{nexus_id}/habits", headers=alice_h, json={
+            "title": "Daily Commits",
+            "icon": "💻"
         })
+        habit_id = habit.json()["id"]
+        await client.post(f"/garden/habits/{habit_id}/log", headers=alice_h, json={"log_date": date.today().isoformat()})
 
-        # 10. CLUB (🎉)
-        print("🎉 Seeding Club...")
-        await client.post(f"/club/{cid}/events", headers=headers, json={
-            "title": "Launch Gala",
-            "description": "Celebrating the API transition.",
-            "location_name": "Digital Ballroom",
-            "start_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
-        })
-
-    print("\n✅ THE NEXUS IS LIVE. EVERY ENDPOINT VALIDATED.")
+    print("\n✅ SUPER SEED COMPLETE. THE SIMULATION IS RUNNING.")
 
 if __name__ == "__main__":
     asyncio.run(seed_via_api())
