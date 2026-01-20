@@ -6,17 +6,15 @@ from sqlmodel import select
 from sqlalchemy.orm import joinedload
 from app.api import deps
 
-# 1. Correct Imports
 from app.models.user import User
 from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus
-# We use the generic Read/Create schemas to keep it simple and working
 from app.schemas.arena import (
     ArenaMatchRead, 
     ArenaMatchCreate, 
     ArenaTeamRead, 
     ArenaTeamCreate,
-    ArenaPredictionCreate, # Ensure you have this or generic PredictionCreate
-    ArenaScoreUpdate       # Ensure you have this or generic ScoreUpdate
+    ArenaPredictionCreate, 
+    ArenaScoreUpdate       
 )
 
 router = APIRouter()
@@ -42,7 +40,9 @@ async def create_team(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    team = ArenaTeam.model_validate(team_in, update={"community_id": community_id})
+    # FIX: Replaced .model_validate(update=...) to avoid RecursionError
+    team = ArenaTeam(**team_in.model_dump(), community_id=community_id)
+    
     db.add(team)
     await db.commit()
     await db.refresh(team)
@@ -75,8 +75,6 @@ async def read_matches(
     result = await db.execute(query)
     matches = result.scalars().all()
 
-    # (Optional) You can inject "User Picked" status here later if needed.
-    # For now, let's just get the data on the screen.
     return matches
 
 
@@ -87,7 +85,9 @@ async def create_match(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    match_obj = ArenaMatch.model_validate(match_in, update={"community_id": community_id})
+    # FIX: Replaced .model_validate(update=...) to avoid RecursionError
+    match_obj = ArenaMatch(**match_in.model_dump(), community_id=community_id)
+    
     db.add(match_obj)
     await db.commit()
     await db.refresh(match_obj)
