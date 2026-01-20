@@ -22,13 +22,21 @@ PERSONAS = [
 
 async def wipe_and_bootstrap_db():
     """Wipes the DB and creates the initial users directly via SQLModel."""
-    print("\n🔥 [DB] WIPING DATABASE & RESETTING SCHEMA...")
+    print("\n🔥 [DB] WIPING DATABASE (Iterative Drop)...")
     async with engine.begin() as conn:
-        # FIX: Execute these as separate commands
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
-        await conn.execute(text("CREATE SCHEMA public"))
+        # 1. DROP ALL TABLES (Safely)
+        # We query all tables in 'public' and drop them with CASCADE.
+        # This bypasses the need for 'DROP SCHEMA' permissions which caused the crash.
+        result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
+        tables = result.scalars().all()
         
-        # Re-create all tables
+        for table in tables:
+            # We use quotes to handle case sensitivity or reserved words
+            print(f"   -> Dropping table: {table}")
+            await conn.execute(text(f'DROP TABLE IF EXISTS "public"."{table}" CASCADE'))
+
+        # 2. RE-CREATE TABLES
+        print("   -> Re-creating tables from SQLModel metadata...")
         await conn.run_sync(SQLModel.metadata.create_all)
     
     print("👤 [DB] BOOTSTRAPPING USER PERSONAS...")
