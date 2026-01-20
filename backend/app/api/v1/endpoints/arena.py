@@ -6,7 +6,7 @@ from sqlalchemy.orm import joinedload
 
 from app.api import deps
 from app.models.user import User
-from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus
+from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus, 
 # Ensure these schemas exist or adjust imports
 from app.schemas.arena import MatchRead, PredictionCreate, ScoreUpdate, TeamRead 
 
@@ -124,7 +124,7 @@ async def update_score(
     
     return {"status": "updated"}
 
-@router.get("/{community_id}/matches", response_model=List[ArenaMatchRead])
+@router.get("/{community_id}/matches", response_model=List[ArenaMatch])
 async def read_matches(
     community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
