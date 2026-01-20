@@ -6,7 +6,6 @@ from sqlmodel import select
 from sqlalchemy.orm import joinedload
 
 # 1. Correct Imports
-from app.core import deps
 from app.models.user import User
 from app.models.arena import ArenaMatch, ArenaTeam, ArenaPrediction, MatchStatus
 # We use the generic Read/Create schemas to keep it simple and working
