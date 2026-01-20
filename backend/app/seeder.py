@@ -50,6 +50,7 @@ ENGINE_REGISTRY = [
 async def seed_db():
     print("🚀 INITIALIZING THE NEXUS: TOTAL SYSTEM SEED...")
     
+    # 1. CLEAN SLATE
     async with engine.begin() as conn:
         print("🔥 Forced Wipe in Progress...")
         result = await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
@@ -59,33 +60,47 @@ async def seed_db():
         await conn.run_sync(SQLModel.metadata.create_all)
         
     async with async_session_factory() as db:
-        # 1. ENGINES
+        # 2. ENGINES
         engine_map = {}
         for e in ENGINE_REGISTRY:
             eng = Engine(**e)
             db.add(eng); await db.commit(); await db.refresh(eng)
             engine_map[e["key"]] = eng.id
 
-        # 2. USERS
-        admin = User(email=ADMIN_EMAIL, full_name="Resinen Architect", hashed_password=get_password_hash(ADMIN_PASS), is_superuser=True)
+        # 3. USERS
+        admin = User(
+            email=ADMIN_EMAIL, 
+            full_name="Resinen Architect", 
+            hashed_password=get_password_hash(ADMIN_PASS), 
+            is_superuser=True,
+            is_active=True
+        )
         db.add(admin)
         users = []
         for u in TEST_USERS:
-            new_user = User(email=u["email"], full_name=u["name"], hashed_password=get_password_hash(u["pass"]))
+            new_user = User(
+                email=u["email"], 
+                full_name=u["name"], 
+                hashed_password=get_password_hash(u["pass"]),
+                is_active=True
+            )
             db.add(new_user); users.append(new_user)
         await db.commit()
         for u in users: await db.refresh(u)
         alice, bob = users[0], users[1]
 
-        # 3. THE WORLD (THE NEXUS)
+        # 4. THE WORLD (THE NEXUS)
         nexus = Community(
-            name="The Nexus", slug="nexus", description="The world where every engine is installed.",
-            archetypes=[a for a in Archetype], creator_id=admin.id
+            name="The Nexus", 
+            slug="nexus", 
+            description="The world where every engine is installed.",
+            archetypes=[a for a in Archetype], 
+            creator_id=admin.id
         )
         db.add(nexus); await db.commit(); await db.refresh(nexus)
         cid = nexus.id
 
-        # 4. INSTALL EVERYTHING
+        # 5. INSTALLATION & MEMBERSHIP
         for eid in engine_map.values():
             db.add(CommunityEngine(community_id=cid, engine_id=eid, is_active=True))
         
@@ -95,43 +110,91 @@ async def seed_db():
         gen_chap = Chapter(community_id=cid, title="General", description="Main Hub")
         db.add(gen_chap); await db.commit(); await db.refresh(gen_chap)
 
-        # 5. ENGINE CONTENT (THE GAUNTLET)
+        # 6. ENGINE CONTENT (THE GAUNTLET)
         print("⚡ Populating Engines...")
 
-        # Social
+        # --- Social ---
         p1 = Post(community_id=cid, chapter_id=gen_chap.id, author_id=admin.id, title="System Online", content="The Nexus is live.")
         db.add(p1); await db.commit(); await db.refresh(p1)
         db.add(PostLike(user_id=alice.id, post_id=p1.id))
         db.add(Comment(post_id=p1.id, user_id=bob.id, content="Ready for testing."))
 
-        # Arena
+        # --- Arena ---
         t1 = ArenaTeam(community_id=cid, name="Titans", color="#FF4444")
         t2 = ArenaTeam(community_id=cid, name="Phantoms", color="#4444FF")
         db.add(t1); db.add(t2); await db.commit(); await db.refresh(t1); await db.refresh(t2)
-        match = ArenaMatch(community_id=cid, team_a_id=t1.id, team_b_id=t2.id, status=MatchStatus.LIVE, score_a=1, score_b=0)
+        match = ArenaMatch(
+            community_id=cid, 
+            team_a_id=t1.id, 
+            team_b_id=t2.id, 
+            status=MatchStatus.LIVE, 
+            score_a=1, 
+            score_b=0,
+            start_time=datetime.utcnow()
+        )
         db.add(match)
 
+        # --- Guild ---
         print("💰 Seeding Guild Bounties...")
         db.add(GuildBounty(
             community_id=cid, 
             author_id=admin.id, 
             title="Bug Hunt", 
-            description="Find and document memory leaks in the Nexus core logic.", # 🚨 ADD THIS LINE
-            reward_text="1000 CR"
+            description="Find and document memory leaks in the Nexus core logic.",
+            reward_text="1000 CR",
+            status=BountyStatus.OPEN
         ))
-        # Senate
-        db.add(Proposal(community_id=cid, author_id=admin.id, title="Nexus Expansion", ends_at=datetime.utcnow() + timedelta(days=7)))
 
-        # Club & Stage
-        db.add(ClubEvent(community_id=cid, creator_id=bob.id, title="Nexus Rave", start_time=datetime.utcnow() + timedelta(days=1)))
-        db.add(StageVideo(community_id=cid, author_id=alice.id, title="Nexus Cinematic", video_url="https://www.youtube.com/embed/dQw4w9WgXcQ"))
+        # --- Academy ---
+        print("🎓 Seeding Academy...")
+        course_mod = Module(community_id=cid, title="Nexus Training 101", order_index=0)
+        db.add(course_mod); await db.commit(); await db.refresh(course_mod)
+        db.add(Lesson(module_id=course_mod.id, title="Navigation", content_body="Use the sidebar to swap engines."))
 
-        # Library & Bunker & Bazaar
-        db.add(LibraryPage(community_id=cid, author_id=admin.id, slug="rules", title="Nexus Rules", content="1. No Spam."))
-        db.add(BunkerMessage(community_id=cid, author_id=alice.id, content="Secret Nexus Key: 7712"))
-        db.add(Listing(community_id=cid, curator_id=bob.id, title="Nexus Blade", price_display="50 Gold"))
+        # --- Senate ---
+        db.add(Proposal(
+            community_id=cid, 
+            author_id=admin.id, 
+            title="Nexus Expansion", 
+            description="Should we add more storage to the Bunker?",
+            ends_at=datetime.utcnow() + timedelta(days=7)
+        ))
 
-        # Garden
+        # --- Club & Stage ---
+        db.add(ClubEvent(
+            community_id=cid, 
+            creator_id=bob.id, 
+            title="Nexus Rave", 
+            description="Celebrating the stable build.",
+            start_time=datetime.utcnow() + timedelta(days=1)
+        ))
+        db.add(StageVideo(
+            community_id=cid, 
+            author_id=alice.id, 
+            title="Nexus Cinematic", 
+            video_url="https://www.youtube.com/embed/dQw4w9WgXcQ"
+        ))
+
+        # --- Bunker ---
+        print("☢️  Seeding Bunker Messages...")
+        db.add(BunkerMessage(
+            community_id=cid, 
+            author_id=alice.id, 
+            content="Secret Nexus Key: 7712",
+            expires_at=datetime.utcnow() + timedelta(minutes=30)
+        ))
+
+        # --- Library & Bazaar ---
+        db.add(LibraryPage(community_id=cid, author_id=admin.id, slug="rules", title="Nexus Rules", content="# 1. No Spam."))
+        db.add(Listing(
+            community_id=cid, 
+            curator_id=bob.id, 
+            title="Nexus Blade", 
+            description="A legendary weapon for the Arena.",
+            price_display="50 Gold"
+        ))
+
+        # --- Garden ---
         habit = GardenHabit(community_id=cid, user_id=alice.id, title="Core Logic Review", icon="🧠")
         db.add(habit)
 
