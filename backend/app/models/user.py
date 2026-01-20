@@ -44,6 +44,8 @@ class User(SQLModel, table=True):
     created_communities: List["Community"] = Relationship(back_populates="creator")
     memberships: List["Membership"] = Relationship(back_populates="user")
     posts: List["Post"] = Relationship(back_populates="author")
+    post_likes: List["PostLike"] = Relationship(back_populates="user")  # Changed to post_likes to avoid conflict
+    comments: List["Comment"] = Relationship(back_populates="author")   
     
     # 🚨 THE FIX: The missing relationship
     services: List["MemberService"] = Relationship(back_populates="user")
