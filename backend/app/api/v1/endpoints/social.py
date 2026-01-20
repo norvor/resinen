@@ -13,6 +13,7 @@ from app.models.community import Membership
 from app.models.governance import CommunityBylaw
 from app.services.reputation import award_xp, XP_PER_LIKE
 from app.schemas.social import PostCreate, PostRead, CommentRead
+import typing import Any
 
 router = APIRouter()
 
