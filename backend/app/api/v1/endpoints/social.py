@@ -126,3 +126,43 @@ async def like_post(
     
     await db.commit()
     return {"status": "liked"}
+
+# 1. DELETE POST
+@router.delete("/posts/{post_id}", response_model=Any)
+async def delete_post(
+    post_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """Permanently delete a post."""
+    post = await db.get(Post, post_id)
+    if not post:
+        raise HTTPException(404, "Post not found")
+    
+    # Optional: Check if user is author or admin
+    # if post.author_id != current_user.id:
+    #     raise HTTPException(403, "Not authorized")
+
+    await db.delete(post)
+    await db.commit()
+    return {"status": "success"}
+
+# 2. PIN/UNPIN POST
+@router.post("/posts/{post_id}/pin", response_model=PostRead)
+async def toggle_pin_post(
+    post_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """Toggle the pinned status of a post."""
+    post = await db.get(Post, post_id)
+    if not post:
+        raise HTTPException(404, "Post not found")
+        
+    # Toggle the boolean
+    post.is_pinned = not post.is_pinned
+    
+    db.add(post)
+    await db.commit()
+    await db.refresh(post)
+    return post
