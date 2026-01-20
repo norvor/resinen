@@ -111,12 +111,14 @@ async def seed_db():
         match = ArenaMatch(community_id=cid, team_a_id=t1.id, team_b_id=t2.id, status=MatchStatus.LIVE, score_a=1, score_b=0)
         db.add(match)
 
-        # Guild & Academy
-        db.add(GuildBounty(community_id=cid, author_id=admin.id, title="Bug Hunt", reward_text="1000 CR"))
-        course = Module(community_id=cid, title="Nexus Training", order_index=0)
-        db.add(course); await db.commit(); await db.refresh(course)
-        db.add(Lesson(module_id=course.id, title="Navigation", content_body="Use the sidebar."))
-
+        print("💰 Seeding Guild Bounties...")
+        db.add(GuildBounty(
+            community_id=cid, 
+            author_id=admin.id, 
+            title="Bug Hunt", 
+            description="Find and document memory leaks in the Nexus core logic.", # 🚨 ADD THIS LINE
+            reward_text="1000 CR"
+        ))
         # Senate
         db.add(Proposal(community_id=cid, author_id=admin.id, title="Nexus Expansion", ends_at=datetime.utcnow() + timedelta(days=7)))
 
