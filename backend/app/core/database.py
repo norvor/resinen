@@ -66,3 +66,7 @@ try:
 except Exception as e:
     print(f"⚠️  Redis Connection Failed: {e}")
     redis_client = MockRedis()
+    
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_factory() as session:
+        yield session
