@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 from app.schemas.user import UserRead
@@ -10,7 +10,6 @@ class CommentBase(BaseModel):
     parent_id: Optional[uuid.UUID] = None
 
 class CommentCreate(CommentBase):
-    # We remove post_id from here since it will be in the URL
     pass
 
 class CommentRead(CommentBase):
@@ -18,11 +17,8 @@ class CommentRead(CommentBase):
     post_id: uuid.UUID
     like_count: int
     created_at: datetime
-    
     author: UserRead
-    
-    # NEW: UI State
-    is_liked: bool = False
+    is_liked: bool = False # UI State
     
     class Config:
         from_attributes = True
@@ -31,8 +27,8 @@ class CommentRead(CommentBase):
 class PostBase(BaseModel):
     title: Optional[str] = None
     content: str
-    image_url: Optional[str] = None
-    link_url: Optional[str] = None
+    media_urls: List[str] = []  # Changed from single image_url
+    meta_data: Dict[str, Any] = {}
     chapter_id: Optional[uuid.UUID] = None
 
 class PostCreate(PostBase):
@@ -50,7 +46,7 @@ class PostRead(PostBase):
     
     author: UserRead
     
-    # UI State
+    # UI State (Calculated at runtime)
     is_liked: bool = False
     
     class Config:
