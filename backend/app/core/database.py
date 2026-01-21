@@ -3,6 +3,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from app.core.config import settings
 import redis
+from typing import Generator, AsyncGenerator
+
 
 # --- 1. POSTGRESQL (Sync & Async) ---
 
