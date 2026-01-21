@@ -22,7 +22,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 # 2. Async DB (Use this for Social Feed & High Perf endpoints)
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         yield session
 
