@@ -1,48 +1,46 @@
-from typing import AsyncGenerator
+from typing import Generator, AsyncGenerator
+from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import SessionLocal, async_session_factory
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core import security
 from app.core.config import settings
-from app.core.database import async_session_factory 
 from app.models.user import User
+from app.core import security
+import jwt
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/login"
-)
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
-# --- DATABASE DEPENDENCY ---
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+# --- DATABASE DEPENDENCIES ---
+
+# 1. Sync DB (Use this for older endpoints)
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# 2. Async DB (Use this for Social Feed & High Perf endpoints)
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         yield session
 
-# 👇 THE FIX: Create an alias so old code (get_db) still works
-get_db = get_session 
+# --- AUTH DEPENDENCIES ---
 
-# --- SECURITY DEPENDENCIES ---
-async def get_current_user(
-    session: AsyncSession = Depends(get_session), 
+def get_current_user(
+    db: Session = Depends(get_db),
     token: str = Depends(reusable_oauth2)
 ) -> User:
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
-        )
-        token_data = payload.get("sub")
-        if token_data is None:
-             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Could not validate credentials",
-            )
-    except (JWTError, ValidationError):
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
+        token_data = security.TokenPayload(**payload)
+    except (jwt.PyJWTError, Exception):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    
-    user = await session.get(User, token_data)
+    user = db.get(User, token_data.sub)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -50,15 +48,6 @@ async def get_current_user(
 def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    if not current_user.is_active:
+    if not security.is_active(current_user):
         raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
-def get_current_active_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=400, detail="The user doesn't have enough privileges"
-        )
     return current_user
