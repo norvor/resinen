@@ -12,46 +12,47 @@
     // 2. Archetype State
     let selectedArchetypes: string[] = [];
 
+   
+
     // Archetype Definitions (The Menu)
+    // IDs updated to match Backend Engine Keys
     const ARCHETYPES = [
         { id: 'arena', label: 'The Arena', icon: '🏆', desc: 'Sports & Competition' },
         { id: 'stage', label: 'The Stage', icon: '🎤', desc: 'Visuals & Performance' },
-        { id: 'sanctuary', label: 'The Sanctuary', icon: '🙏', desc: 'Faith & Spirit' },
+        { id: 'garden', label: 'The Sanctuary', icon: '🙏', desc: 'Faith & Spirit' }, // Was 'sanctuary'
         { id: 'library', label: 'The Library', icon: '📚', desc: 'Wiki & Knowledge' },
         { id: 'guild', label: 'The Guild', icon: '⚒️', desc: 'Building & Code' },
-        { id: 'bazaar', label: 'The Bazaar', icon: '🏷️', desc: 'Commerce & Trade' },
-        { id: 'senate', label: 'The Senate', icon: '⚖️', desc: 'Politics & Voting' },
+        { id: 'listings', label: 'The Bazaar', icon: '🏷️', desc: 'Commerce & Trade' }, // Was 'bazaar'
+        { id: 'governance', label: 'The Senate', icon: '⚖️', desc: 'Politics & Voting' }, // Was 'senate'
         { id: 'academy', label: 'The Academy', icon: '🎓', desc: 'Education & Growth' },
         { id: 'club', label: 'The Club', icon: '🥂', desc: 'Nightlife & Events' },
         { id: 'bunker', label: 'The Bunker', icon: '🕵️', desc: 'Privacy & Anon' },
-        { id: 'lounge', label: 'The Lounge', icon: '🛋️', desc: 'Social & Casual' },
+        { id: 'social', label: 'The Lounge', icon: '🛋️', desc: 'Social & Casual' }, // Was 'lounge'
     ];
 
-    function toggleArchetype(id: string) {
+
+     function toggleArchetype(id: string) {
         if (selectedArchetypes.includes(id)) {
             selectedArchetypes = selectedArchetypes.filter(a => a !== id);
         } else {
             selectedArchetypes = [...selectedArchetypes, id];
         }
     }
-
-    // Auto-generate slug
-    $: slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
+    
     async function handleSubmit() {
         if (!name || !slug) return;
         isSubmitting = true;
 
         try {
-            // Default to 'lounge' if nothing selected
-            const finalArchetypes = selectedArchetypes.length > 0 ? selectedArchetypes : ['lounge'];
+            // Default to 'social' (Backend Key) if nothing selected
+            const finalArchetypes = selectedArchetypes.length > 0 ? selectedArchetypes : ['social'];
 
             const payload: CreateCommunityDTO = {
                 name,
                 slug,
                 description,
                 is_private: isGatekept,
-                archetypes: finalArchetypes // 🚨 SENDING ARRAY
+                archetypes: finalArchetypes 
             };
 
             await api.createCommunity(payload);

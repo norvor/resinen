@@ -9,44 +9,16 @@ export const token = writable<string | null>(
     browser ? localStorage.getItem('codex_token') : null
 );
 
-// --- TYPES ---
+// --- CORE TYPES ---
 
 export type User = {
     id: string;
     email: string;
     full_name: string;
     is_superuser: boolean;
-    headline?: string;
-    bio?: string;
-    location?: string;
-    website?: string;
-    linkedin?: string;
-    twitter?: string;
-    github?: string;
+    avatar_url?: string;
     xp: number;
     level: number;
-    avatar_url?: string; // Added commonly used field
-};
-
-export type Membership = {
-    community_id: string;
-    user_id: string;
-    // Optional because the backend might not send the full user object in the list
-    user?: User; 
-    role: 'member' | 'moderator' | 'admin';
-    status: 'pending' | 'active' | 'banned' | 'rejected';
-    joined_at: string;
-};
-
-// Strict Type for Creation
-export type CreateCommunityDTO = {
-    name: string;
-    slug: string;
-    description: string;
-    is_private: boolean; 
-    // 🚨 NEW: Array of strings
-    archetypes: string[]; 
-    settings?: Record<string, any>;
 };
 
 export type Community = {
@@ -59,70 +31,80 @@ export type Community = {
     creator_id: string;
     banner_url?: string;
     created_at: string;
-    // 🚨 NEW: Array of strings
-    archetypes: string[];
+    archetypes: string[]; 
     settings?: Record<string, any>;
 };
 
-export type Chapter = {
-    id: string;
+export type Membership = {
     community_id: string;
-    name: string;
+    user_id: string;
+    user?: User; 
+    role: 'member' | 'moderator' | 'admin' | 'owner';
+    status: 'pending' | 'active' | 'banned' | 'rejected';
+    joined_at: string;
+};
+
+// --- ENGINE TYPES (The New Stuff) ---
+
+// Arena (Sports)
+export type Match = {
+    id: string;
+    title: string;
+    team_a_name: string;
+    team_b_name: string;
+    score_a: number;
+    score_b: number;
+    start_time: string;
+    status: 'SCHEDULED' | 'LIVE' | 'COMPLETED';
+};
+
+// Guild (Economy)
+export type Bounty = {
+    id: string;
+    title: string;
+    reward: string;
+    difficulty: 'Easy' | 'Medium' | 'Hard';
+    status: 'open' | 'claimed' | 'closed';
+};
+
+// Senate (Governance)
+export type Proposal = {
+    id: string;
+    title: string;
+    description: string;
+    status: 'active' | 'passed' | 'rejected';
+    votes_for: number;
+    votes_against: number;
+    end_date: string;
+};
+
+// Garden (Resources)
+export type Resource = {
+    id: string;
+    title: string;
+    url: string;
+    category: string;
+    is_approved: boolean;
+};
+
+// Library (Wiki)
+export type WikiNode = {
+    id: string;
+    title: string;
+    slug: string;
+    type: 'folder' | 'page';
+    children?: WikiNode[];
+};
+
+// Club (Events)
+export type Event = {
+    id: string;
+    title: string;
+    start_time: string;
     location: string;
 };
 
-// --- SOCIAL TYPES ---
-
-export type Comment = {
-    id: string;
-    post_id: string;
-    content: string;
-    author_id: string;
-    author_name: string;
-    created_at: string;
-};
-
-export type Post = {
-    id: string;
-    community_id: string;
-    chapter_id?: string;
-    title?: string;
-    content: string;
-    image_url?: string;
-    link_url?: string;
-    like_count: number;
-    comment_count: number;
-    view_count: number;
-    is_liked: boolean;
-    is_pinned: boolean;
-    author_id: string;
-    author_name: string;
-    created_at: string;
-    comments: Comment[];
-};
-
-export type CreatePostDTO = {
-    community_id: string;
-    chapter_id?: string;
-    content: string;
-    title?: string;
-    image_url?: string;
-    link_url?: string;
-};
-
-export type ContentBlock = {
-    id: string;
-    slug: string;
-    section: string;
-    title: string;
-    body: string;
-    image_url?: string;
-    link_text?: string;
-    link_url?: string;
-    is_active: boolean;
-};
-
-// --- CORE REQUEST HELPER ---
+// --- REQUEST HELPER ---
 
 async function request<T>(method: string, endpoint: string, data?: any, isForm: boolean = false): Promise<T> {
     if (!browser) return {} as T; 
@@ -142,12 +124,9 @@ async function request<T>(method: string, endpoint: string, data?: any, isForm: 
     try {
         const res = await fetch(`${API_URL}${endpoint}`, config);
         
-        // Auto-Logout on 401
         if (res.status === 401) {
             localStorage.removeItem('codex_token');
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-            }
+            if (window.location.pathname !== '/login') window.location.href = '/login';
             throw new Error('Session expired');
         }
 
@@ -162,28 +141,17 @@ async function request<T>(method: string, endpoint: string, data?: any, isForm: 
     }
 }
 
-// --- API CLIENT ---
+// --- THE CODEX CLIENT ---
 
 export const api = {
     // SYSTEM
     healthCheck: () => request('GET', '/'),
 
-    // CONTENT BLOCKS (CMS)
-    getContentBlock: (slug: string): Promise<ContentBlock> => request('GET', `/content/${slug}`),
-    getSectionBlocks: (section: string): Promise<ContentBlock[]> => request('GET', `/content/section/${section}`),
-    createContentBlock: (data: Partial<ContentBlock>) => request('POST', '/content/', data),
-    updateContentBlock: (slug: string, data: Partial<ContentBlock>) => request('PUT', `/content/${slug}`, data),
-
-    // USER / PROFILE
-    getMe: (): Promise<User> => request('GET', '/users/me'),
-    updateProfile: (data: Partial<User>) => request('PUT', '/users/me', data),
-
-    // AUTHENTICATION
+    // AUTH
     login: async (username, password) => {
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
-        
         const data = await request<any>('POST', '/auth/login', formData, true);
         if (browser) {
             localStorage.setItem('codex_token', data.access_token);
@@ -192,53 +160,67 @@ export const api = {
         return data;
     },
 
-    signup: (email, password, fullName) => {
-        return request('POST', '/auth/signup', { email, password, full_name: fullName });
-    },
-
-    // COMMUNITIES
+    // COMMUNITIES (Core)
     getCommunities: (): Promise<Community[]> => request('GET', '/communities/'),
+    getCommunity: (id: string): Promise<Community> => request('GET', `/communities/${id}`),
+    createCommunity: (data: any) => request<Community>('POST', '/communities/', data),
+    updateCommunity: (id: string, data: any) => request('PUT', `/communities/${id}`, data),
     
-    getCommunity: async (id: string): Promise<Community | undefined> => {
-        try {
-            return await request('GET', `/communities/${id}`);
-        } catch {
-            const all = await request<Community[]>('GET', '/communities/');
-            return all.find((c) => c.id === id);
-        }
-    },
+    getCommunityStats: (communityId: string) => request<{
+        member_count: number;
+        daily_active: number;
+        posts_today: number;
+        pending_reports: number;
+    }>('GET', `/communities/${communityId}/stats`),
 
-    createCommunity: (data: CreateCommunityDTO) => request<Community>('POST', '/communities/', data),
-    updateCommunity: (id: string, data: Partial<Community>) => request('PUT', `/communities/${id}`, data),
-    deleteCommunity: (id: string) => request('DELETE', `/communities/${id}`),
-    
-    // MEMBERSHIP (Fixed Types)
-    getMembers: (communityId: string, status?: string) => 
-        request<Membership[]>('GET', `/communities/${communityId}/members${status ? `?status=${status}` : ''}`),
+    // MEMBERSHIP (CRM)
+    getMembers: (commId: string, status?: string) => 
+        request<Membership[]>('GET', `/communities/${commId}/members${status ? `?status=${status}` : ''}`),
+    updateMemberStatus: (commId: string, userId: string, status: string) => 
+        request('PUT', `/communities/${commId}/members/${userId}/status`, { status }),
 
-    processMembership: (communityId: string, userId: string, action: 'approve' | 'reject' | 'ban') => 
-        request('POST', `/communities/${communityId}/members/${userId}/process?action=${action}`),
+    // --- ENGINE MANAGEMENT (Super Admin Actions) ---
 
-    // CHAPTERS
-    getChapters: (communityId: string): Promise<Chapter[]> => request('GET', `/chapters/?community_id=${communityId}`),
-    getChapter: (id: string): Promise<Chapter> => request('GET', `/chapters/${id}`),
-    createChapter: (data: { community_id: string, name: string, location: string }) => request('POST', '/chapters/', data),
-    updateChapter: (id: string, data: Partial<Chapter>) => request('PUT', `/chapters/${id}`, data),
-    deleteChapter: (id: string) => request('DELETE', `/chapters/${id}`),
+    // 1. ARENA (Sports)
+    getMatches: (commId: string) => request<Match[]>('GET', `/arena/${commId}/matches`),
+    createMatch: (commId: string, data: any) => request('POST', `/arena/${commId}/matches`, data),
+    updateMatchScore: (matchId: string, scoreA: number, scoreB: number) => 
+        request('PUT', `/arena/matches/${matchId}/score`, { score_a: scoreA, score_b: scoreB }),
+    setMatchStatus: (matchId: string, status: string) => 
+        request('PUT', `/arena/matches/${matchId}/status`, { status }),
 
-    // SOCIAL ENGINE
-    getFeed: (communityId: string, chapterId?: string) => {
-        let url = `/feed?scope=community&community_id=${communityId}`;
-        if (chapterId) url += `&chapter_id=${chapterId}`;
-        return request<Post[]>('GET', url);
-    },
+    // 2. GUILD (Projects/Bounties)
+    getBounties: (commId: string) => request<Bounty[]>('GET', `/guild/${commId}/bounties`),
+    createBounty: (commId: string, data: any) => request('POST', `/guild/${commId}/bounties`, data),
+    closeBounty: (bountyId: string) => request('DELETE', `/guild/bounties/${bountyId}`),
+
+    // 3. SENATE (Governance)
+    getProposals: (commId: string) => request<Proposal[]>('GET', `/governance/${commId}/proposals`),
+    createProposal: (commId: string, data: any) => request('POST', `/governance/${commId}/proposals`, data),
+    vetoProposal: (proposalId: string) => request('POST', `/governance/proposals/${proposalId}/veto`),
+
+    // 4. GARDEN (Resources)
+    getGarden: (commId: string) => request<Resource[]>('GET', `/garden/${commId}/resources`),
+    plantResource: (commId: string, data: any) => request('POST', `/garden/${commId}/resources`, data),
+    pruneResource: (resourceId: string) => request('DELETE', `/garden/resources/${resourceId}`),
+
+    // 5. LIBRARY (Wiki)
+    getTree: (commId: string) => request<WikiNode[]>('GET', `/library/${commId}/tree`),
+    createPage: (commId: string, data: any) => request('POST', `/library/${commId}/pages`, data),
+    updatePage: (pageId: string, content: string) => request('PUT', `/library/pages/${pageId}`, { content }),
+
     
-    createPost: (data: CreatePostDTO) => 
-        request<Post>('POST', '/posts', data),
-    
-    likePost: (postId: string) => 
-        request<any>('POST', `/posts/${postId}/like`),
-    
-    createComment: (postId: string, content: string) => 
-        request('POST', '/social/comments', { post_id: postId, content }),
+    // 6. CLUB (Events)
+    getEvents: (commId: string) => request<Event[]>('GET', `/club/${commId}/events`),
+    createEvent: (commId: string, data: any) => request('POST', `/club/${commId}/events`, data),
+
+    // 7. BUNKER (Chat)
+    // Admin only: Fetch raw logs or nuke channel
+    getBunkerLogs: (commId: string) => request('GET', `/bunker/${commId}/history?admin=true`),
+    nukeBunker: (commId: string) => request('POST', `/bunker/${commId}/nuke`),
+
+    // 8. SOCIAL (Feed)
+    getFeed: (commId: string) => request('GET', `/social/feed?community_id=${commId}`),
+    pinPost: (postId: string) => request('POST', `/social/posts/${postId}/pin`),
+    deletePost: (postId: string) => request('DELETE', `/social/posts/${postId}`),
 };

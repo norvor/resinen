@@ -1,11 +1,13 @@
 <script lang="ts">
     import { api } from '$lib/api';
     import { goto } from '$app/navigation';
+    import { fly } from 'svelte/transition';
 
     let email = '';
     let password = '';
     let error = '';
     let loading = false;
+    let success = false;
 
     async function handleLogin() {
         loading = true;
@@ -15,98 +17,103 @@
             formData.append('username', email);
             formData.append('password', password);
             
+            // The new api.login automatically fetches the user profile (getMe)
+            // and sets the token in localStorage.
             await api.login(formData);
-            await api.getMe(); // Load user profile into store
-            goto('/');
+            
+            success = true;
+            // Redirect to the Dashboard (The Engine Room)
+            setTimeout(() => goto('/dashboard'), 800);
         } catch (e: any) {
             console.error(e);
-            error = "ACCESS DENIED: Invalid credentials.";
-        } finally {
+            // Handle specific API errors if available
+            error = e.message || "Invalid Credentials";
             loading = false;
         }
     }
 </script>
 
-<div class="min-h-screen bg-skin-fill flex flex-col items-center justify-center p-4 relative overflow-hidden">
-    <div class="absolute inset-0 opacity-[0.03]" 
-         style="background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px); background-size: 40px 40px;">
-    </div>
+<div class="min-h-screen bg-orange-50 relative flex items-center justify-center p-4 overflow-hidden" 
+     style="--bg-world: #fff7ed; --color-accent: #ea580c; --color-accent-fg: #fff;">
+    
+    <div class="absolute inset-0 pattern-grid pointer-events-none"></div>
+    
+    <div class="absolute top-10 left-10 w-24 h-24 bg-yellow-400 rounded-full border-2 border-black shadow-[4px_4px_0px_black] animate-bounce hidden md:block"></div>
+    <div class="absolute bottom-20 right-20 w-32 h-32 bg-blue-400 rotate-12 border-2 border-black shadow-[4px_4px_0px_black] hidden md:block"></div>
 
-    <div class="w-full max-w-md relative z-10">
-        <div class="mb-8 text-center">
-            <div class="text-6xl mb-4">▣</div>
-            <h1 class="text-4xl font-black uppercase tracking-tighter text-skin-text">Resinen<span class="text-skin-accent">OS</span></h1>
-            <div class="text-xs font-mono font-bold text-skin-muted tracking-[0.3em] mt-2">SECURE GATEWAY v3.0</div>
-        </div>
+    {#if !success}
+        <div in:fly={{ y: 50, duration: 600 }} class="relative w-full max-w-md">
+            
+            <div class="absolute -top-6 left-1/2 -translate-x-1/2 w-32 h-10 bg-white/50 backdrop-blur border border-black/10 rotate-[-2deg] z-20 shadow-sm"></div>
 
-        <div class="bg-skin-surface border-2 border-skin-border shadow-hard">
-            <div class="border-b border-skin-border p-2 flex justify-between items-center bg-skin-fill">
-                <div class="flex gap-2">
-                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                    <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
-                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
+            <div class="paper-card p-8 md:p-12 relative bg-white transform rotate-1 transition-transform hover:rotate-0 duration-300">
+                
+                <div class="text-center mb-10">
+                    <div class="inline-block px-4 py-1 bg-black text-white text-xs font-black uppercase tracking-widest mb-4 rotate-[-3deg]">
+                        Resinen University
+                    </div>
+                    <h1 class="text-4xl font-black text-black tracking-tight uppercase">
+                        Student<br>Portal
+                    </h1>
                 </div>
-                <div class="text-[10px] font-mono font-bold text-skin-muted uppercase">Auth_Required</div>
-            </div>
 
-            <div class="p-8">
                 {#if error}
-                    <div class="mb-6 bg-red-500/10 border-l-4 border-red-500 p-4">
-                        <div class="text-xs font-black uppercase text-red-500 flex items-center gap-2">
-                            <span>🚫</span> {error}
-                        </div>
+                    <div class="mb-6 p-4 bg-red-100 border-2 border-red-500 text-red-600 font-bold uppercase text-center rotate-1 shadow-[4px_4px_0px_#ef4444]">
+                        ⚠ {error}
                     </div>
                 {/if}
 
                 <form on:submit|preventDefault={handleLogin} class="space-y-6">
-                    <div class="group">
-                        <label class="block text-xs font-black uppercase text-skin-muted mb-2 group-focus-within:text-skin-accent transition-colors">
-                            Operator ID (Email)
-                        </label>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase text-gray-500 ml-1">Student ID (Email)</label>
                         <input 
                             bind:value={email} 
                             type="email" 
                             required 
-                            class="w-full bg-skin-fill border border-skin-border p-4 font-mono text-sm text-skin-text focus:outline-none focus:border-skin-accent focus:ring-1 focus:ring-skin-accent transition-all placeholder-skin-muted/30" 
-                            placeholder="user@resinen.com" 
+                            class="paper-input"
+                            placeholder="student@resinen.edu" 
                         />
                     </div>
 
-                    <div class="group">
-                        <label class="block text-xs font-black uppercase text-skin-muted mb-2 group-focus-within:text-skin-accent transition-colors">
-                            Access Key (Password)
-                        </label>
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase text-gray-500 ml-1">Pin Code</label>
                         <input 
                             bind:value={password} 
                             type="password" 
                             required 
-                            class="w-full bg-skin-fill border border-skin-border p-4 font-mono text-sm text-skin-text focus:outline-none focus:border-skin-accent focus:ring-1 focus:ring-skin-accent transition-all placeholder-skin-muted/30" 
+                            class="paper-input"
                             placeholder="••••••••" 
                         />
                     </div>
 
                     <button 
                         disabled={loading} 
-                        class="w-full bg-skin-text text-skin-fill py-4 font-black uppercase tracking-widest hover:bg-skin-accent hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-8 group"
+                        class="paper-btn w-full mt-4 text-sm"
                     >
                         {#if loading}
-                            <span class="animate-spin">⟳</span> Authenticating...
+                            Processing...
                         {:else}
-                            <span>Initialize Session</span> <span class="group-hover:translate-x-1 transition-transform">→</span>
+                            Stamp & Enter
                         {/if}
                     </button>
                 </form>
-            </div>
-            
-            <div class="bg-skin-fill border-t border-skin-border p-4 text-center">
-                <a href="/signup" class="text-xs font-bold font-mono uppercase text-skin-muted hover:text-skin-accent transition-colors">
-                    [ No ID Found? Request Access ]
-                </a>
+
+                <div class="mt-8 text-center border-t-2 border-dashed border-gray-200 pt-6">
+                    <a href="/signup" class="text-xs font-black uppercase text-gray-400 hover:text-orange-600 hover:underline transition-colors">
+                        New Applicant? Fill out Form 1A
+                    </a>
+                </div>
             </div>
         </div>
-        
-        <div class="mt-8 text-center text-[10px] text-skin-muted font-mono opacity-50">
-            ENCRYPTED CONNECTION // NODE_ID: {Math.floor(Math.random() * 9999)}
+    {/if}
+
+    {#if success}
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-orange-600 transition-all duration-500">
+            <div class="text-center text-white transform scale-150 animate-pulse">
+                <div class="text-6xl mb-4">✅</div>
+                <h1 class="text-4xl font-black uppercase tracking-tighter">Authorized</h1>
+            </div>
         </div>
-    </div>
+    {/if}
 </div>

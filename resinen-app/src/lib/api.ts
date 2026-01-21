@@ -1,117 +1,75 @@
+// src/lib/api.ts
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
+import type { User, Post, Community, Membership, Role } from './types';
 
-export const user = writable<User | null>(null);
-
-export interface User {
-    id: string;
-    email: string;
-    full_name: string;
-    avatar_url?: string;
-    is_superuser: boolean;
-    level: number;
-    reputation_score: number;
-    xp: number;
-}
-
-export interface Community {
-    id: string;
-    name: string;
-    slug: string;
-    description: string;
-    banner_url?: string;
-    member_count: number;
-    archetypes: string[];
-    config: any;
-    is_private: boolean;
-    creator_id?: string;
-}
+// --- GLOBAL STORES ---
+export const currentUser = writable<User | null>(null);
+export const activeMembership = writable<Membership | null>(null);
 
 class ApiClient {
     private baseUrl: string;
 
     constructor() {
-        // Points to FastAPI backend
+        // Keeping your remote URL as requested.
+        // Change to "http://127.0.0.1:8000/api/v1" if testing strictly locally.
         this.baseUrl = "https://api.resinen.com/api/v1";
     }
 
-    private getHeaders() {
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+    // --- INTERNAL HELPERS ---
+    private getHeaders(isUpload = false) {
+        const headers: Record<string, string> = {};
+        if (!isUpload) headers['Content-Type'] = 'application/json';
+        
         if (browser) {
-            const token = localStorage.getItem('token');
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
+            // Standardized to 'access_token' for OAuth2 compliance
+            const token = localStorage.getItem('access_token');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
         }
         return headers;
     }
 
-    private async request(endpoint: string, options: RequestInit = {}) {
+    private async request<T>(endpoint: string, config: RequestInit = {}): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
         const headers = this.getHeaders();
         
-        const config = {
-            ...options,
-            headers: {
-                ...headers,
-                ...options.headers,
-            },
-        };
-
-        const res = await fetch(url, config);
+        const res = await fetch(url, { ...config, headers: { ...headers, ...config.headers } });
 
         if (!res.ok) {
+            // Auto-Logout on 401 (Unauthorized)
             if (res.status === 401 && browser) {
-                // Auto logout on 401
-                localStorage.removeItem('token');
-                user.set(null);
-                window.location.href = '/login'; 
+                this.logout();
+                return Promise.reject('Unauthorized');
             }
-            const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.detail || `API Error: ${res.status}`);
+            
+            // Codex Access Denied (Super Admin protection)
+            if (res.status === 403) {
+                throw new Error("CODEX_DENIED: Insufficient Clearance.");
+            }
+
+            const err = await res.json().catch(() => ({ detail: "Network Error" }));
+            throw new Error(err.detail || `API Error ${res.status}`);
         }
+
+        // Handle 204 No Content (Success but empty)
+        if (res.status === 204) return {} as T;
 
         return res.json();
     }
 
-    // --- GENERIC METHODS ---
-    async get(endpoint: string) {
-        return this.request(endpoint, { method: 'GET' });
-    }
-
-    async post(endpoint: string, body: any) {
-        return this.request(endpoint, {
-            method: 'POST',
-            body: JSON.stringify(body),
-        });
-    }
-
-    async put(endpoint: string, body: any) {
-        return this.request(endpoint, {
-            method: 'PUT',
-            body: JSON.stringify(body),
-        });
-    }
-
-    async delete(endpoint: string) {
-        return this.request(endpoint, { method: 'DELETE' });
-    }
-
     // --- AUTH & USER ---
-    
-    // ✅ FIXED: Points to /users/ (The trailing slash is important for FastAPI)
     async signup(data: { email: string; password: string; full_name: string }) {
-        // 1. Create the user
-        await this.post('/users', {
-            email: data.email,
-            password: data.password,
-            full_name: data.full_name,
-            is_superuser: false
+        await this.request('/users', {
+            method: 'POST',
+            body: JSON.stringify({
+                email: data.email,
+                password: data.password,
+                full_name: data.full_name,
+                is_superuser: false
+            })
         });
         
-        // 2. Automatically log them in
+        // Auto-login after signup
         const formData = new FormData();
         formData.append('username', data.email);
         formData.append('password', data.password);
@@ -119,130 +77,207 @@ class ApiClient {
     }
 
     async login(formData: FormData) {
-        // OAuth2 form data requires specific encoding
-        const params = new URLSearchParams();
-        formData.forEach((value, key) => {
-            params.append(key, value as string);
-        });
-
+        // OAuth2 standard expects form-data
         const res = await fetch(`${this.baseUrl}/auth/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params,
+            body: formData 
         });
-
-        if (!res.ok) throw new Error('Login failed');
-        const data = await res.json();
+        if (!res.ok) throw new Error('Invalid Credentials');
         
+        const data = await res.json();
         if (browser) {
-            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('access_token', data.access_token);
+            await this.getMe(); // Hydrate store immediately
         }
         return data;
     }
 
-    async getMe() {
-        const userData = await this.get('/users/me');
-        user.set(userData);
-        return userData;
+    async logout() {
+        if (browser) localStorage.removeItem('access_token');
+        currentUser.set(null);
+        activeMembership.set(null);
+        if (browser) window.location.href = '/login';
     }
 
-    async updateMe(data: any) {
-        const updated = await this.request('/users/me', {
+    async getMe() {
+        const user = await this.request<User>('/users/me');
+        currentUser.set(user);
+        return user;
+    }
+
+    async updateMe(data: Partial<User>) {
+        const updated = await this.request<User>('/users/me', {
             method: 'PATCH',
             body: JSON.stringify(data)
         });
-        user.update(u => ({ ...u, ...updated }));
+        currentUser.update(u => ({ ...u, ...updated }));
         return updated;
     }
 
-    // --- COMMUNITIES ---
+    // --- COMMUNITIES & MEMBERSHIP ---
     async getCommunities() {
-        return this.get('/communities/');
+        return this.request<Community[]>('/communities/');
     }
 
     async getCommunityBySlug(slug: string) {
-        return this.get(`/communities/${slug}`);
+        return this.request<Community>(`/communities/by-slug/${slug}`);
     }
 
     async getMembershipStatus(communityId: string) {
-        return this.get(`/communities/${communityId}/membership`);
+        const membership = await this.request<Membership>(`/communities/${communityId}/membership_status`);
+        activeMembership.set(membership);
+        return membership;
     }
 
-    // --- ENGINE 1: BAZAAR ---
+    async joinCommunity(communityId: string) {
+        return this.request<Membership>(`/communities/${communityId}/join`, { method: 'POST' });
+    }
+
+    // --- ENGINE 1: SOCIAL (The Feed) ---
+   async getFeed(communityId: string, skip = 0) {
+        return this.request<Post[]>(`/social/feed?community_id=${communityId}&skip=${skip}`, { 
+            method: 'GET' 
+        });
+    }
+
+    async createPost(data: { community_id: string; content: string; title?: string }) {
+        return this.request<Post>('/social/posts', { 
+            method: 'POST', 
+            body: JSON.stringify(data) 
+        });
+    }
+
+    async getPost(postId: string) {
+        return this.request<Post>(`/social/posts/${postId}`, { 
+            method: 'GET' 
+        });
+    }
+
+    async likePost(postId: string) {
+        return this.request<{ status: string; likes: number }>(`/social/posts/${postId}/like`, { 
+            method: 'POST' 
+        });
+    }
+
+    async deletePost(postId: string) {
+        return this.request<{ status: string }>(`/social/posts/${postId}`, { 
+            method: 'DELETE' 
+        });
+    }
+
+    // --- COMMENTS ---
+
+    async getComments(postId: string) {
+        return this.request<Comment[]>(`/social/posts/${postId}/comments`, { 
+            method: 'GET' 
+        });
+    }
+
+    async createComment(postId: string, content: string) {
+        return this.request<Comment>(`/social/posts/${postId}/comments`, { 
+            method: 'POST', 
+            body: JSON.stringify({ content }) 
+        });
+    }
+
+    async likeComment(commentId: string) {
+        return this.request<{ status: string }>(`/social/comments/${commentId}/like`, { 
+            method: 'POST' 
+        });
+    }
+
+    async deleteComment(commentId: string) {
+        return this.request<{ status: string }>(`/social/comments/${commentId}`, { 
+            method: 'DELETE' 
+        });
+    }
+    // --- ENGINE 2: BAZAAR ---
     async getListings(communityId: string) {
-        return this.get(`/listings/?community_id=${communityId}`);
+        return this.request(`/listings/?community_id=${communityId}`);
     }
     async vouchListing(listingId: string) {
-        return this.post(`/listings/${listingId}/vouch`, {});
+        return this.request(`/listings/${listingId}/vouch`, { method: 'POST' });
     }
 
-    // --- ENGINE 2: SENATE ---
+    // --- ENGINE 3: SENATE ---
     async getProposals(communityId: string) {
-        return this.get(`/governance/?community_id=${communityId}`);
+        return this.request(`/governance/?community_id=${communityId}`);
     }
     async voteProposal(proposalId: string, choice: string) {
-        return this.post(`/governance/${proposalId}/vote`, { choice });
+        return this.request(`/governance/${proposalId}/vote`, { 
+            method: 'POST',
+            body: JSON.stringify({ choice })
+        });
     }
 
-    // --- ENGINE 3: ACADEMY ---
+    // --- ENGINE 4: ACADEMY ---
     async getCurriculum(communityId: string) {
-        return this.get(`/academy/?community_id=${communityId}`);
+        return this.request(`/academy/?community_id=${communityId}`);
     }
     async completeLesson(lessonId: string) {
-        return this.post(`/academy/lessons/${lessonId}/complete`, {});
+        return this.request(`/academy/lessons/${lessonId}/complete`, { method: 'POST' });
     }
 
-    // --- ENGINE 4: ARENA ---
+    // --- ENGINE 5: ARENA ---
     async getMatches(communityId: string) {
-        return this.get(`/arena/?community_id=${communityId}`);
+        return this.request(`/arena/?community_id=${communityId}`);
     }
     async predictMatch(matchId: string, teamId: string) {
-        return this.post(`/arena/predict`, { match_id: matchId, team_id: teamId });
+        return this.request(`/arena/predict`, { 
+            method: 'POST',
+            body: JSON.stringify({ match_id: matchId, team_id: teamId })
+        });
     }
 
-    // --- ENGINE 5: CLUB ---
+    // --- ENGINE 6: CLUB ---
     async getEvents(communityId: string) {
-        return this.get(`/club/?community_id=${communityId}`);
+        return this.request(`/club/?community_id=${communityId}`);
     }
     async rsvpEvent(eventId: string, status: string) {
-        return this.post(`/club/${eventId}/rsvp`, { status });
+        return this.request(`/club/${eventId}/rsvp`, { 
+            method: 'POST',
+            body: JSON.stringify({ status })
+        });
     }
 
-    // --- ENGINE 6: LIBRARY ---
+    // --- ENGINE 7: LIBRARY ---
     async getPageTree(communityId: string) {
-        return this.get(`/library/tree?community_id=${communityId}`);
+        return this.request(`/library/tree?community_id=${communityId}`);
     }
     async getPage(communityId: string, slug: string) {
-        return this.get(`/library/page/${slug}?community_id=${communityId}`);
+        return this.request(`/library/page/${slug}?community_id=${communityId}`);
     }
 
-    // --- ENGINE 7: STAGE ---
+    // --- ENGINE 8: STAGE ---
     async getStageFeed(communityId: string) {
-        return this.get(`/stage/?community_id=${communityId}`);
+        return this.request(`/stage/?community_id=${communityId}`);
     }
 
-    // --- ENGINE 8: BUNKER ---
+    // --- ENGINE 9: BUNKER ---
     async getBunkerMessages(communityId: string) {
-        return this.get(`/bunker/?community_id=${communityId}`);
+        return this.request(`/bunker/?community_id=${communityId}`);
     }
     async postBunkerMessage(communityId: string, content: string, isAnon: boolean, ttl: number) {
-        return this.post(`/bunker/`, { community_id: communityId, content, is_anonymous: isAnon, ttl_seconds: ttl });
+        return this.request(`/bunker/`, { 
+            method: 'POST',
+            body: JSON.stringify({ community_id: communityId, content, is_anonymous: isAnon, ttl_seconds: ttl })
+        });
     }
 
-    // --- ENGINE 9: GUILD ---
+    // --- ENGINE 10: GUILD ---
     async getProjects(communityId: string) {
-        return this.get(`/guild/projects?community_id=${communityId}`);
+        return this.request(`/guild/projects?community_id=${communityId}`);
     }
     async getBounties(communityId: string) {
-        return this.get(`/guild/bounties?community_id=${communityId}`);
+        return this.request(`/guild/bounties?community_id=${communityId}`);
     }
 
-    // --- ENGINE 10: GARDEN ---
+    // --- ENGINE 11: GARDEN ---
     async getGarden(communityId: string) {
-        return this.get(`/garden/?community_id=${communityId}`);
+        return this.request(`/garden/?community_id=${communityId}`);
     }
     async checkInHabit(habitId: string) {
-        return this.post(`/garden/${habitId}/check`, {});
+        return this.request(`/garden/${habitId}/check`, { method: 'POST' });
     }
 }
 

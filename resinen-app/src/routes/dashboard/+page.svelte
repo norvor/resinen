@@ -1,157 +1,116 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { goto } from '$app/navigation'; // Added for smooth search
-    import { api, user } from '$lib/api';
+    import { api } from '$lib/api';
+    import type { Community } from '$lib/types'; // Using the strong type
+    import { fade, fly } from 'svelte/transition';
 
-    let myCommunities: any[] = [];
+    let communities: Community[] = [];
     let loading = true;
-    let searchQuery = '';
+
+    // A helper to give cards a random-ish rotation without hydration errors
+    function getRotation(index: number) {
+        const rotations = ['rotate-1', '-rotate-2', 'rotate-3', '-rotate-1'];
+        return rotations[index % rotations.length];
+    }
+
+    function getPinColor(index: number) {
+        const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500'];
+        return colors[index % colors.length];
+    }
 
     onMount(async () => {
         try {
-            // FIX: Call the method on the object, don't call the object itself
-            myCommunities = await api.getMyCommunities();
-            console.log("Loaded Communities:", myCommunities); // Debugging
+            // The API now returns the real list from Postgres
+            const res = await api.getCommunities();
+            // Handle if backend returns wrapped object or array
+            communities = Array.isArray(res) ? res : (res as any).items || [];
         } catch (e) {
-            console.error("Failed to load communities:", e);
+            console.error("Failed to load territories:", e);
         } finally {
             loading = false;
         }
     });
-
-    function handleSearch() {
-        if(searchQuery.trim()) {
-            // FIX: Use SvelteKit navigation (faster)
-            goto(`/communities?q=${searchQuery}`);
-        }
-    }
 </script>
 
-<div class="max-w-6xl mx-auto p-4 md:p-8">
+<div class="w-full max-w-6xl mx-auto">
     
-    <div class="flex justify-between items-end border-b-4 border-black pb-6 mb-8">
-        <div>
-            <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tight">Home Base</h1>
-            <p class="font-bold text-gray-500">Welcome back, Citizen.</p>
+    <div class="mb-12 text-center relative">
+        <div class="inline-block bg-white p-6 border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,0.2)] transform -rotate-1 relative">
+            <div class="absolute -top-3 -left-3 w-6 h-6 rounded-full bg-red-500 border-2 border-black shadow-sm"></div>
+            <div class="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-red-500 border-2 border-black shadow-sm"></div>
+
+            <h1 class="text-4xl md:text-6xl font-black uppercase tracking-tighter text-black mb-2">
+                Campus Directory
+            </h1>
+            <p class="font-mono text-xs md:text-sm font-bold text-gray-500 uppercase tracking-widest">
+                Term Spring_25 // Select a Territory
+            </p>
         </div>
-        <a href="/communities/new" class="hidden md:block bg-black text-white px-6 py-3 font-black uppercase hover:bg-sp-green hover:text-black transition-colors shadow-hard">
-            + Initialize Territory
-        </a>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        <div class="space-y-8">
-            
-            <div class="bg-white border-4 border-black p-6 shadow-hard relative overflow-hidden group">
-                <div class="absolute top-0 right-0 bg-sp-yellow border-l-4 border-b-4 border-black px-3 py-1 font-black text-xs uppercase">
-                    ID: {$user?.id ? $user.id.slice(0,8) : '...'}
-                </div>
-
-                <div class="flex flex-col items-center text-center mt-4">
-                    <div class="w-32 h-32 bg-gray-200 border-4 border-black rounded-full overflow-hidden mb-4 relative">
-                        <img src={$user?.avatar_url || 'https://api.dicebear.com/7.x/notionists/svg?seed=' + ($user?.email || 'default')} alt="Avatar" class="w-full h-full object-cover" />
-                    </div>
-                    
-                    <h2 class="text-2xl font-black uppercase leading-none">{$user?.full_name || 'Anonymous'}</h2>
-                    <p class="font-mono text-sm text-gray-500 mt-1">{$user?.email || 'Loading...'}</p>
-                    
-                    <div class="flex gap-2 mt-4">
-                        <span class="bg-black text-white px-3 py-1 font-bold text-xs uppercase">Level {$user?.level || 1}</span>
-                        <span class="bg-gray-200 text-black border border-black px-3 py-1 font-bold text-xs uppercase">{$user?.reputation_score || 0} Rep</span>
-                    </div>
-                </div>
-
-                <div class="mt-8 space-y-2">
-                    <a href="/identity/{$user?.id}" class="block w-full text-center border-2 border-black py-2 font-bold uppercase text-xs hover:bg-black hover:text-white transition-colors">
-                        View Public Passport
-                    </a>
-                    <a href="/settings" class="block w-full text-center border-2 border-black py-2 font-bold uppercase text-xs hover:bg-black hover:text-white transition-colors">
-                        Edit Biometrics
-                    </a>
-                </div>
-            </div>
-
-            <div class="bg-sp-blue border-4 border-black p-6 shadow-hard text-white">
-                <h3 class="font-black uppercase text-lg mb-4 border-b-2 border-white/20 pb-2">Status Report</h3>
-                <ul class="space-y-2 text-sm font-bold">
-                    <li class="flex justify-between">
-                        <span>Jury Summons</span>
-                        <span class="bg-white text-black px-2 rounded">0</span>
-                    </li>
-                    <li class="flex justify-between">
-                        <span>Unread Alerts</span>
-                        <span class="bg-white text-black px-2 rounded">0</span>
-                    </li>
-                </ul>
+    {#if loading}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4">
+            {#each Array(6) as _, i}
+                <div class="h-64 bg-white/50 border-2 border-black/10 rounded-xl animate-pulse transform {getRotation(i)}"></div>
+            {/each}
+        </div>
+    
+    {:else if communities.length === 0}
+        <div class="flex justify-center py-20">
+            <div class="bg-yellow-100 p-8 md:p-12 shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black rotate-2 max-w-md text-center relative">
+                <div class="absolute -top-4 left-1/2 -translate-x-1/2 w-32 h-8 bg-white/40 border border-white/60 shadow-sm backdrop-blur-sm rotate-1"></div>
+                <h3 class="text-2xl font-black text-gray-800 mb-2 uppercase">Quiet... Too Quiet.</h3>
+                <p class="font-mono text-sm text-gray-600 mb-6">No territories found. Why not start your own club?</p>
+                <a href="/communities/new" class="inline-block px-6 py-3 bg-black text-white font-black uppercase tracking-widest hover:scale-105 transition-transform">
+                    + Initialize Territory
+                </a>
             </div>
         </div>
 
-        <div class="lg:col-span-2">
-            
-            <div class="bg-white border-4 border-black p-2 shadow-hard mb-8 flex gap-2">
-                <input 
-                    bind:value={searchQuery}
-                    on:keydown={(e) => e.key === 'Enter' && handleSearch()}
-                    type="text" 
-                    placeholder="Find a new territory to join..." 
-                    class="flex-grow p-3 font-bold outline-none uppercase placeholder:normal-case"
-                />
-                <button on:click={handleSearch} class="bg-sp-orange px-6 font-black uppercase border-l-4 border-black hover:bg-sp-yellow transition-colors">
-                    Search
-                </button>
-            </div>
+    {:else}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 px-4 pb-20">
+            {#each communities as c, i}
+                <a href="/communities/{c.slug}" 
+                   class="group relative block bg-white border-2 border-black p-6 shadow-[6px_6px_0px_rgba(0,0,0,0.2)] transition-all duration-300 hover:scale-105 hover:shadow-[12px_12px_0px_rgba(0,0,0,0.2)] hover:rotate-0 z-10 hover:z-20 {getRotation(i)}"
+                >
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full {getPinColor(i)} border-2 border-black shadow-sm group-hover:-translate-y-2 transition-transform"></div>
 
-            <h3 class="font-black text-xl uppercase mb-4 flex items-center gap-2">
-                <span>My Territories</span>
-                <div class="h-1 bg-black/10 flex-grow"></div>
-            </h3>
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="inline-block px-2 py-1 bg-gray-100 border border-black text-[10px] font-black uppercase tracking-wider">
+                            {(c as any).archetypes?.[0] || 'General'}
+                        </span>
+                        <span class="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                            👤 {(c as any).member_count ?? c._count?.members ?? 0}
+                        </span>
+                    </div>
 
-            {#if loading}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
-                    <div class="h-40 bg-gray-200 border-4 border-black/20"></div>
-                    <div class="h-40 bg-gray-200 border-4 border-black/20"></div>
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-black uppercase leading-tight mb-3 group-hover:text-blue-600 transition-colors break-words">
+                            {c.name}
+                        </h2>
+                        <p class="text-sm font-medium text-gray-500 leading-relaxed line-clamp-3 border-l-2 border-gray-200 pl-3">
+                            {c.description || "No description provided for this territory."}
+                        </p>
+                    </div>
+
+                    <div class="mt-auto border-t-2 border-dashed border-gray-200 pt-4 flex items-center justify-between">
+                        <div class="flex -space-x-2">
+                            <div class="w-6 h-6 rounded-full bg-gray-200 border border-black"></div>
+                            <div class="w-6 h-6 rounded-full bg-gray-300 border border-black"></div>
+                        </div>
+                        <span class="text-xs font-black uppercase text-black bg-yellow-300 px-2 py-1 border border-black transform -rotate-2 group-hover:rotate-0 transition-transform">
+                            Enter ->
+                        </span>
+                    </div>
+                </a>
+            {/each}
+
+            <a href="/communities/new" class="group flex flex-col items-center justify-center bg-gray-100 border-2 border-dashed border-gray-400 p-6 min-h-[250px] hover:bg-white hover:border-black hover:border-solid transition-all cursor-pointer opacity-70 hover:opacity-100">
+                <div class="w-16 h-16 rounded-full bg-white border-2 border-gray-400 group-hover:border-black flex items-center justify-center mb-4 transition-colors">
+                    <span class="text-3xl font-black text-gray-400 group-hover:text-black">+</span>
                 </div>
-            {:else if myCommunities.length === 0}
-                <div class="bg-gray-50 border-4 border-dashed border-gray-300 p-12 text-center">
-                    <h4 class="font-black text-xl text-gray-400 mb-2">No Allegiances Yet</h4>
-                    <p class="font-bold text-gray-500 mb-6">You are a nomad. Join a territory to settle down.</p>
-                    <a href="/communities" class="inline-block bg-black text-white px-6 py-3 font-black uppercase hover:scale-105 transition-transform">
-                        Explore The Map
-                    </a>
-                </div>
-            {:else}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {#each myCommunities as community}
-                        <a href="/communities/{community.slug}" class="bg-white border-4 border-black p-6 shadow-hard hover:translate-x-1 hover:translate-y-1 transition-transform group relative">
-                            <div class="absolute top-4 right-4 w-3 h-3 bg-green-500 border-2 border-black rounded-full"></div>
-
-                            <div class="flex items-center gap-4 mb-4">
-                                <div class="w-12 h-12 bg-sp-purple border-2 border-black flex items-center justify-center font-black text-white text-xl uppercase">
-                                    {community.name ? community.name.slice(0,1) : '?'}
-                                </div>
-                                <div>
-                                    <h4 class="font-black text-lg uppercase leading-none group-hover:text-sp-blue transition-colors">
-                                        {community.name}
-                                    </h4>
-                                    <span class="text-xs font-mono text-gray-400">/{community.slug}</span>
-                                </div>
-                            </div>
-                            
-                            <p class="text-sm font-bold text-gray-600 line-clamp-2 mb-4 h-10">
-                                {community.description || 'A sovereign territory on the network.'}
-                            </p>
-
-                            <div class="flex justify-between items-center pt-4 border-t-2 border-gray-100 text-xs font-black uppercase">
-                                <span class="bg-gray-100 px-2 py-1 border border-black">{community.member_count || 0} Citizens</span>
-                                <span class="text-sp-blue group-hover:underline">Enter Territory &rarr;</span>
-                            </div>
-                        </a>
-                    {/each}
-                </div>
-            {/if}
-
+                <span class="font-black uppercase text-gray-400 group-hover:text-black tracking-widest">Create New</span>
+            </a>
         </div>
-
-    </div>
+    {/if}
 </div>

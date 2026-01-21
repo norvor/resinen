@@ -3,13 +3,11 @@ from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
 
-# Only import for type hints to prevent circular imports
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.community import Community, Chapter
 
-# --- 1. LIKES (Join Tables) ---
-
+# --- 1. LIKES ---
 class CommentLike(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
     comment_id: uuid.UUID = Field(foreign_key="comment.id", primary_key=True)
@@ -30,6 +28,9 @@ class Comment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     user_id: uuid.UUID = Field(foreign_key="user.id")
     post_id: uuid.UUID = Field(foreign_key="post.id")
+    
+    # 🚨 FIX: Added this field 🚨
+    like_count: int = 0
 
     post: "Post" = Relationship(back_populates="comments")
     author: "User" = Relationship(back_populates="comments")
@@ -52,7 +53,6 @@ class Post(SQLModel, table=True):
     
     like_count: int = 0
     comment_count: int = 0
-    # FIX: Added view_count to match Schema
     view_count: int = 0
     
     created_at: datetime = Field(default_factory=datetime.utcnow)

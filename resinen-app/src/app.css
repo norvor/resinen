@@ -2,148 +2,194 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- 1. THE DEFAULT (NEO-BRUTALIST / FUN) --- */
-/* Used by: Bazaar, Guild, Senate */
+/* --- 1. GLOBAL PHYSICS (The "Cutout" Core) --- */
 :root {
-  /* BACKGROUNDS */
-  --color-fill: 15 23 42;          /* Slate-900 (Deep Command Navy) */
-  --color-surface: 30 41 59;       /* Slate-800 (Panel Grey) */
+  /* THE PAPER PHYSICS */
+  --border-width: 2px;
+  --border-color: #1a1a1a; /* Almost Black (Ink) */
+  --shadow-hard: 4px 4px 0px 0px var(--border-color);
+  --shadow-hard-hover: 6px 6px 0px 0px var(--border-color);
+  --shadow-hard-active: 2px 2px 0px 0px var(--border-color);
   
-  /* TEXT */
-  --color-text: 248 250 252;       /* Slate-50 (Crisp White text) */
-  --color-muted: 148 163 184;      /* Slate-400 (HUD Text) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-round: 9999px;
 
-  /* BORDERS & DIVIDERS */
-  --color-border: 51 65 85;        /* Slate-700 (Subtle Borders) */
+  /* TYPOGRAPHY (Formal & Academic) */
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* --- 2. THEME: "THE BUREAU" (Default / Senate / Bazaar) --- */
+/* Vibe: Official University Documents, Blue Ink, White Paper */
+:root {
+  --bg-world: #f3f4f6;       /* Gray-100 (The Wall/Desk) */
+  --bg-paper: #ffffff;       /* Pure White (Document) */
+  --bg-panel: #eef2ff;       /* Indigo-50 (Sub-panel) */
   
-  /* ACCENT (The "Navy Blue" you requested) */
-  --color-accent: 59 130 246;      /* Blue-500 (Electric Blue - Readable on Dark) */
-  --color-accent-dark: 29 78 216;  /* Blue-700 (Hover states) */
-
-  /* PHYSICS */
-  --border-width: 1px;             /* Sleek, thin lines */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-full: 9999px;
+  --text-main: #111827;      /* Gray-900 */
+  --text-muted: #6b7280;     /* Gray-500 */
   
-  /* VIBE */
-  --shadow-hard: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --font-header: 'Inter', sans-serif;
+  --color-accent: #3b82f6;   /* Blue-500 (The Brand) */
+  --color-accent-fg: #ffffff;
+  
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warn: #fbbf24;
 }
 
-/* Ensure the body takes the dark theme by default */
-body {
-  background-color: rgb(var(--color-fill));
-  color: rgb(var(--color-text));
-}
-
-/* Scrollbar Styling for that Cyberpunk feel */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgb(var(--color-fill)); 
-}
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--color-surface)); 
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--color-accent)); 
-}
-/* --- 2. THE SERENITY (CALM / SOFT) --- */
-/* Used by: Sanctuary, Library, Garden */
+/* --- 3. THEME: "THE CAMPUS" (Serenity / Garden / Library) --- */
+/* Vibe: Recycled Paper, Nature, Calm, Ivy League */
 .theme-serenity {
-  /* COLORS */
-  --color-fill: 250 250 249;       /* Stone-50 (Cream) */
-  --color-text: 28 25 23;          /* Stone-900 (Soft Black) */
-  --color-border: 231 229 228;     /* Stone-200 (Subtle) */
-  --color-accent: 87 83 78;        /* Stone-600 (Sage/Earth) */
-  --color-surface: 255 255 255;    /* White cards */
-  --color-muted: 245 245 244;      /* Stone-100 */
-
-  /* PHYSICS */
-  --border-width: 1px;             /* Thin, elegant lines */
-  --radius-sm: 8px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-full: 9999px;
-
-  /* VIBE */
-  --shadow-hard: 0 10px 30px -10px rgba(0,0,0,0.05); /* Float, don't drop */
-  --font-header: 'Merriweather', serif; /* Optional: If you import a serif font */
+  --bg-world: #e7e5e4;       /* Stone-200 */
+  --bg-paper: #fafaf9;       /* Stone-50 (Warm White) */
+  --bg-panel: #f5f5f4;       /* Stone-100 */
+  
+  --text-main: #292524;      /* Stone-800 */
+  --text-muted: #78716c;     /* Stone-500 */
+  
+  --color-accent: #57534e;   /* Stone-600 (Earth) */
+  --color-accent-fg: #ffffff;
+  
+  --color-success: #15803d;  /* Green-700 */
+  --color-danger: #b91c1c;   /* Red-700 */
+  --color-warn: #d97706;     /* Amber-600 */
 }
 
-/* --- 3. THE VOLTAGE (ENERGETIC / DARK) --- */
-/* Used by: Arena, Club, Stage */
+/* --- 4. THEME: "THE NIGHT SHIFT" (Voltage / Arena / Club) --- */
+/* Vibe: Dark Construction Paper, Chalk/Gel Pens, Neon */
 .theme-voltage {
-  /* COLORS */
-  --color-fill: 2 6 23;            /* Slate-950 (Midnight) */
-  --color-text: 255 255 255;       /* Pure White */
-  --color-border: 30 41 59;        /* Slate-800 */
-  --color-accent: 250 204 21;      /* Yellow-400 (Neon) */
-  --color-surface: 15 23 42;       /* Slate-900 */
-  --color-muted: 30 41 59;         /* Slate-800 */
-
-  /* PHYSICS */
-  --border-width: 1px;
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-full: 2px;             /* Cyberpunk clipping */
-
-  /* VIBE */
-  --shadow-hard: 0 0 15px rgba(250, 204, 21, 0.15); /* Neon Glow */
-  --font-header: 'JetBrains Mono', monospace; /* Tech feel */
+  --bg-world: #0f172a;       /* Slate-900 */
+  --bg-paper: #1e293b;       /* Slate-800 */
+  --bg-panel: #334155;       /* Slate-700 */
+  
+  --text-main: #f8fafc;      /* Slate-50 */
+  --text-muted: #94a3b8;     /* Slate-400 */
+  
+  --color-accent: #facc15;   /* Yellow-400 (Neon) */
+  --color-accent-fg: #0f172a; /* Black text on yellow */
+  
+  --color-success: #4ade80;  /* Green-400 */
+  --color-danger: #f87171;   /* Red-400 */
+  --color-warn: #fbbf24;     /* Amber-400 */
+  
+  /* In dark mode, borders might need to be lighter or stay black if background allows */
+  --border-color: #020617;   /* Slate-950 */
 }
 
-/* --- UTILITIES --- */
+/* --- 5. GLOBAL STYLES --- */
 body {
-  background-color: rgb(var(--color-fill));
-  color: rgb(var(--color-text));
+  background-color: var(--bg-world);
+  color: var(--text-main);
+  font-family: var(--font-body);
   transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
-/* Custom Class to apply the variables easily */
-.skin-border {
-  border-width: var(--border-width);
-  border-color: rgb(var(--color-border));
-  border-style: solid;
+/* --- 6. PAPER COMPONENTS (The "South Park" Feel) --- */
+
+/* The Card: A distinct piece of paper */
+.paper-card {
+  background-color: var(--bg-paper);
+  border: var(--border-width) solid var(--border-color);
   border-radius: var(--radius-md);
-}
-
-.skin-card {
-  background-color: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
-  border-width: var(--border-width);
-  border-color: rgb(var(--color-border));
-  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-hard);
 }
 
-.skin-btn-primary {
-  background-color: rgb(var(--color-text)); /* Black in default, White in dark */
-  color: rgb(var(--color-fill));           /* White in default, Black in dark */
-  border-radius: var(--radius-full);
+/* The Button: A pressable sticker */
+.paper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1.5rem;
+  
+  background-color: var(--color-accent);
+  color: var(--color-accent-fg);
+  
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-hard);
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.paper-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hard-hover);
+  filter: brightness(1.1);
+}
+
+.paper-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-hard-active);
+}
+
+.paper-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: translate(2px, 2px);
+  filter: grayscale(1);
+}
+
+/* The Input: A recessed cutout area */
+.paper-input {
+  width: 100%;
+  background-color: var(--bg-paper);
+  color: var(--text-main);
+  
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  
+  /* Inner Shadow for depth */
+  box-shadow: inset 2px 2px 0px 0px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+}
+
+.paper-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: inset 2px 2px 0px 0px rgba(0,0,0,0.05), 0 0 0 4px rgba(var(--color-accent), 0.1); /* Does not work with hex vars directly, needs rgb tweak, simple border focus is fine */
+  background-color: var(--bg-panel);
+}
+
+/* Badge / Label */
+.paper-badge {
+  display: inline-block;
+  padding: 0.25em 0.75em;
+  font-size: 0.75rem;
   font-weight: 900;
   text-transform: uppercase;
-  padding: 0.75rem 1.5rem;
-  border: none; /* Reset */
-  box-shadow: var(--shadow-hard);
-  transition: transform 0.1s;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-round);
+  box-shadow: 2px 2px 0px 0px var(--border-color);
 }
 
-.skin-btn-primary:hover {
-  transform: translate(-1px, -1px);
-  filter: brightness(1.2);
+/* Scrollbar (Chunky) */
+::-webkit-scrollbar { width: 14px; }
+::-webkit-scrollbar-track { 
+  background: var(--bg-world); 
+  border-left: var(--border-width) solid var(--border-color);
 }
+::-webkit-scrollbar-thumb { 
+  background: var(--bg-paper); 
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 99px;
+  box-shadow: inset -2px -2px 0px 0px rgba(0,0,0,0.1);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
 
-/* Hide scrollbar for clean UI */
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+/* --- UTILITY PATTERNS --- */
+.pattern-grid {
+  background-size: 40px 40px;
+  background-image: radial-gradient(var(--text-muted) 1px, transparent 1px);
+  opacity: 0.2;
 }
