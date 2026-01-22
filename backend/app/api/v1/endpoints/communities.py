@@ -1,21 +1,21 @@
 from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
-from sqlalchemy import or_ 
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select, col, or_, func
 from sqlalchemy.orm import joinedload
 import uuid 
-
-from sqlalchemy import func
 from datetime import datetime
-from app.models.social import Post
 
-from app.api import deps
+# Models
+from app.models.social import Post
 from app.models.user import User
 from app.models.engine import CommunityEngine, Engine
 from app.models.community import Community, Membership
 from app.schemas.community import CommunityCreate, CommunityRead, CommunityUpdate
 from app.schemas.membership import MembershipOut
+
+# Core
+from app.api import deps
 
 router = APIRouter()
 
@@ -25,20 +25,25 @@ async def read_communities(
     q: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
 ):
     """Retrieve communities with their installed engines."""
     # 1. Fetch Communities
     query = select(Community)
+    
     if q:
         search_term = f"%{q}%"
-        query = query.where(or_(Community.name.ilike(search_term), Community.slug.ilike(search_term)))
+        # Using col() helps SQLModel infer types correctly in complex filters
+        query = query.where(or_(col(Community.name).ilike(search_term), col(Community.slug).ilike(search_term)))
+        
     query = query.offset(skip).limit(limit)
-    result = await db.execute(query)
+    
+    # 🚨 ASYNC EXEC
+    result = await db.exec(query)
     communities = result.scalars().all()
 
-    # 2. Populate 'installed_engines' for the list view
-    # This is an N+1 query optimization (simplified loop for now)
+    # 2. Populate 'installed_engines'
+    # N+1 Optimization Loop (Async friendly)
     for comm in communities:
         stmt = (
             select(Engine.key)
@@ -46,8 +51,8 @@ async def read_communities(
             .where(CommunityEngine.community_id == comm.id)
             .where(CommunityEngine.is_active == True)
         )
-        engines_res = await db.execute(stmt)
-        # Manually attach the list so the Pydantic model serializes it
+        engines_res = await db.exec(stmt)
+        # Manually attach keys so Pydantic serializes them
         setattr(comm, "installed_engines", engines_res.scalars().all())
 
     return communities
@@ -55,7 +60,7 @@ async def read_communities(
 @router.post("/", response_model=CommunityRead)
 async def create_community(
     *,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     community_in: CommunityCreate,
     current_user: User = Depends(deps.get_current_active_user),
 ):
@@ -70,11 +75,12 @@ async def create_community(
 
     # 2. Check Slug Uniqueness
     query = select(Community).where(Community.slug == community_in.slug)
-    if (await db.execute(query)).scalars().first():
+    existing = await db.exec(query)
+    if existing.first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
     # 3. Create Community Record
-    # Use model_dump to safely unpack Pydantic v2 model
+    # We unpack Pydantic model but exclude 'archetypes' which is logic-only
     db_community = Community(
         **community_in.model_dump(exclude={"archetypes"}), 
         creator_id=current_user.id
@@ -87,9 +93,9 @@ async def create_community(
     # 4. INSTALL ENGINES
     installed_keys = []
     if community_in.archetypes:
-        # Query for all matching engines (e.g. "social", "arena")
-        stmt = select(Engine).where(Engine.key.in_(community_in.archetypes))
-        result = await db.execute(stmt)
+        # Find engine IDs for requested keys (e.g. "social", "arena")
+        stmt = select(Engine).where(col(Engine.key).in_(community_in.archetypes))
+        result = await db.exec(stmt)
         engines_to_install = result.scalars().all()
         
         for engine_obj in engines_to_install:
@@ -104,7 +110,7 @@ async def create_community(
         
         await db.commit()
 
-    # 5. Attach keys for response so UI sees them immediately
+    # 5. Attach keys for immediate UI feedback
     setattr(db_community, "installed_engines", installed_keys)
     
     return db_community
@@ -114,7 +120,7 @@ async def create_community(
 async def update_community(
     community_id: uuid.UUID,
     community_in: CommunityUpdate,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """Update a community (ADMIN ONLY)."""
@@ -126,20 +132,31 @@ async def update_community(
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     
-    update_data = community_in.dict(exclude_unset=True)
+    update_data = community_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(community, key, value)
 
     db.add(community)
     await db.commit()
     await db.refresh(community)
+    
+    # Re-fetch engines to keep response consistent
+    stmt = (
+        select(Engine.key)
+        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
+        .where(CommunityEngine.community_id == community.id)
+        .where(CommunityEngine.is_active == True)
+    )
+    engines_res = await db.exec(stmt)
+    setattr(community, "installed_engines", engines_res.scalars().all())
+
     return community
 
 # --- ADMIN ONLY: DELETE ---
 @router.delete("/{community_id}")
 async def delete_community(
     community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """Delete a community (ADMIN ONLY)."""
@@ -158,7 +175,7 @@ async def delete_community(
 @router.get("/{community_id}", response_model=CommunityRead)
 async def read_community(
     community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
 ):
     # 1. Fetch Community
     community = await db.get(Community, community_id)
@@ -166,17 +183,16 @@ async def read_community(
         raise HTTPException(status_code=404, detail="Community not found")
     
     # 2. ⚡ DYNAMIC ENGINE SYNC ⚡
-    # Join CommunityEngine -> Engine to get the keys (e.g., "arena", "guild")
     statement = (
         select(Engine.key)
         .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
         .where(CommunityEngine.community_id == community_id)
         .where(CommunityEngine.is_active == True)
     )
-    result = await db.execute(statement)
+    result = await db.exec(statement)
     active_keys = result.scalars().all()
     
-    # Overwrite the JSON field on the fly so the frontend receives the real list
+    # Attach to runtime object
     setattr(community, "installed_engines", active_keys)
     
     return community
@@ -184,30 +200,27 @@ async def read_community(
 @router.get("/by-slug/{slug}", response_model=CommunityRead)
 async def get_community_by_slug(
     slug: str,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
 ):
-    """Lookup a territory by its URL slug and sync installed engines."""
-    # 1. Fetch Community
+    """Lookup a territory by its URL slug."""
+    # 1. Fetch
     query = select(Community).where(Community.slug == slug)
-    result = await db.execute(query)
+    result = await db.exec(query)
     community = result.scalars().first()
     
     if not community:
         raise HTTPException(status_code=404, detail="Territory not found")
         
-    # 2. ⚡ DYNAMIC ENGINE SYNC ⚡
-    # (Exactly matching read_community logic)
+    # 2. Sync Engines
     statement = (
         select(Engine.key)
         .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
-        # Note: We use community.id here, since we just fetched it
         .where(CommunityEngine.community_id == community.id)
         .where(CommunityEngine.is_active == True)
     )
-    result = await db.execute(statement)
+    result = await db.exec(statement)
     active_keys = result.scalars().all()
     
-    # 3. Attach keys to response
     setattr(community, "installed_engines", active_keys)
     
     return community
@@ -215,51 +228,54 @@ async def get_community_by_slug(
 @router.get("/{community_id}/membership_status")
 async def get_membership_status(
     community_id: uuid.UUID, 
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     query = select(Membership).where(
         Membership.user_id == current_user.id,
         Membership.community_id == community_id
     )
-    result = await db.execute(query)
+    result = await db.exec(query)
     membership = result.scalars().first()
-    return {"status": membership.status if membership else "none", "role": membership.role if membership else None}
+    
+    return {
+        "status": membership.status if membership else "none", 
+        "role": membership.role if membership else None
+    }
 
 @router.get("/{community_id}/stats")
 async def get_community_stats(
     community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """
-    Get live dashboard statistics.
-    """
-    # 1. Fetch Community for Member Count
+    """Get live dashboard statistics."""
+    
     comm = await db.get(Community, community_id)
     if not comm:
         raise HTTPException(status_code=404, detail="Community not found")
 
-    # 2. Calculate Posts Today (Realtime)
+    # Realtime Posts Count (Today)
     start_of_day = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
     posts_query = select(func.count(Post.id)).where(
         Post.community_id == community_id,
         Post.created_at >= start_of_day
     )
-    posts_result = await db.execute(posts_query)
-    posts_today = posts_result.scalar() or 0
+    posts_res = await db.exec(posts_query)
+    posts_today = posts_res.one() or 0 # .one() returns the count value
 
-    # 3. Calculate Pending Approvals (Realtime)
+    # Realtime Pending Members
     pending_query = select(func.count(Membership.user_id)).where(
         Membership.community_id == community_id,
         Membership.status == "pending"
     )
-    pending_result = await db.execute(pending_query)
-    pending_count = pending_result.scalar() or 0
+    pending_res = await db.exec(pending_query)
+    pending_count = pending_res.one() or 0
 
     return {
         "member_count": comm.member_count,
-        "daily_active": int(comm.member_count * 0.45) + 1, # Mock: 45% + 1 engagement
+        "daily_active": int(comm.member_count * 0.45) + 1,
         "posts_today": posts_today,
         "pending_reports": pending_count
     }
@@ -267,18 +283,19 @@ async def get_community_stats(
 @router.post("/{community_id}/join")
 async def join_community(
     community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     community = await db.get(Community, community_id)
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
 
+    # Check existence
     query = select(Membership).where(
         Membership.user_id == current_user.id,
         Membership.community_id == community_id
     )
-    result = await db.execute(query)
+    result = await db.exec(query)
     existing_membership = result.scalars().first()
 
     if existing_membership:
@@ -286,7 +303,9 @@ async def join_community(
              raise HTTPException(status_code=403, detail="You are banned from this territory.")
         raise HTTPException(status_code=400, detail="Already a member")
 
+    # Create new membership
     initial_status = "pending" if community.is_private else "active"
+    
     new_membership = Membership(
         user_id=current_user.id,
         community_id=community_id,
@@ -294,11 +313,11 @@ async def join_community(
         status=initial_status
     )
     
-    # Update count
+    # Increment Count
     community.member_count += 1
     db.add(community)
-
     db.add(new_membership)
+    
     await db.commit()
     await db.refresh(new_membership)
 
@@ -312,8 +331,9 @@ async def join_community(
 async def read_community_members(
     community_id: uuid.UUID,
     status: Optional[str] = None,
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
 ):
+    # Eager Load User to avoid N+1
     query = (
         select(Membership)
         .options(joinedload(Membership.user))
@@ -322,26 +342,25 @@ async def read_community_members(
     if status:
         query = query.where(Membership.status == status)
     
-    result = await db.execute(query)
+    result = await db.exec(query)
     return result.scalars().all()
 
 @router.post("/{community_id}/members/{user_id}/process")
 async def process_membership(
     community_id: uuid.UUID,
     user_id: uuid.UUID,
+    # Regex validation is fine here
     action: str = Query(..., regex="^(approve|reject|ban)$"),
-    db: AsyncSession = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """Process membership (Moderator/Admin Only)."""
-    # Logic note: In a real app, check if current_user is creator/mod of THIS community
-    # For now, we trust the DB ownership logic or simple membership role
     
     query = select(Membership).where(
         Membership.community_id == community_id,
         Membership.user_id == user_id
     )
-    result = await db.execute(query)
+    result = await db.exec(query)
     membership = result.scalars().first()
 
     if not membership:
@@ -352,17 +371,21 @@ async def process_membership(
         membership.role = "member"
     elif action == "reject":
         await db.delete(membership)
+        
         # Decrement count
         comm = await db.get(Community, community_id)
         if comm:
             comm.member_count -= 1
             db.add(comm)
+            
         await db.commit()
         return {"status": "rejected", "message": "Application removed"}
+        
     elif action == "ban":
         membership.status = "banned"
 
     db.add(membership)
     await db.commit()
     await db.refresh(membership)
+    
     return {"status": "success", "new_state": membership.status}
