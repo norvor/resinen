@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from sqlmodel import select
+from sqlalchemy.exc import IntegrityError
 from app.core.database import async_session_factory
 from app.models.user import User
 from app.models.community import Community, Membership
 from app.core.security import get_password_hash
-from sqlmodel import select
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -14,8 +15,9 @@ async def seed_base():
     async with async_session_factory() as session:
         logger.info("🌱 Seeding Base Data...")
 
-        # 1. CREATE SUPER USER
-        # Check if exists to avoid duplicates
+        # ---------------------------
+        # 1. CREATE ADMIN USER
+        # ---------------------------
         result = await session.exec(select(User).where(User.email == "admin@unionstation.com"))
         user = result.first()
         
@@ -31,12 +33,20 @@ async def seed_base():
                 avatar_url="https://api.dicebear.com/7.x/bottts/svg?seed=architect"
             )
             session.add(user)
-            await session.commit()
-            await session.refresh(user)
+            try:
+                await session.commit()
+                await session.refresh(user)
+            except IntegrityError:
+                await session.rollback()
+                logger.warning("⚠️  User already exists (Race condition). Skipping.")
+                # Re-fetch
+                user = (await session.exec(select(User).where(User.email == "admin@unionstation.com"))).first()
         else:
-            logger.info("👤 Admin User already exists.")
+            logger.info("⏩ Admin User already exists.")
 
-        # 2. CREATE PRIMARY COMMUNITY
+        # ---------------------------
+        # 2. CREATE COMMUNITY
+        # ---------------------------
         result = await session.exec(select(Community).where(Community.slug == "union-station"))
         community = result.first()
 
@@ -46,34 +56,47 @@ async def seed_base():
                 name="Union Station",
                 slug="union-station",
                 description="The central hub for all citizens. Welcome home.",
-                archetype="SANCTUARY",
+                # FIX: Using 'archetypes' (plural list) to match your current DB structure
+                archetypes=["SANCTUARY"], 
                 member_count=1,
-                # We install all engines for the demo
                 installed_engines=["social", "arena", "bazaar", "senate", "academy"]
             )
             session.add(community)
-            await session.commit()
-            await session.refresh(community)
+            try:
+                await session.commit()
+                await session.refresh(community)
+            except IntegrityError:
+                await session.rollback()
+                logger.warning("⚠️  Community already exists. Skipping.")
+                community = (await session.exec(select(Community).where(Community.slug == "union-station"))).first()
         else:
-            logger.info("asd Union Station Community already exists.")
+            logger.info("⏩ Union Station Community already exists.")
 
-        # 3. JOIN THEM (MEMBERSHIP)
-        result = await session.exec(select(Membership).where(
-            Membership.user_id == user.id,
-            Membership.community_id == community.id
-        ))
-        membership = result.first()
+        # ---------------------------
+        # 3. CREATE MEMBERSHIP
+        # ---------------------------
+        # Ensure we have both IDs before proceeding
+        if user and community:
+            result = await session.exec(select(Membership).where(
+                Membership.user_id == user.id,
+                Membership.community_id == community.id
+            ))
+            membership = result.first()
 
-        if not membership:
-            logger.info("🔗 Linking Admin to Community...")
-            membership = Membership(
-                user_id=user.id,
-                community_id=community.id,
-                role="owner",
-                status="active"
-            )
-            session.add(membership)
-            await session.commit()
+            if not membership:
+                logger.info("🔗 Linking Admin to Community...")
+                membership = Membership(
+                    user_id=user.id,
+                    community_id=community.id,
+                    role="owner",
+                    status="active"
+                )
+                session.add(membership)
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    logger.warning("⚠️  Membership already exists.")
         
         logger.info("✅ BASE SEED COMPLETE")
 

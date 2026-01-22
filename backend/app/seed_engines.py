@@ -15,10 +15,13 @@ async def seed_engines():
     async with async_session_factory() as session:
         logger.info("⚙️  Seeding Engine Content...")
 
-        # 1. FETCH CONTEXT (Dynamic Lookup)
+        # 1. FETCH CONTEXT
         # We find the specific community and user to attribute posts to
-        community = (await session.exec(select(Community).where(Community.slug == "union-station"))).first()
-        user = (await session.exec(select(User).where(User.email == "admin@unionstation.com"))).first()
+        c_query = await session.exec(select(Community).where(Community.slug == "union-station"))
+        community = c_query.first()
+        
+        u_query = await session.exec(select(User).where(User.email == "admin@unionstation.com"))
+        user = u_query.first()
 
         if not community or not user:
             logger.error("❌ Error: Run 'python -m app.seeder' first! User/Community not found.")
@@ -27,8 +30,9 @@ async def seed_engines():
         # 2. SEED SOCIAL ENGINE
         logger.info(f"📡 Seeding Social Feed for {community.name}...")
         
-        # Check if we already have posts to avoid over-seeding on re-runs
-        existing_posts = (await session.exec(select(Post).where(Post.community_id == community.id))).all()
+        # Check current count
+        result = await session.exec(select(Post).where(Post.community_id == community.id))
+        existing_posts = result.all()
         
         if len(existing_posts) < 10:
             posts_to_create = []
@@ -57,7 +61,9 @@ async def seed_engines():
                     media_urls=media,
                     like_count=random.randint(0, 500),
                     comment_count=random.randint(0, 50),
-                    view_count=random.randint(100, 5000)
+                    view_count=random.randint(100, 5000),
+                    # Ensure JSON fields are lists/dicts
+                    meta_data={}
                 )
                 session.add(post)
             
@@ -66,9 +72,6 @@ async def seed_engines():
         else:
             logger.info("⏭️  Social Feed already populated. Skipping.")
 
-        # 3. FUTURE ENGINES (Placeholders)
-        # When we build Arena/Bazaar, add their seeding logic here.
-        
         logger.info("✅ ENGINE SEED COMPLETE")
 
 if __name__ == "__main__":
