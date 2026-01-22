@@ -1,27 +1,39 @@
 import asyncio
 import logging
+from sqlalchemy import text
 from sqlmodel import SQLModel
 from app.core.database import async_engine, async_session_factory
 from app.core.security import get_password_hash
 
-# Import Models (Critical for drop_all/create_all to know what to target)
+# Import Models
 from app.models.user import User
 from app.models.engine import Engine, UserEngine
 from app.models.journal import JournalEntry 
-# from app.models.vault import VaultItem 
-# from app.models.library import Page
+# Add other models if you have them
 
 logging.basicConfig(level=logging.INFO)
 
 async def seed():
-    print("🔥 CLEANING DATABASE (Dropping Tables)...")
+    print("🔥 PERFORMING SURGICAL CLEANUP...")
     
     async with async_engine.begin() as conn:
-        # 1. 🚨 SAFE FIX: Drop tables only, not the schema
-        # This respects permissions and works perfectly
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        # 1. ⚔️ RAW SQL NUKE
+        # This iterates over ALL tables in 'public' and drops them with CASCADE.
+        # It kills zombie tables like 'communityengine' that SQLModel doesn't know about.
+        await conn.execute(text("""
+            DO $$ 
+            DECLARE 
+                r RECORD; 
+            BEGIN 
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
+                LOOP 
+                    EXECUTE 'DROP TABLE IF EXISTS public."' || r.tablename || '" CASCADE'; 
+                END LOOP; 
+            END $$;
+        """))
         
         # 2. Re-create Tables
+        print("🏗️ Rebuilding Architecture...")
         await conn.run_sync(SQLModel.metadata.create_all)
 
     async with async_session_factory() as session:
