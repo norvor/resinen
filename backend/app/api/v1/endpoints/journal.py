@@ -16,7 +16,7 @@ router = APIRouter()
 class JournalCreate(BaseModel):
     content: str
     tags: List[str] = []
-    stickers: List[Dict] = []
+    stickers: List[dict] = []
     is_favorite: bool = False
 
 class JournalRead(BaseModel):
@@ -29,7 +29,7 @@ class JournalRead(BaseModel):
 class JournalUpdate(BaseModel):
     content: Optional[str] = None
     tags: Optional[List[str]] = None
-    stickers: Optional[List[Dict]] = None
+    stickers: Optional[List[dict]] = None
     is_favorite: Optional[bool] = None
 
 # --- ENDPOINTS ---
