@@ -1,14 +1,19 @@
-from datetime import datetime, timedelta
-from typing import Any, Union
-from jose import jwt
+from datetime import datetime, timedelta, timezone
+from typing import Any, Union, Optional
+import jwt  # Using PyJWT
 from passlib.context import CryptContext
+from pydantic import BaseModel
 from app.core.config import settings
 
-# ✅ FIX: Define the Algorithm here. 
-# This fixes the crash and allows deps.py to import 'security.ALGORITHM' safely.
+# --- CONFIGURATION ---
 ALGORITHM = "HS256"
 
-# CHANGED: We now use "argon2" as the main scheme.
+# --- PYDANTIC MODEL (Used by deps.py) ---
+class TokenPayload(BaseModel):
+    sub: Optional[str] = None
+    exp: Optional[int] = None
+
+# --- PASSWORD HASHING ---
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -19,11 +24,17 @@ def get_password_hash(password: str) -> str:
     """Transforms raw password into a secure hash."""
     return pwd_context.hash(password)
 
-def create_access_token(subject: Union[str, Any]) -> str:
+# --- TOKEN GENERATION ---
+def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     """Generates the JWT Token for the frontend."""
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # 'sub' (Subject) usually holds the User ID
     to_encode = {"exp": expire, "sub": str(subject)}
     
-    # ✅ FIX: Use the local constant ALGORITHM instead of settings.ALGORITHM
+    # Encode using PyJWT
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
