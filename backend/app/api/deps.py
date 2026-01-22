@@ -3,7 +3,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import select
-import PyJWT
+import jwt
 
 from app.core.database import SessionLocal, async_session_factory # Import the factory
 from app.core.config import settings
@@ -32,9 +32,11 @@ async def get_current_user(
     token: str = Depends(reusable_oauth2)
 ) -> User:
     try:
-        payload = PyJWT.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
         token_data = security.TokenPayload(**payload)
-    except (PyJWT, Exception):
+    except Exception as e:
+        # 🚨 ADD THIS PRINT STATEMENT
+        print(f"❌ AUTH ERROR: {e}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
