@@ -14,7 +14,7 @@ from app.schemas.token import Token
 
 router = APIRouter()
 
-@router.post("/login/access-token", response_model=Token)
+@router.post("/login", response_model=Token)
 async def login_access_token(
     db: AsyncSession = Depends(deps.get_async_db),
     form_data: OAuth2PasswordRequestForm = Depends()
