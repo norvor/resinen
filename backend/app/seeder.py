@@ -7,8 +7,9 @@ from app.core.security import get_password_hash
 
 # Import Models
 from app.models.user import User
-from app.models.engine import Engine, UserEngine
+from app.models.engine import Engine
 from app.models.journal import JournalEntry 
+from app.models.links import UserEngine # <--- UPDATE THIS IMPORT
 # Add other models if you have them
 
 logging.basicConfig(level=logging.INFO)
