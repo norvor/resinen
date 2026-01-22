@@ -2,8 +2,9 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy.dialects.postgresql import JSONB, Column
+from sqlalchemy.dialects.postgresql import JSONB
 from app.models.user import User
+from sqlalchemy import JSON, Column
 
 class JournalEntry(SQLModel, table=True):
     __tablename__ = "journal_entry"
