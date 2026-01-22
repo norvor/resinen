@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.core import security
 import jwt
-from app.config.database import get_async_db
+from app.core.database import get_async_db
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
