@@ -1,34 +1,27 @@
 import asyncio
 import logging
-from sqlalchemy import text
 from sqlmodel import SQLModel
 from app.core.database import async_engine, async_session_factory
 from app.core.security import get_password_hash
-from app.core.config import settings
 
-# Import Models
+# Import Models (Critical for drop_all/create_all to know what to target)
 from app.models.user import User
 from app.models.engine import Engine, UserEngine
 from app.models.journal import JournalEntry 
+# from app.models.vault import VaultItem 
+# from app.models.library import Page
 
 logging.basicConfig(level=logging.INFO)
 
 async def seed():
-    print("🔥 NUKING DATABASE...")
+    print("🔥 CLEANING DATABASE (Dropping Tables)...")
+    
     async with async_engine.begin() as conn:
-        # 1. Drop Old Schema
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        # 1. 🚨 SAFE FIX: Drop tables only, not the schema
+        # This respects permissions and works perfectly
+        await conn.run_sync(SQLModel.metadata.drop_all)
         
-        # 2. Create New Schema
-        await conn.execute(text("CREATE SCHEMA public"))
-        
-        # 3. 🛡️ RESTORE PERMISSIONS (Critical Step)
-        # Grant access to the specific database user defined in your .env
-        await conn.execute(text(f"GRANT ALL ON SCHEMA public TO postgres"))
-        await conn.execute(text(f"GRANT ALL ON SCHEMA public TO resinen_admin"))
-        await conn.execute(text(f"GRANT ALL ON SCHEMA public TO public"))
-        
-        # 4. Create Tables
+        # 2. Re-create Tables
         await conn.run_sync(SQLModel.metadata.create_all)
 
     async with async_session_factory() as session:
