@@ -1,132 +1,138 @@
+from typing import List, Any
 import uuid
-from typing import List, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
-from datetime import datetime
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select, col
 
-from app.api import deps # Consistent dependency injection
+# Models & Schemas
+from app.api import deps
 from app.models.user import User
-from app.models.library import LibraryPage
-from app.schemas.library import PageRead, PageCreate, PageUpdate, PageTreeItem
+from app.models.library import Page  # Assuming this is your model name
+from app.schemas.library import PageCreate, PageRead, PageUpdate, PageTreeItem
 
 router = APIRouter()
 
-# --- 1. GET PAGE (By Slug) ---
-@router.get("/page/{slug}", response_model=PageRead)
-async def get_page(
-    slug: str,
-    community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db)
-):
-    """Retrieve a specific document from the territory library archives."""
-    
-    # ✅ FIX: Use db.execute() for AsyncSession
-    stmt = select(LibraryPage).where(
-        LibraryPage.community_id == community_id,
-        LibraryPage.slug == slug
-    )
-    result = await db.execute(stmt)
-    page = result.scalars().first()
-    
-    if not page:
-        raise HTTPException(status_code=404, detail="Page not found in the archives")
-        
-    return page
-
-# --- 2. GET TREE (Table of Contents) ---
-@router.get("/tree", response_model=List[PageTreeItem])
+# --- 1. GET TREE (The function crashing) ---
+@router.get("/community/{community_id}/tree", response_model=List[PageTreeItem])
 async def get_tree(
     community_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db)
+    db: AsyncSession = Depends(deps.get_async_db), # 🚨 Fixed Dependency
 ):
-    """Generate the hierarchical map of all published documents."""
-    
-    # ✅ FIX: Async execution to fetch all published pages
-    stmt = select(LibraryPage).where(
-        LibraryPage.community_id == community_id,
-        LibraryPage.is_published == True
-    ).order_by(LibraryPage.title)
-    
-    result = await db.execute(stmt)
-    pages = result.scalars().all()
-    
-    # Build Tree logic remains O(n) but uses Pydantic v2 model_validate compatibility
-    nodes: Dict[uuid.UUID, PageTreeItem] = {}
-    
-    # 1. Create Map of all nodes
-    for p in pages:
-        nodes[p.id] = PageTreeItem(
-            id=p.id, 
-            slug=p.slug, 
-            title=p.title, 
-            children=[]
-        )
-        
-    # 2. Link Parents to build the structure
+    """
+    Fetch all pages for a community and return them as a nested tree.
+    """
+    # 1. Fetch all pages for this community
+    stmt = select(Page).where(Page.community_id == community_id)
+    result = await db.exec(stmt) # 🚨 Fixed: Use db.exec()
+    pages = result.all()
+
+    # 2. Convert to Dictionary for fast lookup
+    # We use a helper to build the tree in Python to avoid complex recursive SQL
+    nodes = {p.id: PageTreeItem.model_validate(p) for p in pages}
     roots = []
-    for p in pages:
-        if p.parent_id and p.parent_id in nodes:
-            nodes[p.parent_id].children.append(nodes[p.id])
+
+    # 3. Build Hierarchy
+    for page in pages:
+        node = nodes[page.id]
+        if page.parent_id and page.parent_id in nodes:
+            # Add to parent's children
+            nodes[page.parent_id].children.append(node)
         else:
-            roots.append(nodes[p.id])
-            
+            # It's a root node
+            roots.append(node)
+
     return roots
 
-# --- 3. CREATE PAGE (Publishing) ---
+# --- 2. READ SINGLE PAGE ---
+@router.get("/{page_id}", response_model=PageRead)
+async def read_page(
+    page_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_async_db),
+):
+    page = await db.get(Page, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return page
+
+@router.get("/slug/{community_id}/{slug}", response_model=PageRead)
+async def read_page_by_slug(
+    community_id: uuid.UUID,
+    slug: str,
+    db: AsyncSession = Depends(deps.get_async_db),
+):
+    stmt = select(Page).where(
+        Page.community_id == community_id,
+        Page.slug == slug
+    )
+    result = await db.exec(stmt)
+    page = result.first()
+    
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return page
+
+# --- 3. CREATE PAGE ---
 @router.post("/", response_model=PageRead)
 async def create_page(
+    *,
+    db: AsyncSession = Depends(deps.get_async_db),
     page_in: PageCreate,
     current_user: User = Depends(deps.get_current_active_user),
-    db: AsyncSession = Depends(deps.get_db)
 ):
-    """Submit a new document to the library."""
-    
-    # Check Slug Uniqueness within the community context
-    # ✅ FIX: Async execution for uniqueness check
-    slug_stmt = select(LibraryPage).where(
-        LibraryPage.community_id == page_in.community_id,
-        LibraryPage.slug == page_in.slug
+    # Check if slug exists in community
+    stmt = select(Page).where(
+        Page.community_id == page_in.community_id,
+        Page.slug == page_in.slug
     )
-    slug_result = await db.execute(slug_stmt)
-    if slug_result.scalars().first():
-        raise HTTPException(status_code=400, detail="A document with this slug already exists here")
+    existing = await db.exec(stmt)
+    if existing.first():
+        raise HTTPException(status_code=400, detail="A page with this slug already exists.")
 
-    page_data = page_in.model_dump() if hasattr(page_in, "model_dump") else page_in.dict()
-    
-    new_page = LibraryPage(
-        **page_data,
+    page = Page(
+        **page_in.model_dump(),
         author_id=current_user.id,
-        created_at=datetime.utcnow()
+        updated_at=None # Sets default
     )
     
-    db.add(new_page)
+    db.add(page)
     await db.commit()
-    await db.refresh(new_page)
-    return new_page
+    await db.refresh(page)
+    return page
 
-# --- 4. UPDATE PAGE (Wiki Editing) ---
+# --- 4. UPDATE PAGE ---
 @router.put("/{page_id}", response_model=PageRead)
 async def update_page(
     page_id: uuid.UUID,
-    page_up: PageUpdate,
+    page_in: PageUpdate,
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
-    db: AsyncSession = Depends(deps.get_db)
 ):
-    """Edit an existing document. Standard wiki protocol."""
+    page = await db.get(Page, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+        
+    # Permission check (optional: add logic here)
     
-    db_page = await db.get(LibraryPage, page_id)
-    if not db_page:
+    update_data = page_in.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(page, key, value)
+        
+    db.add(page)
+    await db.commit()
+    await db.refresh(page)
+    return page
+
+# --- 5. DELETE PAGE ---
+@router.delete("/{page_id}")
+async def delete_page(
+    page_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_async_db),
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    page = await db.get(Page, page_id)
+    if not page:
         raise HTTPException(status_code=404, detail="Page not found")
 
-    # Update logic (merging fields)
-    update_data = page_up.model_dump(exclude_unset=True) if hasattr(page_up, "model_dump") else page_up.dict(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_page, key, value)
-    
-    db_page.updated_at = datetime.utcnow()
-    
-    db.add(db_page)
+    await db.delete(page)
     await db.commit()
-    await db.refresh(db_page)
-    return db_page
+    return {"status": "deleted"}

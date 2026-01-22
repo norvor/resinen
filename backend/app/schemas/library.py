@@ -1,36 +1,43 @@
-from typing import List
 import uuid
-from fastapi import APIRouter, Depends
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
+from typing import Optional, List
+from datetime import datetime
+from pydantic import BaseModel
 
-from app.api import deps
-from app.models.library import Page
-from app.schemas.library import PageTreeItem
+# --- WRITE SCHEMAS ---
+class PageCreate(BaseModel):
+    community_id: uuid.UUID
+    title: str
+    slug: str
+    content: str
+    parent_id: Optional[uuid.UUID] = None
 
-router = APIRouter()
+class PageUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    slug: Optional[str] = None
+    is_published: Optional[bool] = None
 
-@router.get("/community/{community_id}/tree", response_model=List[PageTreeItem])
-async def get_tree(
-    community_id: uuid.UUID,
-    # 🚨 FIX 1: Change deps.get_db -> deps.get_async_db
-    db: AsyncSession = Depends(deps.get_async_db), 
-):
-    stmt = select(Page).where(Page.community_id == community_id)
+# --- READ SCHEMAS ---
+class PageRead(BaseModel):
+    id: uuid.UUID
+    slug: str
+    title: str
+    content: str
+    parent_id: Optional[uuid.UUID]
+    updated_at: datetime
     
-    # 🚨 FIX 2: Use db.exec() instead of db.execute()
-    result = await db.exec(stmt)
-    pages = result.all()
+    # Author info (populated manually or via join)
+    author_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
-    # Build Tree Logic (Python side)
-    nodes = {p.id: PageTreeItem.model_validate(p) for p in pages}
-    roots = []
-
-    for page in pages:
-        node = nodes[page.id]
-        if page.parent_id and page.parent_id in nodes:
-            nodes[page.parent_id].children.append(node)
-        else:
-            roots.append(node)
-
-    return roots
+# --- TREE VIEW SCHEMA ---
+class PageTreeItem(BaseModel):
+    id: uuid.UUID
+    slug: str
+    title: str
+    children: List["PageTreeItem"] = []
+    
+    class Config:
+        from_attributes = True
