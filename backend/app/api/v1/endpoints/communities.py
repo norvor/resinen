@@ -39,6 +39,8 @@ async def read_communities(
     result = await db.exec(query)
     communities = result.all()
     
+    # The 'installed_engines' field is a JSON column in Postgres. 
+    # It is automatically loaded into the Pydantic model.
     return communities
 
 @router.post("/", response_model=CommunityRead)
@@ -50,16 +52,17 @@ async def create_community(
 ):
     """Create a new community and INSTALL requested engines."""
     
+    # 1. Permission
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Resinen Federal Authority Required.")
 
-    # 1. Check Slug
+    # 2. Check Slug
     query = select(Community).where(Community.slug == community_in.slug)
     existing = await db.exec(query)
     if existing.first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
-    # 2. Create Object (Start with empty engines)
+    # 3. Create Object (Start empty)
     db_community = Community(
         **community_in.model_dump(exclude={"archetypes"}), 
         creator_id=current_user.id,
@@ -67,19 +70,20 @@ async def create_community(
     )
     
     db.add(db_community)
-    # Flush to get the ID, but don't commit yet
-    await db.flush() 
+    await db.flush() # Get ID
 
-    # 3. INSTALL ENGINES
+    # 4. INSTALL ENGINES
     installed_keys = []
+    
+    # Note: frontend sends engine keys in 'archetypes' field (e.g. ['social', 'arena'])
     if community_in.archetypes:
-        # Find engine objects
+        # Find engine IDs
         stmt = select(Engine).where(col(Engine.key).in_(community_in.archetypes))
         result = await db.exec(stmt)
         engines_to_install = result.all()
         
         for engine_obj in engines_to_install:
-            # A. Create Relational Link
+            # Create Relation
             link = CommunityEngine(
                 community_id=db_community.id,
                 engine_id=engine_obj.id,
@@ -87,16 +91,19 @@ async def create_community(
                 config={} 
             )
             db.add(link)
-            # B. Add to list for JSON column
             installed_keys.append(engine_obj.key)
     
-    # 4. 🚨 CRITICAL FIX: Update the JSON column explicitly
+    # 5. 🚨 FORCE UPDATE JSON COLUMN 🚨
     db_community.installed_engines = installed_keys
     db.add(db_community)
     
-    # 5. Final Commit
     await db.commit()
     await db.refresh(db_community)
+
+    # 6. 🚨 SAFETY OVERRIDE 🚨
+    # Sometimes refresh() reloads stale data if the transaction is fast.
+    # We manually set it again to ensure the Response Model sees it.
+    setattr(db_community, "installed_engines", installed_keys)
 
     return db_community
 
