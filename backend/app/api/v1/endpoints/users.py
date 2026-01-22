@@ -26,12 +26,6 @@ async def create_user(
     result = await db.exec(select(User).where(User.email == user_in.email))
     if result.first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # 2. Check existing username
-    result = await db.exec(select(User).where(User.username == user_in.username))
-    if result.first():
-        raise HTTPException(status_code=400, detail="Username taken")
-
     # 3. Create User
     user = User(
         email=user_in.email,
