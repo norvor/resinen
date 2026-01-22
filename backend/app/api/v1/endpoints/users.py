@@ -31,9 +31,9 @@ async def create_user(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
         full_name=user_in.full_name,
-        username=user_in.username,
+        username=user_in.email,
         is_superuser=user_in.is_superuser,
-        avatar_url=f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_in.username}"
+        avatar_url=f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_in.email}"
     )
     db.add(user)
     await db.commit()
