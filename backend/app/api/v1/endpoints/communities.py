@@ -38,9 +38,6 @@ async def read_communities(
     
     result = await db.exec(query)
     communities = result.all()
-
-    # 🚨 FIX: Removed the loop that was overwriting 'installed_engines' with empty lists.
-    # The Community object already contains the data from the JSON column.
     
     return communities
 
@@ -51,39 +48,38 @@ async def create_community(
     community_in: CommunityCreate,
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Create a new community."""
+    """Create a new community and INSTALL requested engines."""
     
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Resinen Federal Authority Required.")
 
-    # Check Slug
+    # 1. Check Slug
     query = select(Community).where(Community.slug == community_in.slug)
     existing = await db.exec(query)
     if existing.first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
-    # Create Object
+    # 2. Create Object (Start with empty engines)
     db_community = Community(
         **community_in.model_dump(exclude={"archetypes"}), 
         creator_id=current_user.id,
-        # Initialize empty, will fill below
         installed_engines=[] 
     )
     
     db.add(db_community)
-    await db.commit()
-    await db.refresh(db_community)
+    # Flush to get the ID, but don't commit yet
+    await db.flush() 
 
-    # Install Engines (Logic + Persistence)
+    # 3. INSTALL ENGINES
     installed_keys = []
     if community_in.archetypes:
-        # Find engine IDs
+        # Find engine objects
         stmt = select(Engine).where(col(Engine.key).in_(community_in.archetypes))
         result = await db.exec(stmt)
         engines_to_install = result.all()
         
         for engine_obj in engines_to_install:
-            # Create Link (Relational)
+            # A. Create Relational Link
             link = CommunityEngine(
                 community_id=db_community.id,
                 engine_id=engine_obj.id,
@@ -91,14 +87,16 @@ async def create_community(
                 config={} 
             )
             db.add(link)
+            # B. Add to list for JSON column
             installed_keys.append(engine_obj.key)
-        
-        # 🚨 FIX: Explicitly save the list to the JSON column
-        db_community.installed_engines = installed_keys
-        db.add(db_community)
-        
-        await db.commit()
-        await db.refresh(db_community)
+    
+    # 4. 🚨 CRITICAL FIX: Update the JSON column explicitly
+    db_community.installed_engines = installed_keys
+    db.add(db_community)
+    
+    # 5. Final Commit
+    await db.commit()
+    await db.refresh(db_community)
 
     return db_community
 
@@ -109,7 +107,6 @@ async def update_community(
     db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Update a community."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not authorized.")
 
@@ -152,7 +149,6 @@ async def read_community(
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     
-    # 🚨 FIX: Trust the seeded data in the object
     return community
 
 @router.get("/by-slug/{slug}", response_model=CommunityRead)
@@ -160,7 +156,6 @@ async def get_community_by_slug(
     slug: str,
     db: AsyncSession = Depends(deps.get_async_db),
 ):
-    """Lookup a territory by its URL slug."""
     query = select(Community).where(Community.slug == slug)
     result = await db.exec(query)
     community = result.first()
@@ -168,7 +163,6 @@ async def get_community_by_slug(
     if not community:
         raise HTTPException(status_code=404, detail="Territory not found")
         
-    # 🚨 FIX: Trust the seeded data
     return community
 
 # --- STATS & MEMBERSHIP ---
