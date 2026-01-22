@@ -1,6 +1,6 @@
 from typing import Any, List
 from fastapi import APIRouter, Body, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.models.community import Community, Membership
 
