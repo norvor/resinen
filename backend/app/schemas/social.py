@@ -27,7 +27,7 @@ class CommentRead(CommentBase):
 class PostBase(BaseModel):
     title: Optional[str] = None
     content: str
-    media_urls: List[str] = []  # Changed from single image_url
+    media_urls: List[str] = []
     meta_data: Dict[str, Any] = {}
     chapter_id: Optional[uuid.UUID] = None
 
@@ -51,3 +51,8 @@ class PostRead(PostBase):
     
     class Config:
         from_attributes = True
+
+# --- 🚨 ADDED THIS MISSING CLASS 🚨 ---
+class FeedResult(BaseModel):
+    items: List[PostRead]
+    next_cursor: Optional[str] = None
