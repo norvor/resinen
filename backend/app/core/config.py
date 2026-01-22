@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     def ASYNC_DATABASE_URI(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore" 
+    )
 
 settings = Settings()
