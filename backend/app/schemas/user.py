@@ -41,10 +41,5 @@ class UserUpdate(BaseModel):
 class UserRead(UserBase):
     id: uuid.UUID
     
-    # Gamification
-    level: int
-    xp: int
-    reputation_score: int
-    
     class Config:
         from_attributes = True

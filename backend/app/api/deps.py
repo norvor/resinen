@@ -28,8 +28,8 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 # --- AUTH DEPENDENCIES ---
 
-def get_current_user(
-    db: Session = Depends(get_db),
+async def get_current_user(
+    db: AsyncSession = Depends(get_async_db),
     token: str = Depends(reusable_oauth2)
 ) -> User:
     try:
@@ -40,12 +40,16 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    user = db.get(User, token_data.sub)
+    
+    # Correct Async Fetch
+    result = await db.exec(select(User).where(User.id == token_data.sub))
+    user = result.first()
+    
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-def get_current_active_user(
+async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     if not security.is_active(current_user):

@@ -13,13 +13,44 @@ from app.schemas.community import CommunityRead
 
 router = APIRouter()
 
+@router.post("/", response_model=UserRead)
+async def create_user(
+    *,
+    db: AsyncSession = Depends(deps.get_async_db),
+    user_in: UserCreate,
+) -> Any:
+    """
+    Create new user.
+    """
+    # 1. Check existing email
+    result = await db.exec(select(User).where(User.email == user_in.email))
+    if result.first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # 2. Check existing username
+    result = await db.exec(select(User).where(User.username == user_in.username))
+    if result.first():
+        raise HTTPException(status_code=400, detail="Username taken")
+
+    # 3. Create User
+    user = User(
+        email=user_in.email,
+        hashed_password=security.get_password_hash(user_in.password),
+        full_name=user_in.full_name,
+        username=user_in.username,
+        is_superuser=user_in.is_superuser,
+        avatar_url=f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_in.username}"
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return user
+
 @router.get("/me", response_model=UserRead)
 async def read_user_me(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """
-    Get current user profile.
-    """
     return current_user
 
 @router.patch("/me", response_model=UserRead)
@@ -49,40 +80,6 @@ async def update_user_me(
     await db.commit()
     await db.refresh(current_user)
     return current_user
-
-@router.post("/", response_model=UserRead)
-async def create_user(
-    *,
-    db: AsyncSession = Depends(deps.get_session),
-    user_in: UserCreate,
-) -> Any:
-    """
-    Create new user (Public Registration).
-    """
-    # 1. Check if email already exists
-    query = select(User).where(User.email == user_in.email)
-    result = await db.execute(query)
-    if result.scalars().first():
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
-        )
-    
-    # 2. Create User
-    user = User(
-        email=user_in.email,
-        hashed_password=security.get_password_hash(user_in.password),
-        full_name=user_in.full_name or "",
-        is_superuser=user_in.is_superuser,
-        # Default gamification stats
-        level=1,
-        xp=0,
-        reputation_score=100
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
 
 @router.get("/me/communities", response_model=List[CommunityRead])
 async def read_my_communities(
