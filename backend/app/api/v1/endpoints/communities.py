@@ -27,8 +27,7 @@ async def read_communities(
     limit: int = 100,
     db: AsyncSession = Depends(deps.get_async_db),
 ):
-    """Retrieve communities with their installed engines."""
-    # 1. Fetch Communities
+    """Retrieve communities."""
     query = select(Community)
     
     if q:
@@ -37,22 +36,12 @@ async def read_communities(
         
     query = query.offset(skip).limit(limit)
     
-    # 🚨 FIX: db.exec() returns results directly. removed .scalars()
     result = await db.exec(query)
     communities = result.all()
 
-    # 2. Populate 'installed_engines'
-    for comm in communities:
-        stmt = (
-            select(Engine.key)
-            .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
-            .where(CommunityEngine.community_id == comm.id)
-            .where(CommunityEngine.is_active == True)
-        )
-        engines_res = await db.exec(stmt)
-        # 🚨 FIX: removed .scalars()
-        setattr(comm, "installed_engines", engines_res.all())
-
+    # 🚨 FIX: Removed the loop that was overwriting 'installed_engines' with empty lists.
+    # The Community object already contains the data from the JSON column.
+    
     return communities
 
 @router.post("/", response_model=CommunityRead)
@@ -62,41 +51,39 @@ async def create_community(
     community_in: CommunityCreate,
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Create a new community and INSTALL requested engines."""
+    """Create a new community."""
     
-    # 1. Permission Check
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403, 
-            detail="Resinen Federal Authority Required. Only Admins can create territories."
-        )
+        raise HTTPException(status_code=403, detail="Resinen Federal Authority Required.")
 
-    # 2. Check Slug Uniqueness
+    # Check Slug
     query = select(Community).where(Community.slug == community_in.slug)
     existing = await db.exec(query)
     if existing.first():
         raise HTTPException(status_code=400, detail="Community slug already exists")
 
-    # 3. Create Community Record
+    # Create Object
     db_community = Community(
         **community_in.model_dump(exclude={"archetypes"}), 
-        creator_id=current_user.id
+        creator_id=current_user.id,
+        # Initialize empty, will fill below
+        installed_engines=[] 
     )
     
     db.add(db_community)
     await db.commit()
     await db.refresh(db_community)
 
-    # 4. INSTALL ENGINES
+    # Install Engines (Logic + Persistence)
     installed_keys = []
     if community_in.archetypes:
-        # Find engine IDs for requested keys
+        # Find engine IDs
         stmt = select(Engine).where(col(Engine.key).in_(community_in.archetypes))
         result = await db.exec(stmt)
-        # 🚨 FIX: removed .scalars() - The error happened here
         engines_to_install = result.all()
         
         for engine_obj in engines_to_install:
+            # Create Link (Relational)
             link = CommunityEngine(
                 community_id=db_community.id,
                 engine_id=engine_obj.id,
@@ -106,14 +93,15 @@ async def create_community(
             db.add(link)
             installed_keys.append(engine_obj.key)
         
+        # 🚨 FIX: Explicitly save the list to the JSON column
+        db_community.installed_engines = installed_keys
+        db.add(db_community)
+        
         await db.commit()
+        await db.refresh(db_community)
 
-    # 5. Attach keys
-    setattr(db_community, "installed_engines", installed_keys)
-    
     return db_community
 
-# --- ADMIN ONLY: UPDATE ---
 @router.put("/{community_id}", response_model=CommunityRead)
 async def update_community(
     community_id: uuid.UUID,
@@ -121,8 +109,7 @@ async def update_community(
     db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Update a community (ADMIN ONLY)."""
-    
+    """Update a community."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not authorized.")
 
@@ -137,29 +124,14 @@ async def update_community(
     db.add(community)
     await db.commit()
     await db.refresh(community)
-    
-    # Re-fetch engines
-    stmt = (
-        select(Engine.key)
-        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
-        .where(CommunityEngine.community_id == community.id)
-        .where(CommunityEngine.is_active == True)
-    )
-    engines_res = await db.exec(stmt)
-    # 🚨 FIX: removed .scalars()
-    setattr(community, "installed_engines", engines_res.all())
-
     return community
 
-# --- ADMIN ONLY: DELETE ---
 @router.delete("/{community_id}")
 async def delete_community(
     community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Delete a community (ADMIN ONLY)."""
-    
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Not authorized.")
 
@@ -176,24 +148,11 @@ async def read_community(
     community_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_async_db),
 ):
-    # 1. Fetch Community
     community = await db.get(Community, community_id)
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     
-    # 2. Sync Engines
-    statement = (
-        select(Engine.key)
-        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
-        .where(CommunityEngine.community_id == community_id)
-        .where(CommunityEngine.is_active == True)
-    )
-    result = await db.exec(statement)
-    # 🚨 FIX: removed .scalars()
-    active_keys = result.all()
-    
-    setattr(community, "installed_engines", active_keys)
-    
+    # 🚨 FIX: Trust the seeded data in the object
     return community
 
 @router.get("/by-slug/{slug}", response_model=CommunityRead)
@@ -202,29 +161,17 @@ async def get_community_by_slug(
     db: AsyncSession = Depends(deps.get_async_db),
 ):
     """Lookup a territory by its URL slug."""
-    # 1. Fetch
     query = select(Community).where(Community.slug == slug)
     result = await db.exec(query)
-    # 🚨 FIX: removed .scalars()
     community = result.first()
     
     if not community:
         raise HTTPException(status_code=404, detail="Territory not found")
         
-    # 2. Sync Engines
-    statement = (
-        select(Engine.key)
-        .join(CommunityEngine, CommunityEngine.engine_id == Engine.id)
-        .where(CommunityEngine.community_id == community.id)
-        .where(CommunityEngine.is_active == True)
-    )
-    result = await db.exec(statement)
-    # 🚨 FIX: removed .scalars()
-    active_keys = result.all()
-    
-    setattr(community, "installed_engines", active_keys)
-    
+    # 🚨 FIX: Trust the seeded data
     return community
+
+# --- STATS & MEMBERSHIP ---
 
 @router.get("/{community_id}/membership_status")
 async def get_membership_status(
@@ -237,7 +184,6 @@ async def get_membership_status(
         Membership.community_id == community_id
     )
     result = await db.exec(query)
-    # 🚨 FIX: removed .scalars()
     membership = result.first()
     
     return {
@@ -251,8 +197,6 @@ async def get_community_stats(
     db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Get live dashboard statistics."""
-    
     comm = await db.get(Community, community_id)
     if not comm:
         raise HTTPException(status_code=404, detail="Community not found")
@@ -265,7 +209,6 @@ async def get_community_stats(
         Post.created_at >= start_of_day
     )
     posts_res = await db.exec(posts_query)
-    # .one() is valid on ScalarResult
     posts_today = posts_res.one() or 0 
 
     # Realtime Pending Members
@@ -298,7 +241,6 @@ async def join_community(
         Membership.community_id == community_id
     )
     result = await db.exec(query)
-    # 🚨 FIX: removed .scalars()
     existing_membership = result.first()
 
     if existing_membership:
@@ -343,7 +285,6 @@ async def read_community_members(
         query = query.where(Membership.status == status)
     
     result = await db.exec(query)
-    # 🚨 FIX: removed .scalars()
     return result.all()
 
 @router.post("/{community_id}/members/{user_id}/process")
@@ -354,14 +295,11 @@ async def process_membership(
     db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
-    """Process membership."""
-    
     query = select(Membership).where(
         Membership.community_id == community_id,
         Membership.user_id == user_id
     )
     result = await db.exec(query)
-    # 🚨 FIX: removed .scalars()
     membership = result.first()
 
     if not membership:
