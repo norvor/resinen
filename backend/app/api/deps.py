@@ -1,29 +1,31 @@
 from typing import Generator, AsyncGenerator
-from sqlmodel import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import SessionLocal, async_session_factory
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+import jwt
+
+# 1. We import the Factory from database.py
+from app.core.database import SessionLocal, async_session_factory
 from app.core.config import settings
 from app.models.user import User
 from app.core import security
-import jwt
-from app.core.database import get_async_db
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
 # --- DATABASE DEPENDENCIES ---
 
-# 1. Sync DB (Use this for older endpoints)
-def get_db() -> Generator[Session, None, None]:
+# 1. Sync DB (Legacy/Migrations)
+def get_db() -> Generator:
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# 2. Async DB (Use this for Social Feed & High Perf endpoints)
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+# 2. Async DB (The function you are looking for!)
+# This is defined HERE. It uses the factory from database.py.
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         yield session
 
@@ -31,7 +33,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def get_current_user(
     db: AsyncSession = Depends(get_async_db),
-    token: str = Depends(reusable_oaduth2)
+    token: str = Depends(reusable_oauth2)
 ) -> User:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
@@ -42,7 +44,7 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
     
-    # Correct Async Fetch
+    # Async Fetch
     result = await db.exec(select(User).where(User.id == token_data.sub))
     user = result.first()
     
