@@ -1,29 +1,23 @@
 import uuid
-from datetime import datetime
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import JSON, Column
-from typing import List, Optional
+from typing import Dict, Any
+from sqlmodel import SQLModel, Field
+from sqlalchemy.dialects.postgresql import JSONB
 
 class Engine(SQLModel, table=True):
+    __tablename__ = "engine"
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    key: str = Field(unique=True, index=True) # e.g. "social", "arena"
+    key: str = Field(unique=True, index=True) # "journal", "vault", "brain"
     name: str
     description: str
-    icon: str # feather icon name
-    
-    is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    icon: str
+    is_system: bool = Field(default=False)
 
-class CommunityEngine(SQLModel, table=True):
-    """
-    Join table: Tracks which Community has installed which Engine.
-    """
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+class UserEngine(SQLModel, table=True):
+    __tablename__ = "user_engine"
     
-    community_id: uuid.UUID = Field(foreign_key="community.id", index=True)
-    engine_id: uuid.UUID = Field(foreign_key="engine.id")
+    # Composite Primary Key (One entry per user per engine)
+    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    engine_id: uuid.UUID = Field(foreign_key="engine.id", primary_key=True)
     
     is_active: bool = Field(default=True)
-    config: dict = Field(default_factory=dict, sa_column=Column(JSON)) # Specific settings for this install
-    
-    installed_at: datetime = Field(default_factory=datetime.utcnow)
+    config: Dict[str, Any] = Field(default={}, sa_type=JSONB)

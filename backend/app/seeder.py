@@ -1,130 +1,56 @@
 import asyncio
 import logging
 from sqlalchemy import text
-from sqlmodel import SQLModel, select
+from sqlmodel import SQLModel
 from app.core.database import async_engine, async_session_factory
 from app.core.security import get_password_hash
 
-# 🏗️ IMPORT MODELS
+# Import Models
 from app.models.user import User
-from app.models.community import Community, Membership, Chapter
-from app.models.engine import Engine, CommunityEngine # <--- IMPORT THESE
+from app.models.engine import Engine, UserEngine
+from app.models.journal import JournalEntry
 
-# Setup Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-async def reset_db():
-    logger.warning("💣 DROPPING ALL TABLES (CASCADE)...")
+async def seed():
+    print("🔥 NUKING DATABASE...")
     async with async_engine.begin() as conn:
-        await conn.execute(text("""
-            DO $$ DECLARE
-                r RECORD;
-            BEGIN
-                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-                END LOOP;
-            END $$;
-        """))
+        await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
         await conn.run_sync(SQLModel.metadata.create_all)
-    logger.info("✨ Tables Re-created.")
-
-async def seed_base():
-    await reset_db()
 
     async with async_session_factory() as session:
-        logger.info("🌱 Seeding Base Data...")
-
-        # ---------------------------------------------------------
-        # 1. SEED SYSTEM ENGINES (CRITICAL STEP)
-        # ---------------------------------------------------------
-        logger.info("⚙️ Defining System Engines...")
-        engines_data = [
-            {"key": "social", "name": "Social Feed", "description": "Posts, comments, and likes", "icon": "feed"},
-            {"key": "arena", "name": "The Arena", "description": "Debates and ranked discussions", "icon": "gavel"},
-            {"key": "bazaar", "name": "Bazaar", "description": "Marketplace for goods and services", "icon": "store"},
-            {"key": "senate", "name": "Senate", "description": "Governance and voting", "icon": "balance-scale"},
-            {"key": "academy", "name": "Academy", "description": "Courses and knowledge base", "icon": "graduation-cap"},
+        print("🌱 Seeding Arsenal...")
+        
+        # 1. Create Engines
+        engines = [
+            {"key": "journal", "name": "Journal", "description": "Personal Log", "icon": "book"},
+            {"key": "vault", "name": "Vault", "description": "Asset Manager", "icon": "box"},
+            {"key": "brain", "name": "Second Brain", "description": "Knowledge Base", "icon": "brain"},
         ]
         
-        engine_map = {} # To store ID for linking later
-        
-        for e in engines_data:
-            engine = Engine(
-                key=e["key"],
-                name=e["name"],
-                description=e["description"],
-                icon=e["icon"],
-                is_system=True
-            )
-            session.add(engine)
-            # We need to flush to get the ID immediately
+        eng_map = {}
+        for e in engines:
+            eng = Engine(**e, is_system=True)
+            session.add(eng)
             await session.flush()
-            engine_map[e["key"]] = engine.id
-
-        logger.info(f"✅ Defined {len(engine_map)} Engines.")
-
-        # ---------------------------------------------------------
-        # 2. SEED ADMIN USER
-        # ---------------------------------------------------------
-        logger.info("👤 Creating Admin User...")
-        user = User(
-            email="admin@unionstation.com",
-            full_name="The Architect",
-            username="architect",
-            hashed_password=get_password_hash("admin123"),
-            is_active=True,
-            is_superuser=True,
-            avatar_url="https://api.dicebear.com/7.x/bottts/svg?seed=architect"
+            eng_map[e['key']] = eng.id
+            
+        # 2. Create YOU
+        me = User(
+            email="me@resinen.com",
+            hashed_password=get_password_hash("password"),
+            full_name="The Operator",
+            is_superuser=True
         )
-        session.add(user)
+        session.add(me)
         await session.flush()
         
-        # ---------------------------------------------------------
-        # 3. SEED COMMUNITY (With Real Engine Links)
-        # ---------------------------------------------------------
-        logger.info("asd Creating Union Station Community...")
-        
-        # The keys we want to install
-        install_keys = ["social", "arena", "bazaar", "senate", "academy"]
-        
-        community = Community(
-            name="Union Station",
-            slug="union-station",
-            description="The central hub for all citizens.",
-            creator_id=user.id,
-            member_count=1,
-            installed_engines=install_keys # JSON Column
-        )
-        session.add(community)
-        await session.flush()
-
-        # LINK THEM (CommunityEngine)
-        for key in install_keys:
-            if key in engine_map:
-                link = CommunityEngine(
-                    community_id=community.id,
-                    engine_id=engine_map[key],
-                    is_active=True,
-                    config={}
-                )
-                session.add(link)
-
-        # ---------------------------------------------------------
-        # 4. MEMBERSHIP & CHAPTERS
-        # ---------------------------------------------------------
-        membership = Membership(
-            user_id=user.id,
-            community_id=community.id,
-            role="owner",
-            status="active"
-        )
-        session.add(membership)
-        
-        # FINAL COMMIT
+        # 3. Install Engines
+        for key in eng_map:
+            session.add(UserEngine(user_id=me.id, engine_id=eng_map[key]))
+            
         await session.commit()
-        logger.info("✅ SEED COMPLETE")
-        logger.info(f"🔑 Credentials: admin@unionstation.com / admin123")
+        print("✅ DONE. Login: me@resinen.com / password")
 
 if __name__ == "__main__":
-    asyncio.run(seed_base())
+    asyncio.run(seed())

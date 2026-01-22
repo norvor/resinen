@@ -1,29 +1,29 @@
-
+from pydantic_settings import BaseSettings
 from typing import List
-from pydantic_settings import BaseSettings 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Resinen Core"
     API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "Resinen: Rest In Engines"
     
-    # DB
-    DATABASE_URL: str = "postgresql+asyncpg://resinen_admin:securepassword@localhost/resinen_platform"
+    # Database
+    POSTGRES_USER: str = "resinen_admin"
+    POSTGRES_PASSWORD: str = "securepassword"
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_DB: str = "resinen_platform"
     
-    # SECURITY
+    # Auth
     SECRET_KEY: str = "change_this_to_a_very_long_random_string_xyz123"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8 
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "https://resinen.com"]
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8 # 8 Days (Personal app, long session)
+    ALGORITHM: str = "HS256"
 
-    # --- 🆕 MINIO (THE VAULT) ---
-    MINIO_ENDPOINT: str = "http://localhost:9000" # Where MinIO lives
-    MINIO_ACCESS_KEY: str = "resinen_minio_admin"
-    MINIO_SECRET_KEY: str = "minio_secure_password_123"
-    MINIO_BUCKET_NAME: str = "resinen-media" # The folder we store files in
+    # CORS
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000", "http://localhost:5174"]
+
+    @property
+    def ASYNC_DATABASE_URI(self) -> str:
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
 
     class Config:
         env_file = ".env"
-        case_sensitive = True
 
 settings = Settings()
