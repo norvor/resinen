@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Optional
-import jwt  # Using PyJWT
+import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from app.core.config import settings
@@ -8,7 +8,7 @@ from app.core.config import settings
 # --- CONFIGURATION ---
 ALGORITHM = "HS256"
 
-# --- PYDANTIC MODEL (Used by deps.py) ---
+# --- PYDANTIC MODEL ---
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
     exp: Optional[int] = None
@@ -32,9 +32,12 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # 'sub' (Subject) usually holds the User ID
     to_encode = {"exp": expire, "sub": str(subject)}
     
-    # Encode using PyJWT
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# --- 🚨 ADDED THIS MISSING FUNCTION ---
+def is_active(user: Any) -> bool:
+    """Helper to check if a user is active."""
+    return user.is_active
