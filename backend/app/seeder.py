@@ -1,18 +1,18 @@
 import asyncio
 import logging
-from sqlmodel import SQLModel, select
+from sqlalchemy import text
+from sqlmodel import SQLModel
 from app.core.database import async_engine, async_session_factory
 from app.core.security import get_password_hash
 
 # ----------------------------------------------------------------------
 # 🏗️ IMPORT ALL MODELS HERE
 # ----------------------------------------------------------------------
-# This is crucial! SQLModel needs to know about these classes 
-# before it can create the tables in the database.
+# If you don't import it here, the table won't be created!
 from app.models.user import User
 from app.models.community import Community, Membership, Chapter
-from app.models.social import Post, Comment, PostLike, CommentLike
-# from app.models.arena import ... (Add future engines here)
+from app.models.social import Post, Comment, PostLike, CommentLike, Comment
+# from app.models.arena import ... 
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -20,31 +20,36 @@ logger = logging.getLogger(__name__)
 
 async def reset_db():
     """
-    ⚠️ WARNING: DELETES ALL DATA
-    Drops all tables and recreates them from SQLModel metadata.
+    ☢️ NUCLEAR RESET
+    Drops the entire schema to bypass Foreign Key constraints.
     """
-    logger.warning("💣 DROPPING ALL TABLES & RESETTING SCHEMA...")
+    logger.warning("💣 DROPPING ENTIRE SCHEMA (CASCADE)...")
     
     async with async_engine.begin() as conn:
-        # Disable foreign key checks temporarily to avoid dependency errors during drop
-        # (Postgres specific, but good practice)
-        # await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")) 
+        # 1. NUKE IT
+        # This kills 'user', 'reputationevent', and everything else instantly.
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
         
-        # Standard SQLModel Drop/Create
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        # 2. REBUILD IT
+        # Re-grant permissions (optional but good for some setups)
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
+        await conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
+        
+        # Create all tables found in imported models
         await conn.run_sync(SQLModel.metadata.create_all)
     
-    logger.info("✨ Database Schema Re-created Successfully.")
+    logger.info("✨ Schema & Tables Re-created Successfully.")
 
 async def seed_base():
-    # 1. WIPE THE DATABASE
+    # 1. EXECUTE RESET
     await reset_db()
 
     # 2. SEED DATA
     async with async_session_factory() as session:
         logger.info("🌱 Seeding Base Data...")
 
-        # --- CREATE ADMIN USER ---
+        # --- ADMIN USER ---
         logger.info("👤 Creating Admin User...")
         user = User(
             email="admin@unionstation.com",
@@ -57,24 +62,24 @@ async def seed_base():
         )
         session.add(user)
         
-        # --- CREATE COMMUNITY ---
+        # --- COMMUNITY ---
         logger.info("asd Creating Union Station Community...")
         community = Community(
             name="Union Station",
             slug="union-station",
             description="The central hub for all citizens. Welcome home.",
-            archetype="SANCTUARY", # Correct singular field based on your schema
+            # Note: Ensure this matches your model (singular 'archetype' vs plural)
+            archetype="SANCTUARY", 
             member_count=1,
             installed_engines=["social", "arena", "bazaar", "senate", "academy"]
         )
         session.add(community)
 
-        # Commit here so we get IDs for the Membership
         await session.commit()
         await session.refresh(user)
         await session.refresh(community)
 
-        # --- CREATE MEMBERSHIP ---
+        # --- MEMBERSHIP ---
         logger.info("🔗 Linking Admin to Community...")
         membership = Membership(
             user_id=user.id,
@@ -84,7 +89,7 @@ async def seed_base():
         )
         session.add(membership)
         
-        # --- CREATE DEFAULT CHAPTER (Optional) ---
+        # --- CHAPTER ---
         logger.info("🛡️ Creating 'General' Chapter...")
         chapter = Chapter(
             community_id=community.id,
@@ -98,9 +103,8 @@ async def seed_base():
 
         await session.commit()
         
-        logger.info("✅ NUCLEAR SEED COMPLETE")
-        logger.info(f"🔑 User: admin@unionstation.com / admin123")
-        logger.info(f"🌍 Community: {community.id}")
+        logger.info("✅ SEED COMPLETE")
+        logger.info(f"🔑 Credentials: admin@unionstation.com / admin123")
 
 if __name__ == "__main__":
     asyncio.run(seed_base())
