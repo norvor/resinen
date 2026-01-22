@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 
 # Import Routers (We will build these next)
-# from app.api.v1.api import api_router 
+from app.api.v1.api import api_router 
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -19,4 +19,4 @@ app.add_middleware(
 def root():
     return {"message": "Resinen: System Online", "mode": "Personal Arsenal"}
 
-# app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router, prefix=settings.API_V1_STR)
