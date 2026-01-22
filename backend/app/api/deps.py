@@ -1,21 +1,18 @@
 from typing import Generator, AsyncGenerator
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import select
 import jwt
 
-# 1. We import the Factory from database.py
-from app.core.database import SessionLocal, async_session_factory
+from app.core.database import SessionLocal, async_session_factory # Import the factory
 from app.core.config import settings
 from app.models.user import User
 from app.core import security
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
-# --- DATABASE DEPENDENCIES ---
-
-# 1. Sync DB (Legacy/Migrations)
+# 1. Sync DB
 def get_db() -> Generator:
     db = SessionLocal()
     try:
@@ -23,14 +20,13 @@ def get_db() -> Generator:
     finally:
         db.close()
 
-# 2. Async DB (The function you are looking for!)
-# This is defined HERE. It uses the factory from database.py.
+# 2. Async DB (Used by Auth & Social)
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+    # 🚨 This creates the specific AsyncSession object
     async with async_session_factory() as session:
         yield session
 
-# --- AUTH DEPENDENCIES ---
-
+# 3. Current User
 async def get_current_user(
     db: AsyncSession = Depends(get_async_db),
     token: str = Depends(reusable_oauth2)
@@ -44,7 +40,7 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
     
-    # Async Fetch
+    # Use db.exec for SQLModel Async
     result = await db.exec(select(User).where(User.id == token_data.sub))
     user = result.first()
     
