@@ -25,8 +25,7 @@ async def reset_db():
     logger.warning("💣 DROPPING ALL TABLES (CASCADE)...")
     
     async with async_engine.begin() as conn:
-        # This SQL block dynamically finds all tables and drops them.
-        # It works where DROP SCHEMA fails.
+        # 1. Wipe Tables safely
         await conn.execute(text("""
             DO $$ DECLARE
                 r RECORD;
@@ -37,7 +36,7 @@ async def reset_db():
             END $$;
         """))
         
-        # Re-create tables from SQLModel
+        # 2. Re-create Tables from SQLModel
         await conn.run_sync(SQLModel.metadata.create_all)
     
     logger.info("✨ Tables Wiped & Re-created.")
@@ -50,7 +49,7 @@ async def seed_base():
     async with async_session_factory() as session:
         logger.info("🌱 Seeding Base Data...")
 
-        # --- ADMIN ---
+        # --- ADMIN USER ---
         user = User(
             email="admin@unionstation.com",
             full_name="The Architect",
@@ -61,21 +60,23 @@ async def seed_base():
             avatar_url="https://api.dicebear.com/7.x/bottts/svg?seed=architect"
         )
         session.add(user)
+        # Flush to generate the User ID so we can use it for the Community
+        await session.flush() 
         
         # --- COMMUNITY ---
         community = Community(
             name="Union Station",
             slug="union-station",
             description="The central hub for all citizens.",
-            archetype="SANCTUARY", 
+            # 🚨 FIX: Plural List to match your Schema
+            archetypes=["SANCTUARY"], 
             member_count=1,
-            installed_engines=["social", "arena", "bazaar", "senate", "academy"]
+            installed_engines=["social", "arena", "bazaar", "senate", "academy"],
+            # 🚨 FIX: Link the Creator explicitly
+            creator_id=user.id
         )
         session.add(community)
-
-        await session.commit()
-        await session.refresh(user)
-        await session.refresh(community)
+        await session.flush()
 
         # --- MEMBERSHIP ---
         membership = Membership(
@@ -99,6 +100,7 @@ async def seed_base():
 
         await session.commit()
         logger.info("✅ SEED COMPLETE")
+        logger.info(f"🔑 Credentials: admin@unionstation.com / admin123")
 
 if __name__ == "__main__":
     asyncio.run(seed_base())
