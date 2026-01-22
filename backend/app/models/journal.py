@@ -19,6 +19,7 @@ class JournalEntry(SQLModel, table=True):
     
     # It's personal, but you might want to "star" good memories
     is_favorite: bool = Field(default=False)
+    stickers: List[Dict] = Field(default=[], sa_column=Column(JSON))
     
     # Relationship
     user: User = Relationship()
