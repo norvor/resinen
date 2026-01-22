@@ -9,7 +9,7 @@ import redis
 # We must ensure the Sync Engine uses 'postgresql://' (psycopg2)
 # and the Async Engine uses 'postgresql+asyncpg://' (asyncpg).
 
-raw_uri = settings.SQLALCHEMY_DATABASE_URI
+raw_uri = settings.DATABASE_URL
 
 # 1. Force Sync URI (remove +asyncpg if present)
 sync_uri = raw_uri.replace("+asyncpg", "")
