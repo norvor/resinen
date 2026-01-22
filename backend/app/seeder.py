@@ -25,6 +25,7 @@ async def seed():
         # 3. 🛡️ RESTORE PERMISSIONS (Critical Step)
         # Grant access to the specific database user defined in your .env
         await conn.execute(text(f"GRANT ALL ON SCHEMA public TO postgres"))
+        await conn.execute(text(f"GRANT ALL ON SCHEMA public TO resinen_admin"))
         await conn.execute(text(f"GRANT ALL ON SCHEMA public TO public"))
         
         # 4. Create Tables
