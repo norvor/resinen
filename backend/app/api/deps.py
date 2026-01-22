@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.core import security
 
-reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login")
 
 # 1. Sync DB
 def get_db() -> Generator:
