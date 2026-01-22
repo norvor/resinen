@@ -25,6 +25,11 @@ class JournalRead(BaseModel):
     created_at: datetime
     is_favorite: bool
 
+class JournalUpdate(BaseModel):
+    content: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_favorite: Optional[bool] = None
+
 # --- ENDPOINTS ---
 
 @router.get("/", response_model=List[JournalRead])
@@ -66,6 +71,36 @@ async def create_entry(
     await db.commit()
     await db.refresh(new_entry)
     return new_entry
+
+@router.put("/{entry_id}", response_model=JournalRead)
+async def update_entry(
+    entry_id: uuid.UUID,
+    entry_update: JournalUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    # 1. Find it
+    entry = await db.get(JournalEntry, entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if entry.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your entry")
+    
+    # 2. Update fields if provided
+    if entry_update.content is not None:
+        entry.content = entry_update.content
+    if entry_update.tags is not None:
+        entry.tags = entry_update.tags
+    if entry_update.is_favorite is not None:
+        entry.is_favorite = entry_update.is_favorite
+        
+    entry.updated_at = datetime.utcnow()
+    
+    # 3. Save
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+    return entry
 
 @router.delete("/{entry_id}")
 async def delete_entry(
