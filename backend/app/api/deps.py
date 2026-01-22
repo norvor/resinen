@@ -33,7 +33,7 @@ async def get_current_user(
 ) -> User:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
-        token_data = security.TokenPayload(**payload)
+        create_access_token = security.TokenPayload(**payload)
     except Exception as e:
         # 🚨 ADD THIS PRINT STATEMENT
         print(f"❌ AUTH ERROR: {e}")
