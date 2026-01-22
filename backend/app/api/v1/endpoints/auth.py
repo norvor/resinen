@@ -39,6 +39,7 @@ async def login_access_token(
         ),
         "token_type": "bearer",
     }
+    
 
 @router.post("/signup", response_model=UserRead)
 async def create_user(
