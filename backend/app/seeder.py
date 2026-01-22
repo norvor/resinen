@@ -87,17 +87,6 @@ async def seed_base():
         )
         session.add(membership)
         
-        # --- CHAPTER ---
-        chapter = Chapter(
-            community_id=community.id,
-            name="General Hall",
-            slug="general",
-            description="Main discussion area",
-            icon="🛡️",
-            engines=["social"]
-        )
-        session.add(chapter)
-
         await session.commit()
         logger.info("✅ SEED COMPLETE")
         logger.info(f"🔑 Credentials: admin@unionstation.com / admin123")
