@@ -35,7 +35,7 @@ async def login_access_token(
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": security.create_access_token(
-            user.id, access_token_expires
+            user.id
         ),
         "token_type": "bearer",
     }
