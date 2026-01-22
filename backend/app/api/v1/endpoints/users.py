@@ -56,7 +56,7 @@ async def read_user_me(
 @router.patch("/me", response_model=UserRead)
 async def update_user_me(
     *,
-    db: AsyncSession = Depends(deps.get_session),
+    db: AsyncSession = Depends(deps.get_async_db),
     user_in: UserUpdate,
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -83,7 +83,7 @@ async def update_user_me(
 
 @router.get("/me/communities", response_model=List[CommunityRead])
 async def read_my_communities(
-    db: AsyncSession = Depends(deps.get_session),
+    db: AsyncSession = Depends(deps.get_async_db),
     current_user: User = Depends(deps.get_current_active_user),
 ):
     """
