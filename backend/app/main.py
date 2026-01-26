@@ -1,9 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from app.database import init_db
 from .database import create_db_and_tables
 from .routers import news, auth, chess, sudoku, payment, battleship, saataath, poker, catan, tetris, ludo, go, minesweeper # <--- Changed this
 
 app = FastAPI(title="The Resinen Times API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🚀 Starting up: Initializing Database...")
+    await init_db()
+    print("✅ Database Initialized.")
+    yield
+    print("🛑 Shutting down...")
+
+app = FastAPI(lifespan=lifespan)
 
 origins = ["http://localhost:5173", "http://localhost:3000"]
 
