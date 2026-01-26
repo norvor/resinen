@@ -45,7 +45,7 @@
             // To restore real auth, uncomment the fetch block below
             /*
             const endpoint = authMode === 'login' ? '/auth/login' : '/auth/signup';
-            const res = await fetch(`http://localhost:8000${endpoint}`, { ... });
+            const res = await fetch(`https://api.resinen.com${endpoint}`, { ... });
             */
             
             // SIMULATED LOGIN SUCCESS

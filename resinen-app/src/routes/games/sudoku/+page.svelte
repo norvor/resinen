@@ -18,7 +18,7 @@
         mistakes = 0;
         selected = null;
         try {
-            const res = await fetch(`http://localhost:8000/games/sudoku/new?difficulty=${difficulty}`);
+            const res = await fetch(`https://api.resinen.com/games/sudoku/new?difficulty=${difficulty}`);
             const data = await res.json();
             puzzle = data.puzzle;
             solution = data.solution;

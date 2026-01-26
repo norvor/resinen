@@ -14,7 +14,7 @@
 
     // --- LOGIC ---
     async function fetchState() {
-        const res = await fetch('http://localhost:8000/games/saataath/state');
+        const res = await fetch('https://api.resinen.com/games/saataath/state');
         updateFromData(await res.json());
     }
 

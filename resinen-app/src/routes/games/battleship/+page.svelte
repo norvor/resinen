@@ -21,7 +21,7 @@
         // Randomly place OUR ships (Client side simple placement for now)
         placeShips(myBoard);
 
-        const res = await fetch('http://localhost:8000/games/battleship/new', { method: 'POST' });
+        const res = await fetch('https://api.resinen.com/games/battleship/new', { method: 'POST' });
         const data = await res.json();
         token = data.token;
         msg = "Radar Active. Select coordinates.";

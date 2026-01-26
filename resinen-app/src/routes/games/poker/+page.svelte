@@ -18,7 +18,7 @@
     async function startGame() {
         loading = true;
         resetRound();
-        const res = await fetch('http://localhost:8000/games/poker/deal');
+        const res = await fetch('https://api.resinen.com/games/poker/deal');
         const data = await res.json();
         playerHand = data.player;
         botHand = data.bot;

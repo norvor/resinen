@@ -48,7 +48,7 @@
         status = "Rivendell Computing...";
 
         try {
-            const res = await fetch('http://localhost:8000/games/chess/move', {
+            const res = await fetch('https://api.resinen.com/games/chess/move', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ fen: chess.fen(), difficulty: 3 })

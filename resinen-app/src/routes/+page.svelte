@@ -43,7 +43,7 @@
     function saveTodos() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_todos', JSON.stringify(todos)); }
 
     // --- DATA & INIT ---
-    const API = "http://localhost:8000/dashboard";
+    const API = "https://api.resinen.com/dashboard";
     
     async function fetchAll() {
         const t = Date.now();

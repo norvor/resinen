@@ -63,7 +63,7 @@
 
     async function botMove() {
         try {
-            const res = await fetch('http://localhost:8000/games/ludo/bot-move', {
+            const res = await fetch('https://api.resinen.com/games/ludo/bot-move', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ turn, dice, positions })

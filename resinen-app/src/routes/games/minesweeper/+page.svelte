@@ -25,7 +25,7 @@
         clearInterval(timerInterval);
         
         try {
-            const res = await fetch(`http://localhost:8000/games/minesweeper/new?difficulty=${difficulty}`);
+            const res = await fetch(`https://api.resinen.com/games/minesweeper/new?difficulty=${difficulty}`);
             const data = await res.json();
             board = data.board;
             
