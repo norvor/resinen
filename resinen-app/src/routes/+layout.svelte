@@ -97,7 +97,7 @@
             }
         }
         try {
-            const res = await fetch('http://localhost:8000/dashboard/audio');
+            const res = await fetch('https://api.resinen.com/dashboard/audio');
             audioConfig = await res.json();
         } catch (e) { }
     });
