@@ -11,7 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def planetary(): return get_planetary_state()
 
 @router.get("/visuals")
-async def visuals(): return await get_visual_feeds()
+async def visuals(): return await get_visual_feeds(art_source="met")
 
 @router.get("/zen")
 async def zen(): return await get_zen_wisdom()
