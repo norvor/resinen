@@ -14,7 +14,11 @@ def get_audio_config():
     }
 
 async def get_system_status():
-    return [{"name": "NET", "status": "operational"}, {"name": "CORE", "status": "operational"}, {"name": "UPLINK", "status": "operational"}]
+    return [
+        {"name": "NET", "status": "operational"}, 
+        {"name": "CORE", "status": "operational"}, 
+        {"name": "UPLINK", "status": "operational"}
+    ]
 
 # --- 2. PLANETARY STATE ---
 def get_planetary_state():
@@ -32,23 +36,21 @@ def get_planetary_state():
     watch = [{"city": c['name'], "time": (now + timedelta(hours=c['tz'])).strftime("%H:%M"), "icon": c['icon']} for c in cities]
     return {"year_pct": f"{percent:.6f}", "watch": watch}
 
+# --- 3. ART HELPER FUNCTIONS ---
 async def get_met_art(client):
     """Fetches a random masterpiece from The MET (New York)"""
     try:
-        # 1. Search for paintings with images (Classic & Landscape focus)
-        # We assume a static search to get valid IDs, or we could cache this.
-        # "Oil on canvas" usually guarantees a painting.
+        # Search for paintings with images
         search_url = "https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=oil%20on%20canvas&medium=Paintings"
-        
-        resp = await client.get(search_url)
+        resp = await client.get(search_url, timeout=4.0)
         data = resp.json()
         
         if data['total'] > 0:
-            # Pick a random object ID
-            obj_id = random.choice(data['objectIDs'][:100]) # Limit to top 100 for relevance
+            # Pick a random object ID from the top 100
+            obj_id = random.choice(data['objectIDs'][:100])
             
-            # 2. Get Object Details
-            obj_resp = await client.get(f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{obj_id}")
+            # Get Object Details
+            obj_resp = await client.get(f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{obj_id}", timeout=4.0)
             obj = obj_resp.json()
             
             return {
@@ -64,19 +66,17 @@ async def get_met_art(client):
 async def get_aic_art(client):
     """Fetches a random masterpiece from Art Institute of Chicago"""
     try:
-        # AIC allows random page fetching, which is faster/easier
-        # Page 1-100 contains the most popular/curated works
+        # Page 1-50 contains the curated works
         page = random.randint(1, 50)
         url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=1&fields=id,title,image_id,artist_display"
         
-        resp = await client.get(url)
+        resp = await client.get(url, timeout=4.0)
         data = resp.json()
         artwork = data['data'][0]
         
         if artwork['image_id']:
             # Construct IIIF Image URL
             img_url = f"https://www.artic.edu/iiif/2/{artwork['image_id']}/full/843,/0/default.jpg"
-            
             return {
                 "url": img_url,
                 "title": artwork['title'],
@@ -85,33 +85,31 @@ async def get_aic_art(client):
             }
     except Exception as e:
         print(f"AIC Error: {e}")
-    return None    
+    return None
 
-# --- 3. VISUALS (World, Nature, Food, Animals) ---
-async def get_visual_feeds():
+# --- 4. VISUALS AGGREGATOR ---
+async def get_visual_feeds(art_source: str = "met"):
     async with httpx.AsyncClient() as client:
         results = {}
-        
-        # A. WORLD VIEW (Cities & Wonders) - Replaces APOD
-        # High-res Unsplash IDs for specific locations
-        
 
+        # A. ART (Toggle between MET and AIC)
         art_data = None
         if art_source == "aic":
-            results['art_data'] = await get_aic_art(client)
+            art_data = await get_aic_art(client)
         
         # Fallback to MET if AIC fails or if MET is selected
         if not art_data: 
-            results['art_data'] = await get_met_art(client)
+            art_data = await get_met_art(client)
         
         # Ultimate Fallback
         if not art_data:
-            results['art_data'] = {
+            art_data = {
                 "url": "https://images.unsplash.com/photo-1549490349-8643362247b5",
                 "title": "Connection Lost",
                 "artist": "System",
                 "source": "OFFLINE"
             }
+        results['art'] = art_data
 
         # B. ANIMALS (Cat/Dog/Fox)
         try:
@@ -121,33 +119,31 @@ async def get_visual_feeds():
                 results['animal'] = {"type": "FOX", "url": r.json()['image']}
             elif choice == 'dog':
                 r = await client.get("https://dog.ceo/api/breeds/image/random", timeout=2.0)
-                results['animal'] = {"type": "DOG", "url": r.json()['message']}
+                breed_url = r.json()['message']
+                # Try to parse breed
+                try:
+                    breed = breed_url.split('/breeds/')[1].split('/')[0].replace('-', ' ').title()
+                except:
+                    breed = "DOG"
+                results['animal'] = {"type": breed, "url": breed_url}
             else:
                 r = await client.get("https://api.thecatapi.com/v1/images/search", timeout=2.0)
                 results['animal'] = {"type": "CAT", "url": r.json()[0]['url']}
         except: 
             results['animal'] = {"type": "OFFLINE", "url": ""}
 
-        # C. NATURE (Pure Landscapes for bottom right)
-        ids = ["1472214103451-9374bd1c798e", "1441974231531-c6227db76b6e", "1507525428034-b723cf961d3e"]
-        results['nature'] = f"https://images.unsplash.com/photo-{random.choice(ids)}?q=80&w=800&auto=format&fit=crop"
-        
-        # D. FOODISH
-
-        # 1. GET FOOD (TheMealDB)
-        # This is the "Better API" - High res, real recipes.
-        food_data = None
+        # C. FOOD (TheMealDB)
         try:
-            resp = await client.get("https://www.themealdb.com/api/json/v1/1/random.php")
+            resp = await client.get("https://www.themealdb.com/api/json/v1/1/random.php", timeout=2.0)
             data = resp.json()
             meal = data['meals'][0]
-            results['food'] = meal['strMealThumb'] # High Res Image URL
+            results['food'] = meal['strMealThumb']
         except:
-            results['food'] = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c" # Fallback
+            results['food'] = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
 
         return results
 
-# --- 4. DATA FEEDS (Sports, History, Uplifting, Markets, Jokes) ---
+# --- 5. DATA FEEDS (Sports, History, Uplifting, Markets, Jokes) ---
 async def get_new_feeds():
     headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
     async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
@@ -206,7 +202,7 @@ async def get_new_feeds():
 
         return data
 
-# --- 5. ZEN ---
+# --- 6. ZEN ---
 async def get_zen_wisdom():
     quotes = ["The obstacle is the path.", "Act without expectation.", "Stillness speaks.", "Nature does not hurry.", "Be water, my friend."]
     return {"text": random.choice(quotes)}
