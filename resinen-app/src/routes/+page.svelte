@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
+    import logo from '$lib/assets/logo.svg'; // <--- Add this line
 
     // --- STATE ---
     let planetary = $state<any>(null);
@@ -134,9 +135,9 @@
         </div>
 
         <div class="search-command-row">
-            <a href="/studio" class="studio-btn" title="Enter Studio">
-                <span class="rune-icon">✧</span> STUDIO
-            </a>
+            <div class="brand-display">
+                <img src={logo} alt="Resinen" class="brand-logo" />
+            </div>
 
             <div class="search-module">
                 <div class="search-engines">
@@ -256,6 +257,21 @@
 </div>
 
 <style>
+
+    .brand-display {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 36px;
+        padding-right: 20px;
+        user-select: none;
+    }
+
+    .brand-logo {
+        height: 42px;
+        width: auto;
+        filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.4)); /* Soft accent glow */
+    }
     :root { --accent: #2dd4bf; --card: rgba(30, 41, 59, 0.7); --border: #334155; --mono: 'JetBrains Mono', monospace; }
     .app-wrapper { min-height: 100vh; position: relative; padding-bottom: 220px; transition: background 0.5s; background-color: #020617; }
     

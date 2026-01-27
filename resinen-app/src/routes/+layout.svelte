@@ -135,7 +135,7 @@
                 
                 <a href="/" class="dock-home" title="Return Home">
                     <img src={logo} alt="Resinen" />
-                    <span>RESINEN</span>
+                    <span>Focus</span>
                 </a>
                 <div class="sep"></div>
 
