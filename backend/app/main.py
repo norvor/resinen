@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from app.database import init_db
 from .database import create_db_and_tables
 from .routers import news, auth, chess, sudoku, payment, battleship, saataath, poker, catan, tetris, ludo, go, minesweeper # <--- Changed this
+from app.routers import ..., cinema # Add cinema
+
 
 app = FastAPI(title="The Resinen Times API")
 
@@ -32,6 +34,7 @@ def on_startup():
     create_db_and_tables()
 
 app.include_router(news.router)
+app.include_router(cinema.router)
 app.include_router(ludo.router)  # <--- Added this
 app.include_router(chess.router)
 app.include_router(sudoku.router)
