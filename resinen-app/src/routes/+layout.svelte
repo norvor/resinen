@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
+    import logo from '$lib/assets/logo.svg';
 
     // --- GLOBAL AUDIO STATE ---
     let audioConfig = $state<any>(null);
@@ -13,11 +14,22 @@
     function toggleAudio() { isPlaying = !isPlaying; }
 
     // --- DRAGGABLE PORTAL ---
-    let videoX = $state(20); let videoY = $state(80);
+    let videoX = $state(20); let videoY = $state(20); 
     let isDragging = $state(false); let startX = 0, startY = 0;
-    function startDrag(e: MouseEvent) { isDragging = true; startX = e.clientX - videoX; startY = e.clientY - videoY; window.addEventListener('mousemove', onDrag); window.addEventListener('mouseup', stopDrag); }
-    function onDrag(e: MouseEvent) { if (!isDragging) return; videoX = e.clientX - startX; videoY = e.clientY - startY; }
-    function stopDrag() { isDragging = false; window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', stopDrag); }
+    
+    function startDrag(e: MouseEvent) { 
+        isDragging = true; 
+        startX = e.clientX - videoX; startY = e.clientY - videoY; 
+        window.addEventListener('mousemove', onDrag); window.addEventListener('mouseup', stopDrag); 
+    }
+    function onDrag(e: MouseEvent) { 
+        if (!isDragging) return; 
+        videoX = e.clientX - startX; videoY = e.clientY - startY; 
+    }
+    function stopDrag() { 
+        isDragging = false; 
+        window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', stopDrag); 
+    }
 
     // --- AUTH & PAYMENT STATE ---
     let showAuth = $state(false);
@@ -30,25 +42,14 @@
 
     // --- STATE MANAGEMENT ---
     function broadcastState() {
-        if (user) {
-            localStorage.setItem('resinen_user', JSON.stringify(user));
-        } else {
-            localStorage.removeItem('resinen_user');
-        }
+        if (user) { localStorage.setItem('resinen_user', JSON.stringify(user)); } 
+        else { localStorage.removeItem('resinen_user'); }
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('resinen-auth-change'));
     }
 
     async function handleAuth() {
         authError = "";
         try {
-            // FAUX AUTH FOR TESTING (Accepts any email/pass)
-            // To restore real auth, uncomment the fetch block below
-            /*
-            const endpoint = authMode === 'login' ? '/auth/login' : '/auth/signup';
-            const res = await fetch(`https://api.resinen.com${endpoint}`, { ... });
-            */
-            
-            // SIMULATED LOGIN SUCCESS
             setTimeout(() => {
                 user = { email: email || "test@resinen.com", token: "mock-token", is_premium: false };
                 isPremium = false;
@@ -57,27 +58,21 @@
                 email = ""; password = "";
                 window.location.reload(); 
             }, 500);
-
         } catch (e) { authError = "System Offline"; }
     }
 
     function logout() {
         if(confirm('Disconnect Neural Link?')) {
-            user = null;
-            isPremium = false;
+            user = null; isPremium = false;
             broadcastState();
             window.location.reload();
         }
     }
 
-    // --- FAUX PAYMENT LOGIC ---
     async function simulatePayment() {
         if (!user) { showAuth = true; return; }
-
         if(confirm("Initialize Mock Payment Gateway?")) {
-            // Fake processing delay
             alert("Contacting Bank Servers...");
-            
             setTimeout(() => {
                 user.is_premium = true;
                 isPremium = true;
@@ -105,7 +100,7 @@
 
 <svelte:head>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
-    </svelte:head>
+</svelte:head>
 
 <div class="layout-shell">
     
@@ -119,21 +114,37 @@
         </div>
     {/if}
 
+    <div class="holy-grail-dock">
+        <a href="/apps/cinema" class="grail-rune"><span>🎬</span><div class="dock-tooltip">Cinema</div></a>
+        <a href="/games/chess" class="grail-rune"><span>♟️</span><div class="dock-tooltip">Chess</div></a>
+        <a href="/games/poker" class="grail-rune"><span>♠️</span><div class="dock-tooltip">Poker</div></a>
+        <a href="/games/go" class="grail-rune"><span>⚪</span><div class="dock-tooltip">Go</div></a>
+        <a href="/games/tetris" class="grail-rune"><span>🕹️</span><div class="dock-tooltip">Tetris</div></a>
+        <a href="/games/sudoku" class="grail-rune"><span>🔢</span><div class="dock-tooltip">Sudoku</div></a>
+        <a href="/games/ludo" class="grail-rune"><span>🎲</span><div class="dock-tooltip">Ludo</div></a>
+        <a href="/games/minesweeper" class="grail-rune"><span>💣</span><div class="dock-tooltip">Minesweeper</div></a>
+        <a href="/games/snake" class="grail-rune"><span>🐍</span><div class="dock-tooltip">Snake</div></a>
+        <a href="/games/runner" class="grail-rune"><span>🏃</span><div class="dock-tooltip">Runner</div></a>
+        <a href="/games/2048" class="grail-rune"><span>🧱</span><div class="dock-tooltip">2048</div></a>
+        <a href="/games/battleship" class="grail-rune"><span>🚢</span><div class="dock-tooltip">Battleship</div></a>
+    </div>
+
     {#if audioConfig}
         <div class="global-dock">
             <div class="dock-inner">
                 
+                <a href="/" class="dock-home" title="Return Home">
+                    <img src={logo} alt="Resinen" />
+                    <span>RESINEN</span>
+                </a>
+                <div class="sep"></div>
+
                 {#if user}
                     <button class="logout-btn" onclick={logout} title="Sign Out">⏻</button>
                 {/if}
 
                 {#if user}
-                    <button 
-                        class="user-btn logged-in" 
-                        class:upgrade-mode={!isPremium}
-                        onclick={() => !isPremium && simulatePayment()} 
-                        title={isPremium ? `Operator: ${user.email}` : "Click to Upgrade"}
-                    >
+                    <button class="user-btn logged-in" class:upgrade-mode={!isPremium} onclick={() => !isPremium && simulatePayment()} title={isPremium ? `Operator: ${user.email}` : "Click to Upgrade"}>
                         <span class="online-dot" class:premium={isPremium}></span> 
                         {isPremium ? 'PRO' : 'UPGRADE'}
                     </button>
@@ -142,7 +153,6 @@
                 {/if}
 
                 <div class="sep"></div>
-
                 <div class="eq-visual" class:active={isPlaying}><span></span><span></span><span></span></div>
                 
                 {#each ['lotr', 'disney', 'hp', 'atla'] as key}
@@ -180,7 +190,6 @@
     {/if}
 
     <main class="page-content" class:blurred={showAuth}>
-        
         {#if $page.url.pathname.startsWith('/games') && !isPremium}
             <div class="paywall-overlay">
                 <div class="paywall-card">
@@ -194,48 +203,82 @@
         {:else}
             <slot />
         {/if}
-    
     </main>
-
 </div>
 
 <style>
-    /* ... keep all previous styles ... */
-    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow-x: hidden; }
+    /* GLOBAL SCROLL FIX */
+    :global(html) { height: 100%; overflow-y: scroll; scroll-behavior: smooth; }
+    :global(body) { 
+        margin: 0; min-height: 100vh;
+        background-color: #020617; color: #f8fafc; 
+        font-family: 'Space Grotesk', sans-serif; 
+        overflow-x: hidden; position: relative;
+    }
+    :global(:root) { --accent: #2dd4bf; --card: rgba(30, 41, 59, 0.7); --border: #334155; --mono: 'JetBrains Mono', monospace; }
     :global(*) { box-sizing: border-box; }
     
-    .layout-shell { min-height: 100vh; position: relative; }
-    .page-content { position: relative; z-index: 1; transition: filter 0.3s; }
+    .layout-shell { min-height: 100vh; position: relative; display: flex; flex-direction: column; }
+    .page-content { flex: 1; position: relative; z-index: 1; transition: filter 0.3s; width: 100%; }
     .page-content.blurred { filter: blur(5px) brightness(0.7); pointer-events: none; }
 
-    .global-dock { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: 90%; max-width: 480px; pointer-events: none; }
-    .dock-inner { pointer-events: auto; background: rgba(15, 23, 42, 0.95); border: 1px solid #334155; border-radius: 50px; padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px); gap: 10px; }
+    /* --- STACKED DOCKS --- */
+
+    /* 1. APP DOCK (UPPER STACK) */
+    .holy-grail-dock { 
+        position: fixed; bottom: 90px; /* Stacked above Global Dock */
+        left: 50%; transform: translateX(-50%); 
+        background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border);
+        border-radius: 50px; padding: 8px 20px;
+        display: flex; gap: 15px; z-index: 1000;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+        backdrop-filter: blur(8px);
+        max-width: 90vw; overflow: visible; 
+        transition: 0.3s;
+    }
+    .grail-rune { font-size: 1.5rem; text-decoration: none; transition: transform 0.2s; filter: grayscale(100%); opacity: 0.7; flex-shrink: 0; position: relative; }
+    .grail-rune:hover { transform: scale(1.2) translateY(-10px); filter: grayscale(0%); opacity: 1; }
+    .dock-tooltip { 
+        position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); 
+        background: var(--accent); color: #000; padding: 4px 8px; border-radius: 4px; 
+        font-family: var(--mono); font-size: 0.7rem; font-weight: bold; pointer-events: none; 
+        opacity: 0; transition: opacity 0.2s, transform 0.2s; white-space: nowrap; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+    }
+    .grail-rune:hover .dock-tooltip { opacity: 1; transform: translateX(-50%) translateY(-5px); }
+
+
+    /* 2. GLOBAL DOCK (LOWER STACK) */
+    .global-dock { 
+        position: fixed; bottom: 20px; /* Anchored to bottom */
+        left: 50%; transform: translateX(-50%); z-index: 9999; 
+        width: 90%; max-width: 550px; pointer-events: none; 
+    }
+    .dock-inner { 
+        pointer-events: auto; background: rgba(2, 6, 23, 0.95); border: 1px solid #334155; border-radius: 50px; 
+        padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; 
+        box-shadow: 0 10px 40px rgba(0,0,0,0.9); backdrop-filter: blur(12px); gap: 10px; 
+    }
+
+    /* HOME BUTTON */
+    .dock-home { display: flex; align-items: center; gap: 8px; text-decoration: none; color: #fff; transition: 0.2s; margin-right: 5px; }
+    .dock-home img { height: 20px; width: auto; filter: drop-shadow(0 0 5px rgba(45, 212, 191, 0.5)); }
+    .dock-home span { font-family: 'Space Grotesk'; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px; color: #fff; }
+    .dock-home:hover { opacity: 0.8; transform: scale(1.05); }
 
     /* CONTROLS */
     .channel-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; transition: 0.2s; padding: 0 5px; }
     .channel-btn:hover { opacity: 1; transform: scale(1.2); }
     .channel-btn.active { opacity: 1; text-shadow: 0 0 10px var(--glow); transform: scale(1.1); }
     
-    /* LOGOUT BUTTON */
-    .logout-btn { 
-        background: transparent; border: 1px solid #334155; color: #94a3b8; 
-        width: 30px; height: 30px; border-radius: 50%; 
-        font-size: 0.8rem; cursor: pointer; transition: 0.2s;
-        display: flex; align-items: center; justify-content: center;
-    }
+    .logout-btn { background: transparent; border: 1px solid #334155; color: #94a3b8; width: 30px; height: 30px; border-radius: 50%; font-size: 0.8rem; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
     .logout-btn:hover { color: #ef4444; border-color: #ef4444; }
 
-    /* USER BUTTON */
     .user-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.8; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
     .user-btn:hover { transform: scale(1.1); opacity: 1; }
     .user-btn.logged-in { font-family: 'JetBrains Mono'; font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
-    
     .user-btn.upgrade-mode { color: #facc15; animation: pulse-gold 2s infinite; }
-    @keyframes pulse-gold { 
-        0% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); }
-        50% { text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
-        100% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); }
-    }
+    @keyframes pulse-gold { 0% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); } 50% { text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); } 100% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); } }
 
     .online-dot { width: 8px; height: 8px; background: #64748b; border-radius: 50%; box-shadow: 0 0 5px #64748b; }
     .online-dot.premium { background: #facc15; box-shadow: 0 0 8px #facc15; }
@@ -252,7 +295,7 @@
     .eq-visual.active span:nth-child(3) { animation: bounce 0.4s infinite alternate; }
     @keyframes bounce { 0% { height: 2px; } 100% { height: 10px; } }
 
-    /* AUTH OVERLAY */
+    /* AUTH & PORTALS */
     .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; display: flex; justify-content: center; align-items: center; background: rgba(2, 6, 23, 0.4); }
     .auth-glass { width: 400px; padding: 40px; border-radius: 16px; background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); position: relative; animation: slideIn 0.3s ease-out; }
     .auth-glass.shake { animation: shake 0.4s; border-color: #ef4444; }
@@ -268,7 +311,6 @@
     .action-btn { width: 100%; padding: 15px; background: #2dd4bf; color: #020617; border: none; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono'; cursor: pointer; transition: 0.2s; }
     .action-btn:hover { background: #fff; box-shadow: 0 0 20px #2dd4bf; }
 
-    /* VIDEO PORTAL */
     .video-portal { position: fixed; width: 320px; max-width: 90vw; background: #000; border: 1px solid #2dd4bf; border-radius: 8px; z-index: 9998; box-shadow: 0 0 20px rgba(45, 212, 191, 0.2); overflow: hidden; }
     .portal-handle { background: rgba(45, 212, 191, 0.1); padding: 5px 10px; font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #2dd4bf; display: flex; justify-content: space-between; cursor: grab; }
     .portal-screen { position: relative; padding-bottom: 56.25%; }
@@ -276,7 +318,6 @@
     .drag-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
     .close-btn { background: none; border: none; color: #fff; cursor: pointer; }
 
-    /* PAYWALL */
     .paywall-overlay { height: 80vh; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, rgba(15,23,42,0.9), #020617); z-index: 50; }
     .paywall-card { text-align: center; border: 2px solid #ef4444; padding: 40px; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 0 50px rgba(239, 68, 68, 0.3); animation: shake 0.5s; width: 90%; max-width: 500px; }
     .paywall-card h1 { color: #ef4444; font-size: 2.5rem; margin: 0 0 10px 0; letter-spacing: 5px; }
