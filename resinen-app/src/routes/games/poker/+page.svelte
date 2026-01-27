@@ -59,7 +59,7 @@
         
         // Bot Turn
         message = "Bot thinking...";
-        const res = await fetch('http://localhost:8000/games/poker/bot-move', {
+        const res = await fetch('https://api.resinen.com/games/poker/bot-move', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -98,7 +98,7 @@
     }
 
     async function calculateWinner() {
-        const res = await fetch('http://localhost:8000/games/poker/winner', {
+        const res = await fetch('https://api.resinen.com/games/poker/winner', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({

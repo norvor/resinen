@@ -42,13 +42,13 @@
 
     async function newGame() {
         loading = true;
-        const res = await fetch('http://localhost:8000/games/saataath/new', { method: 'POST' });
+        const res = await fetch('https://api.resinen.com/games/saataath/new', { method: 'POST' });
         updateFromData(await res.json());
         loading = false;
     }
 
     async function selectTrump(suit: string) {
-        const res = await fetch('http://localhost:8000/games/saataath/trump', {
+        const res = await fetch('https://api.resinen.com/games/saataath/trump', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ suit })
@@ -59,7 +59,7 @@
     async function playCard(idx: number) {
         if (turn !== 0 || phase !== 'PLAYING') return;
         
-        const res = await fetch('http://localhost:8000/games/saataath/play', {
+        const res = await fetch('https://api.resinen.com/games/saataath/play', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ card_idx: idx })
@@ -75,7 +75,7 @@
 
     async function triggerBotLead() {
         if (turn === 1 && trick.length === 0) {
-            const res = await fetch('http://localhost:8000/games/saataath/bot-lead', { method: 'POST' });
+            const res = await fetch('https://api.resinen.com/games/saataath/bot-lead', { method: 'POST' });
             updateFromData(await res.json());
         }
     }

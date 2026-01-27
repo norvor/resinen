@@ -56,7 +56,7 @@
         // Optimistic UI
         enemyBoard[r][c] = 2; // Assume miss first to show click
 
-        const res = await fetch('http://localhost:8000/games/battleship/fire', {
+        const res = await fetch('https://api.resinen.com/games/battleship/fire', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ token, r, c })
