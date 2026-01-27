@@ -136,7 +136,6 @@
         <a href="/games/ludo" class="grail-rune" title="Ludo">🎲</a>
         <a href="/games/minesweeper" class="grail-rune" title="Minesweeper">💣</a>
         <a href="/games/snake" class="grail-rune" title="Snake">🐍</a>
-        <a href="/games/saataath" class="grail-rune" title="Saat Aath">🃏</a>
         <a href="/games/runner" class="grail-rune" title="Runner">🏃</a>
         <a href="/games/2048" class="grail-rune" title="2048">🧱</a>
         <a href="/games/battleship" class="grail-rune" title="Battleship">🚢</a>
