@@ -32,6 +32,61 @@ def get_planetary_state():
     watch = [{"city": c['name'], "time": (now + timedelta(hours=c['tz'])).strftime("%H:%M"), "icon": c['icon']} for c in cities]
     return {"year_pct": f"{percent:.6f}", "watch": watch}
 
+async def get_met_art(client):
+    """Fetches a random masterpiece from The MET (New York)"""
+    try:
+        # 1. Search for paintings with images (Classic & Landscape focus)
+        # We assume a static search to get valid IDs, or we could cache this.
+        # "Oil on canvas" usually guarantees a painting.
+        search_url = "https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=oil%20on%20canvas&medium=Paintings"
+        
+        resp = await client.get(search_url)
+        data = resp.json()
+        
+        if data['total'] > 0:
+            # Pick a random object ID
+            obj_id = random.choice(data['objectIDs'][:100]) # Limit to top 100 for relevance
+            
+            # 2. Get Object Details
+            obj_resp = await client.get(f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{obj_id}")
+            obj = obj_resp.json()
+            
+            return {
+                "url": obj.get('primaryImageSmall') or obj.get('primaryImage'),
+                "title": obj.get('title', 'Untitled'),
+                "artist": obj.get('artistDisplayName', 'Unknown Artist'),
+                "source": "MET NEW YORK"
+            }
+    except Exception as e:
+        print(f"MET Error: {e}")
+    return None
+
+async def get_aic_art(client):
+    """Fetches a random masterpiece from Art Institute of Chicago"""
+    try:
+        # AIC allows random page fetching, which is faster/easier
+        # Page 1-100 contains the most popular/curated works
+        page = random.randint(1, 50)
+        url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=1&fields=id,title,image_id,artist_display"
+        
+        resp = await client.get(url)
+        data = resp.json()
+        artwork = data['data'][0]
+        
+        if artwork['image_id']:
+            # Construct IIIF Image URL
+            img_url = f"https://www.artic.edu/iiif/2/{artwork['image_id']}/full/843,/0/default.jpg"
+            
+            return {
+                "url": img_url,
+                "title": artwork['title'],
+                "artist": artwork['artist_display'],
+                "source": "AIC CHICAGO"
+            }
+    except Exception as e:
+        print(f"AIC Error: {e}")
+    return None    
+
 # --- 3. VISUALS (World, Nature, Food, Animals) ---
 async def get_visual_feeds():
     async with httpx.AsyncClient() as client:
@@ -41,67 +96,22 @@ async def get_visual_feeds():
         # High-res Unsplash IDs for specific locations
         
 
-        WORLD_WONDERS = [
-    # --- ASIA ---
-            {"title": "Tokyo, Japan", "url": "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Kyoto, Japan", "url": "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Mount Fuji", "url": "https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Great Wall of China", "url": "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Hong Kong Night", "url": "https://images.unsplash.com/photo-1506318137071-a8bcbf90d346?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Seoul, South Korea", "url": "https://images.unsplash.com/photo-1517154421773-052f83c4217c?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Bali, Indonesia", "url": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Ha Long Bay, Vietnam", "url": "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Taj Mahal, India", "url": "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Petra, Jordan", "url": "https://images.unsplash.com/photo-1579606622384-8253119191d9?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Singapore Supertrees", "url": "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Jaipur, India", "url": "https://images.unsplash.com/photo-1477587458883-47145ed94245?auto=format&fit=crop&w=800&q=80"},
-
-            # --- EUROPE ---
-            {"title": "Paris, France", "url": "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80"},
-            {"title": "London, UK", "url": "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Swiss Alps", "url": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Santorini, Greece", "url": "https://images.unsplash.com/photo-1613395877344-13d4c79e4284?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Rome, Italy", "url": "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Venice, Italy", "url": "https://images.unsplash.com/photo-1514890547357-a9ee288728e0?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Amalfi Coast", "url": "https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Iceland Aurora", "url": "https://images.unsplash.com/photo-1476610182048-b716b8518aae?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Amsterdam Canals", "url": "https://images.unsplash.com/photo-1512470876302-972faa2ab9af?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Barcelona, Spain", "url": "https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Prague, Czechia", "url": "https://images.unsplash.com/photo-1519677100203-a0e668c92439?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Neuschwanstein Castle", "url": "https://images.unsplash.com/photo-1543783207-c1056d231478?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Hallstatt, Austria", "url": "https://images.unsplash.com/photo-1506355683710-bd071c0a5828?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Dubrovnik, Croatia", "url": "https://images.unsplash.com/photo-1555990538-1a525e838634?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Lofoten, Norway", "url": "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=800&q=80"},
-
-            # --- AMERICAS ---
-            {"title": "New York City", "url": "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80"},
-            {"title": "San Francisco", "url": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Grand Canyon", "url": "https://images.unsplash.com/photo-1474044159687-195d0f127146?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Yosemite National Park", "url": "https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Banff, Canada", "url": "https://images.unsplash.com/photo-1561134643-63305d28ef33?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Machu Picchu", "url": "https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Rio de Janeiro", "url": "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Patagonia", "url": "https://images.unsplash.com/photo-1518182170546-0766ce6fec93?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Havana, Cuba", "url": "https://images.unsplash.com/photo-1503923053744-b04071536750?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Mexico City", "url": "https://images.unsplash.com/photo-1518105779142-d975f22f1b0a?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Tulum, Mexico", "url": "https://images.unsplash.com/photo-1504730635926-28109ae43b23?auto=format&fit=crop&w=800&q=80"},
-
-            # --- AFRICA & MIDDLE EAST ---
-            {"title": "Dubai, UAE", "url": "https://images.unsplash.com/photo-1512453979798-5ea904ac6605?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Pyramids of Giza", "url": "https://images.unsplash.com/photo-1539650116455-251d9a05a218?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Cape Town", "url": "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Sahara Desert", "url": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Marrakech, Morocco", "url": "https://images.unsplash.com/photo-1597212720117-6d60527c9287?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Serengeti, Tanzania", "url": "https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Seychelles", "url": "https://images.unsplash.com/photo-1537551080512-fb7dd14fbf90?auto=format&fit=crop&w=800&q=80"},
-
-            # --- OCEANIA ---
-            {"title": "Sydney Opera House", "url": "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80"},
-            {"title": "New Zealand", "url": "https://images.unsplash.com/photo-1469521669194-babb45f8a8d4?auto=format&fit=crop&w=800&q=80"},
-            {"title": "Bora Bora", "url": "https://images.unsplash.com/photo-1589979481223-deb893043163?auto=format&fit=crop&w=800&q=80"}
-        ]
-
-        results['world'] = random.choice(WORLD_WONDERS)
+        art_data = None
+        if art_source == "aic":
+            results['art_data'] = await get_aic_art(client)
+        
+        # Fallback to MET if AIC fails or if MET is selected
+        if not art_data: 
+            results['art_data'] = await get_met_art(client)
+        
+        # Ultimate Fallback
+        if not art_data:
+            results['art_data'] = {
+                "url": "https://images.unsplash.com/photo-1549490349-8643362247b5",
+                "title": "Connection Lost",
+                "artist": "System",
+                "source": "OFFLINE"
+            }
 
         # B. ANIMALS (Cat/Dog/Fox)
         try:
