@@ -10,15 +10,17 @@
     let loading = $state(true);
     let refreshTimer: any;
 
+    // --- ART GALLERY STATE ---
+    let artMode = $state('met'); // 'met' or 'aic'
+    let artLoading = $state(false);
+
     // --- PREMIUM STATE ---
     let isPremium = $state(false);
 
     // --- HELPER: CHECK AUTH ---
-    // This runs on mount AND whenever the layout says "Auth Changed"
     function checkPremiumStatus() {
         if (typeof localStorage !== 'undefined') {
             const user = JSON.parse(localStorage.getItem('resinen_user') || 'null');
-            // If user exists AND has is_premium flag
             isPremium = (user && user.is_premium) === true;
         } else {
             isPremium = false;
@@ -43,17 +45,43 @@
     function saveTodos() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_todos', JSON.stringify(todos)); }
 
     // --- DATA & INIT ---
-    const API = "https://api.resinen.com/dashboard";
+    // NOTE: Change this to http://localhost:8000/dashboard for local dev
+    // or https://api.resinen.com/dashboard for production
+    const API = "https://api.resinen.com/dashboard"; 
     
+    async function fetchVisuals() {
+        artLoading = true;
+        try {
+            const t = Date.now();
+            // Fetch visuals specifically with the selected Art Mode
+            const res = await fetch(`${API}/visuals?t=${t}&art_source=${artMode}`);
+            visuals = await res.json();
+        } catch(e) { console.error(e); }
+        finally { artLoading = false; }
+    }
+
+    function toggleArtMode() {
+        artMode = artMode === 'met' ? 'aic' : 'met';
+        fetchVisuals();
+    }
+
     async function fetchAll() {
         const t = Date.now();
         try {
-            const [p, v, f, z, s] = await Promise.all([
-                fetch(`${API}/planetary`), fetch(`${API}/visuals?t=${t}`), fetch(`${API}/feeds?t=${t}`),
-                fetch(`${API}/zen?t=${t}`), fetch(`${API}/system`)
+            const [p, f, z, s] = await Promise.all([
+                fetch(`${API}/planetary`), 
+                fetch(`${API}/feeds?t=${t}`),
+                fetch(`${API}/zen?t=${t}`), 
+                fetch(`${API}/system`)
             ]);
-            planetary = await p.json(); visuals = await v.json(); feeds = await f.json();
-            zen = await z.json(); system = await s.json();
+            
+            // Fetch visuals separately to handle the toggle logic cleanly
+            await fetchVisuals();
+
+            planetary = await p.json(); 
+            feeds = await f.json();
+            zen = await z.json(); 
+            system = await s.json();
         } catch (e) { console.error("Dashboard Sync Failed", e); }
     }
 
@@ -63,13 +91,9 @@
 
     onMount(async () => { 
         try { 
-            // 1. Initial Check
             checkPremiumStatus();
-
-            // 2. Listen for Login/Logout events from Layout
             window.addEventListener('resinen-auth-change', checkPremiumStatus);
 
-            // 3. Load Widget Data
             if (typeof localStorage !== 'undefined') {
                 const savedNote = localStorage.getItem('resinen_notes');
                 if (savedNote) noteContent = savedNote;
@@ -77,7 +101,6 @@
                 if (savedTodos) todos = JSON.parse(savedTodos);
             }
 
-            // 4. Fetch Data
             await fetchAll(); 
             refreshTimer = setInterval(fetchAll, 300000);
         } 
@@ -139,16 +162,19 @@
                 
                 <section class="col">
                     <div class="card hero"><div class="head">YUMMY</div>{#if visuals?.food}<div class="img-frame" style="background-image: url({visuals.food})"></div>{/if}</div>
+                    
                     <div class="card animal-card">
                         <div class="head">COMPANION LINK</div>
                         {#if visuals?.animal}
                             <div class="animal-frame"><img src={visuals.animal.url} alt="Animal" /><div class="animal-tag">DETECTED: {visuals.animal.type}</div></div>
                         {/if}
                     </div>
+
                     <div class="card news">
                         <div class="head">UPLIFTING</div>
                         {#if feeds?.uplifting}{#each feeds.uplifting as n}<a href={n.url} target="_blank" class="news-item">★ {n.title}</a>{/each}{/if}
                     </div>
+                    
                     {#if feeds?.joke}<div class="card joke"><div class="head">HUMOR</div><div class="joke-text"><p>Q: {feeds.joke.setup}</p><p class="punch">A: {feeds.joke.punchline}</p></div></div>{/if}
                 </section>
 
@@ -222,17 +248,33 @@
                 </section>
 
                 <section class="col">
-                    {#if visuals?.world}
-                        <div class="card world" style="background-image: url({visuals.world.url})">
-                            <div class="overlay"><div class="head">WORLD VIEW</div><h2>{visuals.world.title}</h2></div>
+                    {#if visuals?.art}
+                        <div class="card art-card" style="background-image: url({visuals.art.url})">
+                            <div class="overlay">
+                                <div class="art-header">
+                                    <div class="head">GALLERY LINK</div>
+                                    <button class="art-toggle" onclick={toggleArtMode} disabled={artLoading}>
+                                        <span class:active={artMode === 'met'}>MET</span>
+                                        <span class="div">/</span>
+                                        <span class:active={artMode === 'aic'}>AIC</span>
+                                    </button>
+                                </div>
+                                <div class="art-info" class:blur={artLoading}>
+                                    <h2>{visuals.art.title}</h2>
+                                    <div class="artist">{visuals.art.artist}</div>
+                                    <div class="source-tag">{visuals.art.source}</div>
+                                </div>
+                            </div>
                         </div>
                     {/if}
+
                     <div class="card sports">
                         <div class="head">GLOBAL SPORTS</div>
                         <div class="sports-list">
                             {#if feeds?.sports}{#each feeds.sports as s}<a href={s.link} target="_blank" class="sports-item"><span class="sport-icon">⚽</span><span class="sport-title">{s.title}</span></a>{/each}{/if}
                         </div>
                     </div>
+
                     <div class="card history">
                         <div class="head">TIME CAPSULE</div>
                         {#if feeds?.history}<div class="hist-content"><div class="hist-year">{feeds.history.year}</div><div class="hist-text">{feeds.history.text}</div></div>{/if}
@@ -320,12 +362,29 @@
     .animal-frame img { width: 100%; border-radius: 4px; display: block; border: 1px solid var(--border); }
     .animal-tag { position: absolute; bottom: 15px; left: 15px; background: #000; color: var(--accent); padding: 2px 6px; font-size: 0.6rem; font-family: var(--mono); border: 1px solid var(--accent); }
 
-    .world { height: 250px; background-size: cover; display: flex; align-items: flex-end; }
-    .overlay { width: 100%; background: linear-gradient(to top, #000, transparent); padding: 15px; }
-    .world h2 { margin: 0; font-size: 1.2rem; text-shadow: 0 2px 4px #000; }
-
-    .sticky textarea { width: 100%; height: 150px; background: transparent; border: none; color: #fff; padding: 10px; font-family: var(--mono); font-size: 0.8rem; resize: none; outline: none; }
+    /* ART CARD STYLES */
+    .art-card { height: 350px; background-size: cover; background-position: center; position: relative; transition: 0.3s; }
+    .art-card .overlay { width: 100%; height: 100%; background: linear-gradient(to top, #000 10%, transparent 80%); padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+    .art-header { display: flex; justify-content: space-between; align-items: flex-start; }
     
+    .art-toggle { 
+        background: rgba(0,0,0,0.6); border: 1px solid var(--border); 
+        color: #64748b; font-family: var(--mono); font-size: 0.7rem; 
+        padding: 4px 8px; border-radius: 4px; cursor: pointer; backdrop-filter: blur(5px);
+        transition: 0.2s;
+    }
+    .art-toggle:hover { border-color: var(--accent); }
+    .art-toggle span.active { color: var(--accent); font-weight: bold; text-shadow: 0 0 10px var(--accent); }
+    .art-toggle .div { margin: 0 4px; opacity: 0.5; }
+
+    .art-info { transition: 0.3s; }
+    .art-info.blur { filter: blur(5px); opacity: 0.5; }
+    .art-card h2 { margin: 0 0 5px 0; font-size: 1.1rem; text-shadow: 0 2px 4px #000; line-height: 1.2; }
+    .artist { font-family: var(--mono); color: #cbd5e1; font-size: 0.8rem; margin-bottom: 8px; }
+    .source-tag { display: inline-block; background: var(--accent); color: #000; font-family: var(--mono); font-size: 0.6rem; font-weight: bold; padding: 2px 6px; border-radius: 2px; }
+
+    /* UTILS */
+    .sticky textarea { width: 100%; height: 150px; background: transparent; border: none; color: #fff; padding: 10px; font-family: var(--mono); font-size: 0.8rem; resize: none; outline: none; }
     .todo-input-row { display: flex; border-bottom: 1px solid var(--border); }
     .todo-input-row input { flex: 1; background: transparent; border: none; padding: 8px 12px; color: #fff; font-family: var(--mono); font-size: 0.8rem; outline: none; }
     .todo-input-row button { background: var(--accent); border: none; color: #000; font-weight: bold; width: 30px; cursor: pointer; }
