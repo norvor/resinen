@@ -15,7 +15,7 @@ def create_deck():
     return deck
 
 def get_suit(card): return card[1]
-def get_rank_val(card): return RANK_MAP[card[0]]
+def get_rank_val(card): return RANK_MAP.get(card[0], 0) # Safety .get()
 
 class SaatAathGame:
     def __init__(self):
@@ -38,10 +38,9 @@ class SaatAathGame:
 
     def set_trump(self, suit):
         self.trump = suit
-        # Second Deal (Rest of cards)
+        # Full Deal
         self.hands[0].extend(self.deck[10:20])
         self.hands[1].extend(self.deck[20:30])
-        
         self.sort_hand(0)
         self.sort_hand(1)
         self.phase = "PLAYING"
@@ -54,33 +53,25 @@ class SaatAathGame:
         self.hands[p_idx].sort(key=sort_key)
 
     def play_card(self, p_idx, card):
-        """
-        Accepts 'card' string (e.g. "7H") to avoid index errors.
-        """
         if self.phase == "FINISHED": return False, "Game Over"
         
         hand = self.hands[p_idx]
-        
-        # 1. Validation
-        if card not in hand:
-            return False, "Card not in hand"
+        if card not in hand: return False, "Card not in hand"
             
-        # 2. Rule Check: Must Follow Suit
+        # Rule Check: Must Follow Suit
         if len(self.current_trick) > 0:
             lead_card = self.current_trick[0][1]
             lead_suit = get_suit(lead_card)
             played_suit = get_suit(card)
             
             has_suit = any(get_suit(c) == lead_suit for c in hand)
-            
             if has_suit and played_suit != lead_suit:
-                return False, f"You must play {lead_suit}"
+                return False, f"Must follow {lead_suit}"
 
-        # 3. Execute
+        # Execute
         hand.remove(card)
         self.current_trick.append((p_idx, card))
         
-        # Check Trick End
         if len(self.current_trick) == 2:
             self.resolve_trick()
         else:
@@ -96,11 +87,11 @@ class SaatAathGame:
         self.tricks_won[winner] += 1
         self.turn = winner
         
-        # Save state for UI animation
         self.last_trick = list(self.current_trick)
         self.last_winner = winner
         self.current_trick = [] 
         
+        # Check Win Condition
         if len(self.hands[0]) == 0:
             self.phase = "FINISHED"
 
@@ -113,57 +104,69 @@ class SaatAathGame:
         
         if s2 == self.trump and s1 != self.trump: return p2
         if s1 == self.trump and s2 != self.trump: return p1
-        
-        if s1 == s2:
-            return p1 if r1 > r2 else p2
-            
+        if s1 == s2: return p1 if r1 > r2 else p2
         return p1
 
     def get_bot_move_card(self):
         """
-        Returns the CARD STRING to play.
+        CRASH-PROOF BOT LOGIC
+        Wraps decision making in a sandbox. 
+        If logic fails, it plays the first valid card it finds.
         """
         try:
             hand = self.hands[1]
             if not hand: return None
             
-            chosen_idx = 0
+            # --- STRATEGIC BLOCK ---
+            chosen_card = None
             
-            # LOGIC
             if len(self.current_trick) == 0:
-                # Leading: Play highest rank
-                chosen_idx = max(range(len(hand)), key=lambda i: get_rank_val(hand[i]))
+                # Leading: Play highest rank (Simple Strategy)
+                # Sort by rank desc, pick first
+                sorted_hand = sorted(hand, key=lambda c: -get_rank_val(c))
+                chosen_card = sorted_hand[0]
             else:
                 # Following
-                lead_suit = get_suit(self.current_trick[0][1])
-                matches = [i for i, c in enumerate(hand) if get_suit(c) == lead_suit]
+                lead_card = self.current_trick[0][1]
+                lead_suit = get_suit(lead_card)
+                matches = [c for c in hand if get_suit(c) == lead_suit]
                 
                 if matches:
-                    lead_rank = get_rank_val(self.current_trick[0][1])
-                    winning = [i for i in matches if get_rank_val(hand[i]) > lead_rank]
+                    # Try to win
+                    lead_rank = get_rank_val(lead_card)
+                    winning = [c for c in matches if get_rank_val(c) > lead_rank]
                     
                     if winning:
-                        # Win cheaply
-                        winning.sort(key=lambda i: get_rank_val(hand[i]))
-                        chosen_idx = winning[0]
+                        # Win cheap: Lowest winning card
+                        chosen_card = sorted(winning, key=lambda c: get_rank_val(c))[0]
                     else:
-                        # Lose cheaply
-                        matches.sort(key=lambda i: get_rank_val(hand[i]))
-                        chosen_idx = matches[0]
+                        # Lose cheap: Lowest matching card
+                        chosen_card = sorted(matches, key=lambda c: get_rank_val(c))[0]
                 else:
-                    # Trump or discard
-                    trumps = [i for i, c in enumerate(hand) if get_suit(c) == self.trump]
+                    # Can't follow suit
+                    trumps = [c for c in hand if get_suit(c) == self.trump]
                     if trumps:
-                        trumps.sort(key=lambda i: get_rank_val(hand[i]))
-                        chosen_idx = trumps[0]
+                        # Trump cheap: Lowest trump
+                        chosen_card = sorted(trumps, key=lambda c: get_rank_val(c))[0]
                     else:
-                        chosen_idx = min(range(len(hand)), key=lambda i: get_rank_val(hand[i]))
+                        # Discard junk: Lowest card overall
+                        chosen_card = sorted(hand, key=lambda c: get_rank_val(c))[0]
 
-            return hand[chosen_idx]
+            # --- VALIDATION BLOCK ---
+            # Ensure chosen_card is actually in hand (Sanity Check)
+            if chosen_card and chosen_card in hand:
+                return chosen_card
+                
+            # Fallback if logic failed to pick
+            return hand[0]
 
         except Exception as e:
-            print(f"Bot Logic Error: {e}")
-            return hand[0] if hand else None
+            print(f"CRITICAL BOT ERROR: {e}")
+            # ULTIMATE FALLBACK: Play first available card
+            # This prevents the server from crashing on logic errors
+            if self.hands[1]:
+                return self.hands[1][0]
+            return None
 
 # Singleton Game Instance
 active_game = SaatAathGame()

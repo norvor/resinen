@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ..saataath_ai import active_game
 
@@ -32,27 +32,36 @@ def select_trump(req: TrumpRequest):
     return get_state()
 
 class PlayRequest(BaseModel):
-    card: str  # <--- CHANGED: String instead of int index
+    card: str
 
 @router.post("/play")
 def play_card(req: PlayRequest):
-    # 1. Player Move
-    success, msg = active_game.play_card(0, req.card)
-    if not success: return {"error": msg}
-    
-    # 2. Bot Response (Auto-Follow)
-    if active_game.phase == "PLAYING" and active_game.turn == 1 and len(active_game.current_trick) == 1:
-        bot_card = active_game.get_bot_move_card()
-        if bot_card:
-            active_game.play_card(1, bot_card)
+    try:
+        # 1. Player Move
+        success, msg = active_game.play_card(0, req.card)
+        if not success: return {"error": msg}
         
-    return get_state()
+        # 2. Bot Response (Auto-Follow)
+        # Only auto-play if bot needs to follow suit immediately
+        if active_game.phase == "PLAYING" and active_game.turn == 1 and len(active_game.current_trick) == 1:
+            bot_card = active_game.get_bot_move_card()
+            if bot_card:
+                active_game.play_card(1, bot_card)
+            
+        return get_state()
+    except Exception as e:
+        print(f"SERVER ERROR IN PLAY: {e}")
+        return {"error": "Server Error - Game State Preserved"}
 
 @router.post("/bot-lead")
 def bot_lead():
-    # Helper for frontend to trigger bot lead after animation
-    if active_game.phase == "PLAYING" and active_game.turn == 1 and len(active_game.current_trick) == 0:
-        bot_card = active_game.get_bot_move_card()
-        if bot_card:
-            active_game.play_card(1, bot_card)
-    return get_state()
+    try:
+        # Helper for frontend to trigger bot lead after animation
+        if active_game.phase == "PLAYING" and active_game.turn == 1 and len(active_game.current_trick) == 0:
+            bot_card = active_game.get_bot_move_card()
+            if bot_card:
+                active_game.play_card(1, bot_card)
+        return get_state()
+    except Exception as e:
+        print(f"SERVER ERROR IN BOT LEAD: {e}")
+        return get_state()
