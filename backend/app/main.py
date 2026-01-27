@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database import init_db
 from .database import create_db_and_tables
-from .routers import news, auth, chess, sudoku, payment, battleship, saataath, poker, catan, tetris, ludo, go, minesweeper # <--- Changed this
-from app.routers import ..., cinema # Add cinema
+from .routers import news, auth, cinema, chess, sudoku, payment, battleship, saataath, poker, catan, tetris, ludo, go, minesweeper # <--- Changed this
 
 
 app = FastAPI(title="The Resinen Times API")
