@@ -104,6 +104,7 @@
     <div class="bg-layer aurora"></div>
 
     <div class="holy-grail-dock">
+        <a href="/apps/cinema" class="grail-rune" title="Cinema">🎬</a>
         <a href="/games/chess" class="grail-rune" title="Chess">♟️</a>
         <a href="/games/poker" class="grail-rune" title="Poker">♠️</a>
         <a href="/games/go" class="grail-rune" title="Go">⚪</a>
