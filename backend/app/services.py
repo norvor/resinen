@@ -39,7 +39,10 @@ async def get_visual_feeds():
         
         # A. WORLD VIEW (Cities & Wonders) - Replaces APOD
         # High-res Unsplash IDs for specific locations
+        
+
         WORLD_WONDERS = [
+    # --- ORIGINALS ---
             {"title": "Tokyo, Japan", "url": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=800"},
             {"title": "New York City, USA", "url": "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=800"},
             {"title": "Swiss Alps", "url": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?q=80&w=800"},
@@ -49,8 +52,58 @@ async def get_visual_feeds():
             {"title": "Icelandic Aurora", "url": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?q=80&w=800"},
             {"title": "London Bridge", "url": "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?q=80&w=800"},
             {"title": "Singapore Gardens", "url": "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?q=80&w=800"},
-            {"title": "Amalfi Coast", "url": "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800"}
+            {"title": "Amalfi Coast", "url": "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800"},
+
+            # --- EUROPE ---
+            {"title": "Santorini, Greece", "url": "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?q=80&w=800"},
+            {"title": "Rome Colosseum", "url": "https://images.unsplash.com/photo-1552832230-c0197dd311b5?q=80&w=800"},
+            {"title": "Venice Canals", "url": "https://images.unsplash.com/photo-1514890547357-a9ee288728e0?q=80&w=800"},
+            {"title": "Barcelona, Spain", "url": "https://images.unsplash.com/photo-1583422409516-2895a77efded?q=80&w=800"},
+            {"title": "Prague, Czechia", "url": "https://images.unsplash.com/photo-1519677100203-a0e668c92439?q=80&w=800"},
+            {"title": "Amsterdam, Netherlands", "url": "https://images.unsplash.com/photo-1512470876302-972faa2ab9af?q=80&w=800"},
+            {"title": "Lofoten Islands, Norway", "url": "https://images.unsplash.com/photo-1470058869958-2a77ade41c02?q=80&w=800"},
+            {"title": "Hallstatt, Austria", "url": "https://images.unsplash.com/photo-1506355683710-bd071c0a5828?q=80&w=800"},
+            {"title": "Budapest, Hungary", "url": "https://images.unsplash.com/photo-1565426873118-a17ed65d74b9?q=80&w=800"},
+            {"title": "Neuschwanstein, Germany", "url": "https://images.unsplash.com/photo-1543783207-c1056d231478?q=80&w=800"},
+            {"title": "Dubrovnik, Croatia", "url": "https://images.unsplash.com/photo-1555990538-1a525e838634?q=80&w=800"},
+            {"title": "Edinburgh, Scotland", "url": "https://images.unsplash.com/photo-1506377295352-e3154d43ea9e?q=80&w=800"},
+
+            # --- ASIA & OCEANIA ---
+            {"title": "Mount Fuji, Japan", "url": "https://images.unsplash.com/photo-1576675466969-38eeae4b41f6?q=80&w=800"},
+            {"title": "Seoul, South Korea", "url": "https://images.unsplash.com/photo-1538485399081-7191377e8241?q=80&w=800"},
+            {"title": "Great Wall of China", "url": "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?q=80&w=800"},
+            {"title": "Taj Mahal, India", "url": "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=800"},
+            {"title": "Ha Long Bay, Vietnam", "url": "https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=800"},
+            {"title": "Bali, Indonesia", "url": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?q=80&w=800"},
+            {"title": "Petra, Jordan", "url": "https://images.unsplash.com/photo-1579606622384-8253119191d9?q=80&w=800"},
+            {"title": "Sydney Opera House", "url": "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=800"},
+            {"title": "Bora Bora", "url": "https://images.unsplash.com/photo-1589979481223-deb893043163?q=80&w=800"},
+            {"title": "Angkor Wat, Cambodia", "url": "https://images.unsplash.com/photo-1600520611035-b22334f5451a?q=80&w=800"},
+
+            # --- AMERICAS ---
+            {"title": "Grand Canyon, USA", "url": "https://images.unsplash.com/photo-1615551043360-33de8b5f410c?q=80&w=800"},
+            {"title": "Yosemite, USA", "url": "https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?q=80&w=800"},
+            {"title": "San Francisco Bridge", "url": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?q=80&w=800"},
+            {"title": "Banff, Canada", "url": "https://images.unsplash.com/photo-1561134643-63305d28ef33?q=80&w=800"},
+            {"title": "Machu Picchu, Peru", "url": "https://images.unsplash.com/photo-1587595431973-160d0d94add1?q=80&w=800"},
+            {"title": "Rio de Janeiro, Brazil", "url": "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?q=80&w=800"},
+            {"title": "Patagonia, Chile", "url": "https://images.unsplash.com/photo-1518182170546-0766ce6fec93?q=80&w=800"},
+            {"title": "Havana, Cuba", "url": "https://images.unsplash.com/photo-1503923053744-b04071536750?q=80&w=800"},
+            {"title": "Mexico City", "url": "https://images.unsplash.com/photo-1585464231875-d9cae9f0d82b?q=80&w=800"},
+            {"title": "Chicago Skyline", "url": "https://images.unsplash.com/photo-1494522358652-f30e61a60313?q=80&w=800"},
+            
+            # --- AFRICA & MIDDLE EAST ---
+            {"title": "Pyramids of Giza", "url": "https://images.unsplash.com/photo-1503177119275-0aa32b3a9368?q=80&w=800"},
+            {"title": "Cape Town, SA", "url": "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?q=80&w=800"},
+            {"title": "Sahara Desert", "url": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=800"},
+            {"title": "Marrakech, Morocco", "url": "https://images.unsplash.com/photo-1597212720117-6d60527c9287?q=80&w=800"},
+            {"title": "Victoria Falls", "url": "https://images.unsplash.com/photo-1605723517503-3cadb5818a0c?q=80&w=800"},
+            {"title": "Istanbul, Turkey", "url": "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?q=80&w=800"},
+            {"title": "Serengeti, Tanzania", "url": "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=800"},
+            {"title": "Madagascar Avenue", "url": "https://images.unsplash.com/photo-1555593846-9d2a23330368?q=80&w=800"}
         ]
+
+
         results['world'] = random.choice(WORLD_WONDERS)
 
         # B. ANIMALS (Cat/Dog/Fox)
