@@ -73,10 +73,17 @@ async def get_visual_feeds():
         results['nature'] = f"https://images.unsplash.com/photo-{random.choice(ids)}?q=80&w=800&auto=format&fit=crop"
         
         # D. FOODISH
+
+        # 1. GET FOOD (TheMealDB)
+        # This is the "Better API" - High res, real recipes.
+        food_data = None
         try:
-            r = await client.get("https://foodish-api.com/api/", timeout=2.0)
-            results['food'] = r.json()['image']
-        except: results['food'] = "https://foodish-api.com/images/burger/burger8.jpg"
+            resp = await client.get("https://www.themealdb.com/api/json/v1/1/random.php")
+            data = resp.json()
+            meal = data['meals'][0]
+            results['food'] = meal['strMealThumb'] # High Res Image URL
+        except:
+            results['food'] = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c" # Fallback
 
         return results
 
