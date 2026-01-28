@@ -2,6 +2,15 @@
     import { onMount, onDestroy } from 'svelte';
     import logo from '$lib/assets/logo.svg';
     import ProjectModal from '$lib/components/ProjectModal.svelte';
+    import TravelModal from '$lib/components/TravelModal.svelte'; 
+    import * as api from '$lib/api';
+
+    // --- IMPORT NEW WIDGETS ---
+    import ScribbleWidget from '$lib/components/widgets/ScribbleWidget.svelte';
+    import HabitMatrix from '$lib/components/widgets/HabitMatrix.svelte';
+    import TravelList from '$lib/components/widgets/TravelList.svelte'; 
+    import BreathingOrb from '$lib/components/widgets/BreathingOrb.svelte';
+    import BudgetWidget from '$lib/components/widgets/BudgetWidget.svelte'; // Make sure this is imported
 
     // --- STATE ---
     let planetary = $state<any>(null);
@@ -59,11 +68,19 @@
     }
     function nextLove() { if (loves.length > 0) loveIndex = (loveIndex + 1) % loves.length; }
     function prevLove() { if (loves.length > 0) loveIndex = (loveIndex - 1 + loves.length) % loves.length; }
-    function saveLoves() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_loves', JSON.stringify(loves)); }
+    function saveLoves() { api.saveData('resinen_loves', loves); }
 
     // --- PROJECT CARDS STATE ---
     type Link = { name: string; url: string };
-    type Project = { id: number; name: string; rune: string; links: Link[] };
+    type Project = { 
+        id: number; 
+        name: string; 
+        rune: string; 
+        org?: string;        // New
+        description?: string; // New
+        links: Link[] 
+    };
+    
     let projects = $state<Project[]>([]);
     let newProjName = $state("");
     
@@ -76,7 +93,7 @@
     function addProject() {
         if (!newProjName.trim()) return;
         const rune = RUNES[Math.floor(Math.random() * RUNES.length)];
-        projects = [...projects, { id: Date.now(), name: newProjName, rune, links: [] }];
+        projects = [...projects, { id: Date.now(), name: newProjName, rune, links: [], org: "", description: "" }];
         newProjName = "";
         saveProjects();
     }
@@ -94,7 +111,30 @@
         projects = projects.map(p => p.id === updated.id ? updated : p);
         saveProjects();
     }
-    function saveProjects() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_projects', JSON.stringify(projects)); }
+    function saveProjects() { api.saveData('resinen_projects', projects); }
+
+    // --- TRAVEL LIST STATE ---
+    type Place = { id: number; name: string; photos: string[] };
+    let places = $state<Place[]>([]);
+    let isTravelModalOpen = $state(false);
+    let viewingPlace = $state<Place | null>(null);
+
+    function addTravelPlace(name: string) {
+        places = [...places, { id: Date.now(), name, photos: [] }];
+        savePlaces();
+    }
+    function deleteTravelPlace(id: number) {
+        if(confirm("Remove destination?")) {
+            places = places.filter(p => p.id !== id);
+            savePlaces();
+        }
+    }
+    function openTravelPlace(p: Place) { viewingPlace = p; isTravelModalOpen = true; }
+    function saveEditedPlace(updated: Place) {
+        places = places.map(p => p.id === updated.id ? updated : p);
+        savePlaces();
+    }
+    function savePlaces() { api.saveData('resinen_travel_list', { places }); }
 
     // --- CUSTOM TIMER STATE ---
     let timerDuration = $state(20); 
@@ -147,14 +187,14 @@
 
     // --- WIDGETS ---
     let noteContent = $state("");
-    function saveNotes() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_notes', noteContent); }
+    function saveNotes() { api.saveData('resinen_notes', noteContent); }
     
     let todoInput = $state("");
     let todos = $state<{text: string, done: boolean}[]>([]);
     function addTodo() { if (!todoInput.trim()) return; todos = [...todos, { text: todoInput, done: false }]; todoInput = ""; saveTodos(); }
     function toggleTodo(i: number) { todos[i].done = !todos[i].done; saveTodos(); }
     function removeTodo(i: number) { todos = todos.filter((_, idx) => idx !== i); saveTodos(); }
-    function saveTodos() { if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_todos', JSON.stringify(todos)); }
+    function saveTodos() { api.saveData('resinen_todos', todos); }
 
     // --- DATA ---
     const API = "https://api.resinen.com/dashboard";
@@ -178,15 +218,41 @@
         try { 
             checkPremiumStatus();
             window.addEventListener('resinen-auth-change', checkPremiumStatus);
-            if (typeof localStorage !== 'undefined') {
-                const savedNote = localStorage.getItem('resinen_notes'); if (savedNote) noteContent = savedNote;
-                const savedTodos = localStorage.getItem('resinen_todos'); if (savedTodos) todos = JSON.parse(savedTodos);
-                const savedLoves = localStorage.getItem('resinen_loves'); if (savedLoves) loves = JSON.parse(savedLoves);
-                const savedProjs = localStorage.getItem('resinen_projects'); if (savedProjs) projects = JSON.parse(savedProjs);
+
+            // 1. TRY CLOUD SYNC
+            const cloudData = await api.syncFromCloud();
+
+            if (cloudData) {
+                // If cloud gave us data, use it!
+                if (cloudData.resinen_notes) noteContent = cloudData.resinen_notes;
+                if (cloudData.resinen_todos) todos = cloudData.resinen_todos;
+                if (cloudData.resinen_loves) loves = cloudData.resinen_loves;
+                if (cloudData.resinen_projects) projects = cloudData.resinen_projects;
+                if (cloudData.resinen_travel_list) places = cloudData.resinen_travel_list.places;
+            } 
+            else if (typeof localStorage !== 'undefined') {
+                // 2. FALLBACK: Load from LocalStorage if Cloud failed or user is anon
+                const sn = localStorage.getItem('resinen_notes'); if (sn) noteContent = sn;
+                const st = localStorage.getItem('resinen_todos'); if (st) todos = JSON.parse(st);
+                const sl = localStorage.getItem('resinen_loves'); if (sl) loves = JSON.parse(sl);
+                const sp = localStorage.getItem('resinen_projects'); if (sp) projects = JSON.parse(sp);
                 const savedYt = localStorage.getItem('resinen_yt_last'); if (savedYt) ytId = savedYt;
+                const str = localStorage.getItem('resinen_travel_list'); if (str) places = JSON.parse(str).places;
             }
-            refreshAll(); 
-            refreshTimer = setInterval(refreshAll, 300000);
+
+            async function loadAll(t: number) {
+                artLoading = true;
+                // Now using api.getDashboard instead of raw fetch
+                try { visuals = await api.getDashboard('visuals', { t, art_source: 'aic' }); } catch(e){} finally { artLoading = false; }
+                try { feeds = await api.getDashboard('feeds', { t }); } catch(e){}
+                try { planetary = await api.getDashboard('planetary', {}); } catch(e){}
+                try { zen = await api.getDashboard('zen', { t }); } catch(e){}
+                try { system = await api.getDashboard('system', {}); } catch(e){}
+            }
+
+            // 3. Start Feeds
+            loadAll(Date.now()); 
+            refreshTimer = setInterval(() => loadAll(Date.now()), 300000);
         } catch (e) { console.error(e); } 
     });
     
@@ -315,10 +381,28 @@
                     </div>
                 </div>
 
-                <div class="card timer-card"><div class="head">CUSTOM TIMER</div>
-                    <div class="timer-body"><div class="time-display">{formatTime(timerTime)}</div>
-                        <div class="timer-controls"><input type="number" bind:value={timerDuration} min="1" max="180" onchange={setCustomTimer} disabled={timerRunning} /><span>MIN</span><button class="action-btn" class:active={timerRunning} onclick={toggleTimer}>{timerRunning ? 'PAUSE' : 'START'}</button><button class="reset-btn" onclick={setCustomTimer}>RESET</button></div>
+                <div class="utility-row">
+                    <ScribbleWidget />
+                    <TravelList 
+                        places={places} 
+                        onOpenPlace={openTravelPlace} 
+                        onAddPlace={addTravelPlace} 
+                        onDeletePlace={deleteTravelPlace} 
+                    />
+                </div>
+
+                <div class="utility-row">
+                    <BudgetWidget />
+                    <div class="card timer-card"><div class="head">CUSTOM TIMER</div>
+                        <div class="timer-body"><div class="time-display">{formatTime(timerTime)}</div>
+                            <div class="timer-controls"><input type="number" bind:value={timerDuration} min="1" max="180" onchange={setCustomTimer} disabled={timerRunning} /><span>MIN</span><button class="action-btn" class:active={timerRunning} onclick={toggleTimer}>{timerRunning ? 'PAUSE' : 'START'}</button><button class="reset-btn" onclick={setCustomTimer}>RESET</button></div>
+                        </div>
                     </div>
+                </div>
+
+                <div class="utility-row">
+                    <BreathingOrb />
+                    <HabitMatrix />
                 </div>
 
                 <div class="card todo"><div class="head">TASKS {#if !isPremium}🔒{/if}</div>
@@ -362,9 +446,19 @@
             onSave={saveEditedProject} 
         />
     {/if}
+
+    {#if viewingPlace && isTravelModalOpen}
+        <TravelModal 
+            place={viewingPlace} 
+            isOpen={isTravelModalOpen} 
+            onClose={()=>isTravelModalOpen=false} 
+            onSave={saveEditedPlace} 
+        />
+    {/if}
 </div>
 
 <style>
+    /* STYLES FROM PREVIOUS RESPONSE - NO CHANGES NEEDED BUT INCLUDED FOR COMPLETENESS */
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     .skeleton { background: #1e293b; background-image: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; opacity: 0.6; }
     .skeleton-text { height: 14px; margin-bottom: 8px; border-radius: 2px; }
@@ -375,6 +469,13 @@
     .grid { display: grid; grid-template-columns: 300px 1fr 300px; gap: 2.5rem; /* Increased from 2rem */ }
     .col { display: flex; flex-direction: column; gap: 2rem; /* Increased from 1.5rem */ }
     .center-focus { flex: 1; }
+
+    /* UTILITY ROW FOR NEW WIDGETS */
+    .utility-row { 
+        display: grid; 
+        grid-template-columns: 1fr 1fr; 
+        gap: 20px; 
+    }
 
     /* BEAUTIFIED PROJECT CARDS */
     .projects-section { margin-bottom: 20px; }
@@ -421,7 +522,7 @@
     .fixed-notes textarea { width: 100%; height: 300px; background: transparent; border: none; color: #fff; padding: 15px; font-family: var(--mono); font-size: 0.85rem; resize: none; outline: none; line-height: 1.5; }
     
     /* ... (Existing styles for other widgets remain) ... */
-    .loves-widget { height: 260px; display: flex; flex-direction: column; } .loves-display { flex: 1; background-size: cover; background-position: center; position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0 5px; } .loves-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2); } .empty-icon { font-size: 3rem; color: #334155; } .empty-text { font-family: var(--mono); color: #64748b; font-size: 0.7rem; margin-top: 5px; } .nav-arrow { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid var(--border); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-family: var(--mono); transition: 0.2s; backdrop-filter: blur(4px); } .nav-arrow:hover { background: var(--accent); color: #000; } .love-counter { position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.8); color: #fff; font-family: var(--mono); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; } .loves-input { display: flex; border-top: 1px solid var(--border); } .loves-input input { flex: 1; background: transparent; border: none; padding: 8px; color: #fff; font-family: var(--mono); font-size: 0.8rem; outline: none; } .loves-input button { background: var(--accent); border: none; color: #000; font-weight: bold; width: 40px; cursor: pointer; } .del-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; line-height: 0.5; }
+    .loves-widget { height: 260px; display: flex; flex-direction: column; } .loves-display { flex: 1; background-size: cover; background-position: center; position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0 5px; } .loves-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2); } .empty-icon { font-size: 3rem; color: #334155; } .empty-text { font-family: var(--mono); color: #64748b; font-size: 0.7rem; margin-top: 5px; } .nav-arrow { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid var(--border); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-family: var(--mono); transition: 0.2s; backdrop-filter: blur(4px); } .nav-arrow:hover { background: var(--accent); color: #000; } .love-counter { position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.8); color: #fff; font-family: var(--mono); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; } .loves-input { display: flex; border-top: 1px solid var(--border); } .loves-input input { flex: 1; background: transparent; border: none; padding: 8px; color: #fff; outline: none; } .loves-input button { background: var(--accent); border: none; width: 40px; cursor: pointer; font-weight: bold; } .del-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; line-height: 0.5; }
     
     .club-widget { height: 280px; display: flex; flex-direction: column; } .club-toggles { display: flex; gap: 5px; } .club-toggles button { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.4; transition: 0.2s; padding: 0 4px; } .club-toggles button.active { opacity: 1; transform: scale(1.2); text-shadow: 0 0 10px rgba(255,255,255,0.5); } .club-viewport { flex: 1; position: relative; overflow: hidden; } .club-content { width: 100%; height: 100%; background-size: cover; background-position: center; position: relative; } .club-tag { position: absolute; bottom: 10px; left: 10px; background: #000; color: var(--accent); font-family: var(--mono); font-size: 0.7rem; padding: 2px 6px; border: 1px solid var(--accent); } .club-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, #000, transparent); padding: 20px 10px 10px 10px; } .art-title { font-weight: bold; font-size: 1rem; text-shadow: 0 2px 2px #000; line-height: 1.1; } .art-artist { font-family: var(--mono); font-size: 0.7rem; color: #cbd5e1; margin-top: 4px; }
 
