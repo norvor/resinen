@@ -1,30 +1,22 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlmodel import SQLModel, Field
+from sqlalchemy import Column, JSON
 
 # --- SHARED PROPERTIES ---
-
-class UserStorage(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_email: str = Field(index=True)
-    key: str = Field(index=True)  # e.g., "resinen_projects", "resinen_scribble"
-    
-    # Stores ANY JSON data (lists, objects, strings)
-    value: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
-
 
 class ArticleBase(SQLModel):
     title: str
     summary: str
-    content: str  # Full text
-    category: str # "Spectrum", "Opinion", "Analysis"
+    content: str
+    category: str 
     read_time: str = "5 min"
     author: str = "Resinen Ed."
     image_url: Optional[str] = None
 
 class WireItemBase(SQLModel):
     text: str
-    type: str = "info" # "alert", "work", "health"
+    type: str = "info"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 # --- DATABASE TABLES ---
@@ -36,6 +28,14 @@ class Article(ArticleBase, table=True):
 
 class WireItem(WireItemBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+
+# --- NEW: UNIVERSAL STORAGE TABLE ---
+class UserStorage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_email: str = Field(index=True)
+    key: str = Field(index=True)  # e.g., "resinen_projects"
+    # Stores ANY JSON data (lists, objects, strings)
+    value: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
 
 # --- API RESPONSES ---
 
