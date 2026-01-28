@@ -4,6 +4,25 @@ import random
 import feedparser
 from datetime import datetime, timezone, timedelta
 
+# --- 0. ROBUST FALLBACKS (The Safety Net) ---
+FALLBACKS = {
+    "art": {
+        "url": "https://www.artic.edu/iiif/2/25c31d8d-21a4-9ea9-11c1-ac333d963f7b/full/843,/0/default.jpg",
+        "title": "Nighthawks (Offline Mode)",
+        "artist": "Edward Hopper",
+        "source": "AIC ARCHIVE"
+    },
+    "animal": {
+        "type": "FOX",
+        "url": "https://images.pexels.com/photos/47547/squirrel-animal-cute-rodents-47547.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" 
+    },
+    "food": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
+    "uplifting": [
+        {"title": "Global Reforestation Efforts Hit Record High", "link": "https://www.dailygood.org/"},
+        {"title": "Community Garden Feeds Thousands in Local City", "link": "https://www.dailygood.org/"}
+    ]
+}
+
 # --- 1. CONFIG & SYSTEM ---
 def get_audio_config():
     return {
@@ -36,92 +55,73 @@ def get_planetary_state():
     watch = [{"city": c['name'], "time": (now + timedelta(hours=c['tz'])).strftime("%H:%M"), "icon": c['icon']} for c in cities]
     return {"year_pct": f"{percent:.6f}", "watch": watch}
 
-# --- 3. ART HELPER FUNCTIONS ---
-async def get_met_art(client):
-    try:
-        search_url = "https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=oil%20on%20canvas&medium=Paintings"
-        resp = await client.get(search_url, timeout=4.0)
-        data = resp.json()
-        if data['total'] > 0:
-            obj_id = random.choice(data['objectIDs'][:100])
-            obj_resp = await client.get(f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{obj_id}", timeout=4.0)
-            obj = obj_resp.json()
-            return {
-                "url": obj.get('primaryImageSmall') or obj.get('primaryImage'),
-                "title": obj.get('title', 'Untitled'),
-                "artist": obj.get('artistDisplayName', 'Unknown Artist'),
-                "source": "MET NEW YORK"
-            }
-    except Exception as e:
-        print(f"MET Error: {e}")
-    return None
+# --- 3. VISUALS AGGREGATOR ---
+async def get_visual_feeds(art_source: str = "met"):
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        results = {}
 
-async def get_aic_art(client):
-    try:
-        page = random.randint(1, 50)
-        url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=1&fields=id,title,image_id,artist_display"
-        resp = await client.get(url, timeout=4.0)
-        data = resp.json()
-        if data['data']:
-            artwork = data['data'][0]
-            if artwork['image_id']:
-                img_url = f"https://www.artic.edu/iiif/2/{artwork['image_id']}/full/843,/0/default.jpg"
-                return {
-                    "url": img_url,
+        # A. ART (Try AIC -> MET -> Fallback)
+        try:
+            # Art Institute of Chicago (Specific Fields for lighter payload)
+            page = random.randint(1, 40)
+            url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=1&fields=id,title,image_id,artist_display"
+            resp = await client.get(url)
+            data = resp.json()
+            if data['data'] and data['data'][0]['image_id']:
+                artwork = data['data'][0]
+                results['art'] = {
+                    "url": f"https://www.artic.edu/iiif/2/{artwork['image_id']}/full/843,/0/default.jpg",
                     "title": artwork['title'],
                     "artist": artwork['artist_display'],
                     "source": "AIC CHICAGO"
                 }
-    except Exception as e:
-        print(f"AIC Error: {e}")
-    return None
-
-# --- 4. VISUALS AGGREGATOR ---
-async def get_visual_feeds(art_source: str = "met"):
-    async with httpx.AsyncClient() as client:
-        results = {}
-        # A. ART
-        art_data = None
-        if art_source == "aic": art_data = await get_aic_art(client)
-        if not art_data: art_data = await get_met_art(client)
-        if not art_data: art_data = {"url": "https://images.unsplash.com/photo-1549490349-8643362247b5", "title": "Connection Lost", "artist": "System", "source": "OFFLINE"}
-        results['art'] = art_data
-
-        # B. ANIMALS
-        try:
-            choice = random.choice(['fox', 'dog', 'cat'])
-            if choice == 'fox':
-                r = await client.get("https://randomfox.ca/floof/", timeout=2.0)
-                results['animal'] = {"type": "FOX", "url": r.json()['image']}
-            elif choice == 'dog':
-                r = await client.get("https://dog.ceo/api/breeds/image/random", timeout=2.0)
-                msg = r.json()['message']
-                breed = "DOG"
-                if '/breeds/' in msg:
-                    try: breed = msg.split('/breeds/')[1].split('/')[0].replace('-', ' ').title()
-                    except: pass
-                results['animal'] = {"type": breed, "url": msg}
             else:
-                r = await client.get("https://api.thecatapi.com/v1/images/search", timeout=2.0)
-                results['animal'] = {"type": "CAT", "url": r.json()[0]['url']}
-        except: 
-            results['animal'] = {"type": "OFFLINE", "url": ""}
-
-        # C. FOOD
-        try:
-            resp = await client.get("https://www.themealdb.com/api/json/v1/1/random.php", timeout=2.0)
-            meal = resp.json()['meals'][0]
-            results['food'] = meal['strMealThumb']
+                raise Exception("No Image ID")
         except:
-            results['food'] = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
+            # Fail silently to fallback
+            results['art'] = FALLBACKS['art']
+
+        # B. ANIMALS (Try Dog CEO -> RandomFox -> Fallback)
+        try:
+            # Dog CEO
+            r = await client.get("https://dog.ceo/api/breeds/image/random")
+            data = r.json()
+            if data['status'] == 'success':
+                url = data['message']
+                # Clean breed name from URL
+                breed = "DOG"
+                if "/breeds/" in url:
+                    try:
+                        breed = url.split("/breeds/")[1].split("/")[0].replace("-", " ").title()
+                    except: pass
+                results['animal'] = {"type": breed, "url": url}
+            else:
+                raise Exception("Dog API Failed")
+        except:
+            # Fallback to RandomFox if Dog fails
+            try:
+                r = await client.get("https://randomfox.ca/floof/")
+                results['animal'] = {"type": "FOX", "url": r.json()['image']}
+            except:
+                results['animal'] = FALLBACKS['animal']
+
+        # C. FOOD (TheMealDB -> Fallback)
+        try:
+            r = await client.get("https://www.themealdb.com/api/json/v1/1/random.php")
+            data = r.json()
+            if data['meals']:
+                results['food'] = data['meals'][0]['strMealThumb']
+            else:
+                raise Exception("No Meal Data")
+        except:
+            results['food'] = FALLBACKS['food']
 
         return results
 
-# --- 5. DATA FEEDS (NEWS AGGREGATOR) ---
-def parse_feed(url, limit=4):
-    """Parses a public RSS feed using standard feedparser"""
+# --- 4. DATA FEEDS (NEWS AGGREGATOR) ---
+def parse_rss_robust(url, limit=4):
+    """Parses RSS with feedparser, returns empty list on failure"""
     try:
-        # feedparser handles HTTP requests internally in a standard way
         feed = feedparser.parse(url)
         items = []
         for entry in feed.entries[:limit]:
@@ -130,16 +130,14 @@ def parse_feed(url, limit=4):
                 "link": entry.link
             })
         return items
-    except Exception as e:
-        print(f"RSS Error {url}: {e}")
+    except:
         return []
 
 async def get_new_feeds():
-    # We use httpx for the API calls, but feedparser for RSS
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient() as client:
         data = {}
 
-        # A. MARKETS (Simulated for Stability)
+        # A. MARKETS (Simulated)
         base_sp, base_gold, base_brent = 5200.00, 2350.00, 85.00
         sp = base_sp * random.uniform(0.995, 1.005)
         gold = base_gold * random.uniform(0.995, 1.005)
@@ -150,30 +148,35 @@ async def get_new_feeds():
             {"name": "BRENT", "price": f"{brent:.2f}", "change": f"{random.uniform(-2.0, 2.0):.2f}%"}
         ]
 
-        # B. NEWS FEEDS (Using Public RSS)
-        data['business'] = parse_feed("http://feeds.bbci.co.uk/news/business/rss.xml")
-        data['sports'] = parse_feed("http://feeds.bbci.co.uk/sport/rss.xml")
-        data['culture'] = parse_feed("https://www.theguardian.com/culture/rss")
-        data['global'] = parse_feed("http://feeds.bbci.co.uk/news/world/rss.xml")
+        # B. NEWS HUB FEEDS
+        data['business'] = parse_rss_robust("http://feeds.bbci.co.uk/news/business/rss.xml")
+        data['sports'] = parse_rss_robust("http://feeds.bbci.co.uk/sport/rss.xml")
+        data['culture'] = parse_rss_robust("https://www.theguardian.com/culture/rss")
+        data['global'] = parse_rss_robust("http://feeds.bbci.co.uk/news/world/rss.xml")
 
-        # C. HISTORY FACT
+        # C. UPLIFTING FEED (Using DailyGood RSS)
+        uplifting = parse_rss_robust("https://www.dailygood.org/rss/", limit=2)
+        data['uplifting'] = uplifting if uplifting else FALLBACKS['uplifting']
+
+        # D. HISTORY
         try:
+            # Note: history.muffinlabs.com is great but sometimes slow
             r = await client.get(f"https://history.muffinlabs.com/date/{datetime.now().month}/{datetime.now().day}", timeout=3.0)
             fact = random.choice(r.json()['data']['Events'])
             data['history'] = {"year": fact['year'], "text": fact['text']}
         except:
             data['history'] = {"year": "2026", "text": "Resinen Systems operational."}
 
-        # D. JOKE
+        # E. JOKE
         try:
             r = await client.get("https://official-joke-api.appspot.com/random_joke", timeout=2.0)
             data['joke'] = r.json()
         except: 
-            data['joke'] = {"setup": "Loading...", "punchline": "..."}
+            data['joke'] = {"setup": "Why did the server crash?", "punchline": "It had a bad driver."}
 
         return data
 
-# --- 6. ZEN ---
+# --- 5. ZEN ---
 async def get_zen_wisdom():
     quotes = ["The obstacle is the path.", "Act without expectation.", "Stillness speaks.", "Nature does not hurry.", "Be water, my friend."]
     return {"text": random.choice(quotes)}
