@@ -91,6 +91,8 @@
             <a href="/games/snake" class="app-link"><span>🐍</span><div class="tooltip">Snake</div></a>
             <a href="/games/runner" class="app-link"><span>🏃</span><div class="tooltip">Runner</div></a>
             <a href="/games/2048" class="app-link"><span>🧱</span><div class="tooltip">2048</div></a>
+            <a href="/games/soccer" class="app-link"><span>⚽️</span><div class="tooltip">Cricket</div></a>
+            <a href="/games/cricket" class="app-link"><span>🏏</span><div class="tooltip">Soccer</div></a>
             <a href="/games/battleship" class="app-link"><span>🚢</span><div class="tooltip">Battleship</div></a>
         </div>
 
