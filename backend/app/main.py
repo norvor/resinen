@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database import init_db
 from .database import create_db_and_tables
-from .routers import news, auth, cinema, chess, sudoku, payment, battleship, poker, tetris, ludo, go, minesweeper, storage # <--- Changed this
+from .routers import news, auth, cinema, chess, sudoku, payment, battleship, poker, tetris, go, minesweeper, storage # <--- Changed this
 
 
 app = FastAPI(title="The Resinen Times API")
@@ -34,7 +34,6 @@ def on_startup():
 
 app.include_router(news.router)
 app.include_router(cinema.router)
-app.include_router(ludo.router)  # <--- Added this
 app.include_router(chess.router)
 app.include_router(sudoku.router)
 app.include_router(poker.router) 

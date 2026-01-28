@@ -87,7 +87,6 @@
             <a href="/games/go" class="app-link"><span>⚪</span><div class="tooltip">Go</div></a>
             <a href="/games/tetris" class="app-link"><span>🕹️</span><div class="tooltip">Tetris</div></a>
             <a href="/games/sudoku" class="app-link"><span>🔢</span><div class="tooltip">Sudoku</div></a>
-            <a href="/games/ludo" class="app-link"><span>🎲</span><div class="tooltip">Ludo</div></a>
             <a href="/games/minesweeper" class="app-link"><span>💣</span><div class="tooltip">Minesweeper</div></a>
             <a href="/games/snake" class="app-link"><span>🐍</span><div class="tooltip">Snake</div></a>
             <a href="/games/runner" class="app-link"><span>🏃</span><div class="tooltip">Runner</div></a>
