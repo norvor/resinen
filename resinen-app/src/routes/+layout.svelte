@@ -3,34 +3,6 @@
     import { page } from '$app/stores';
     import logo from '$lib/assets/logo.svg';
 
-    // --- GLOBAL AUDIO STATE ---
-    let audioConfig = $state<any>(null);
-    let activeAudioKey = $state('lotr');
-    let isPlaying = $state(false);
-    let currentTrack = $derived(audioConfig ? audioConfig[activeAudioKey] : null);
-    let audioUrl = $derived(currentTrack ? `https://www.youtube-nocookie.com/embed/${currentTrack.id}?autoplay=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${currentTrack.id}&modestbranding=1` : '');
-
-    function setAudio(key: string) { activeAudioKey = key; if (!isPlaying) isPlaying = true; }
-    function toggleAudio() { isPlaying = !isPlaying; }
-
-    // --- DRAGGABLE PORTAL ---
-    let videoX = $state(20); let videoY = $state(20); 
-    let isDragging = $state(false); let startX = 0, startY = 0;
-    
-    function startDrag(e: MouseEvent) { 
-        isDragging = true; 
-        startX = e.clientX - videoX; startY = e.clientY - videoY; 
-        window.addEventListener('mousemove', onDrag); window.addEventListener('mouseup', stopDrag); 
-    }
-    function onDrag(e: MouseEvent) { 
-        if (!isDragging) return; 
-        videoX = e.clientX - startX; videoY = e.clientY - startY; 
-    }
-    function stopDrag() { 
-        isDragging = false; 
-        window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', stopDrag); 
-    }
-
     // --- AUTH & PAYMENT STATE ---
     let showAuth = $state(false);
     let authMode = $state('login'); 
@@ -91,10 +63,6 @@
                 isPremium = user.is_premium;
             }
         }
-        try {
-            const res = await fetch('https://api.resinen.com/dashboard/audio');
-            audioConfig = await res.json();
-        } catch (e) { }
     });
 </script>
 
@@ -104,66 +72,45 @@
 
 <div class="layout-shell">
     
-    {#if isPlaying && currentTrack}
-        <div class="video-portal" style="left: {videoX}px; top: {videoY}px;" onmousedown={startDrag} role="button" tabindex="0">
-            <div class="portal-handle"><span>:: {currentTrack.name}</span><button class="close-btn" onclick={toggleAudio}>×</button></div>
-            <div class="portal-screen">
-                {#if isDragging}<div class="drag-shield"></div>{/if}
-                <iframe src={audioUrl} title="Portal" frameborder="0" allow="autoplay"></iframe>
-            </div>
-        </div>
-    {/if}
+    <div class="command-dock">
+        <a href="/" class="dock-item home">
+            <img src={logo} alt="Resinen" />
+            <span class="label">Focus</span>
+        </a>
 
-    <div class="holy-grail-dock">
-        <a href="/apps/cinema" class="grail-rune"><span>🎬</span><div class="dock-tooltip">Cinema</div></a>
-        <a href="/games/chess" class="grail-rune"><span>♟️</span><div class="dock-tooltip">Chess</div></a>
-        <a href="/games/poker" class="grail-rune"><span>♠️</span><div class="dock-tooltip">Poker</div></a>
-        <a href="/games/go" class="grail-rune"><span>⚪</span><div class="dock-tooltip">Go</div></a>
-        <a href="/games/tetris" class="grail-rune"><span>🕹️</span><div class="dock-tooltip">Tetris</div></a>
-        <a href="/games/sudoku" class="grail-rune"><span>🔢</span><div class="dock-tooltip">Sudoku</div></a>
-        <a href="/games/ludo" class="grail-rune"><span>🎲</span><div class="dock-tooltip">Ludo</div></a>
-        <a href="/games/minesweeper" class="grail-rune"><span>💣</span><div class="dock-tooltip">Minesweeper</div></a>
-        <a href="/games/snake" class="grail-rune"><span>🐍</span><div class="dock-tooltip">Snake</div></a>
-        <a href="/games/runner" class="grail-rune"><span>🏃</span><div class="dock-tooltip">Runner</div></a>
-        <a href="/games/2048" class="grail-rune"><span>🧱</span><div class="dock-tooltip">2048</div></a>
-        <a href="/games/battleship" class="grail-rune"><span>🚢</span><div class="dock-tooltip">Battleship</div></a>
+        <div class="divider"></div>
+
+        <div class="dock-apps">
+            <a href="/apps/cinema" class="app-link"><span>🎬</span><div class="tooltip">Cinema</div></a>
+            <a href="/games/chess" class="app-link"><span>♟️</span><div class="tooltip">Chess</div></a>
+            <a href="/games/poker" class="app-link"><span>♠️</span><div class="tooltip">Poker</div></a>
+            <a href="/games/go" class="app-link"><span>⚪</span><div class="tooltip">Go</div></a>
+            <a href="/games/tetris" class="app-link"><span>🕹️</span><div class="tooltip">Tetris</div></a>
+            <a href="/games/sudoku" class="app-link"><span>🔢</span><div class="tooltip">Sudoku</div></a>
+            <a href="/games/ludo" class="app-link"><span>🎲</span><div class="tooltip">Ludo</div></a>
+            <a href="/games/minesweeper" class="app-link"><span>💣</span><div class="tooltip">Minesweeper</div></a>
+            <a href="/games/snake" class="app-link"><span>🐍</span><div class="tooltip">Snake</div></a>
+            <a href="/games/runner" class="app-link"><span>🏃</span><div class="tooltip">Runner</div></a>
+            <a href="/games/2048" class="app-link"><span>🧱</span><div class="tooltip">2048</div></a>
+            <a href="/games/battleship" class="app-link"><span>🚢</span><div class="tooltip">Battleship</div></a>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="dock-auth">
+            {#if user}
+                <button class="user-pill" class:premium={isPremium} onclick={() => !isPremium && simulatePayment()} title={isPremium ? "Pro License Active" : "Click to Upgrade"}>
+                    <div class="status-dot"></div>
+                    <span>{isPremium ? 'PRO' : 'UPG'}</span>
+                </button>
+                <button class="logout-icon" onclick={logout} title="Disconnect">⏻</button>
+            {:else}
+                <button class="login-btn" onclick={() => showAuth = true}>
+                    <span>👤</span> <span class="label">Login</span>
+                </button>
+            {/if} 
+        </div>
     </div>
-
-    {#if audioConfig}
-        <div class="global-dock">
-            <div class="dock-inner">
-                
-                <a href="/" class="dock-home" title="Return Home">
-                    <img src={logo} alt="Resinen" />
-                    <span>Focus</span>
-                </a>
-                <div class="sep"></div>
-
-                {#if user}
-                    <button class="logout-btn" onclick={logout} title="Sign Out">⏻</button>
-                {/if}
-
-                {#if user}
-                    <button class="user-btn logged-in" class:upgrade-mode={!isPremium} onclick={() => !isPremium && simulatePayment()} title={isPremium ? `Operator: ${user.email}` : "Click to Upgrade"}>
-                        <span class="online-dot" class:premium={isPremium}></span> 
-                        {isPremium ? 'PRO' : 'UPGRADE'}
-                    </button>
-                {:else}
-                    <button class="user-btn" onclick={() => showAuth = true}>👤</button>
-                {/if}
-
-                <div class="sep"></div>
-                <div class="eq-visual" class:active={isPlaying}><span></span><span></span><span></span></div>
-                
-                {#each ['lotr', 'disney', 'hp', 'atla'] as key}
-                    <button class="channel-btn" class:active={activeAudioKey === key} style="--glow: {audioConfig[key].color}" onclick={() => setAudio(key)}>{audioConfig[key].icon}</button>
-                {/each}
-                
-                <div class="sep"></div>
-                <button class="power-btn" onclick={toggleAudio} class:on={isPlaying}>{isPlaying ? 'PAUSE' : 'PLAY'}</button>
-            </div>
-        </div>
-    {/if}
 
     {#if showAuth}
         <div class="auth-overlay">
@@ -207,7 +154,7 @@
 </div>
 
 <style>
-    /* GLOBAL SCROLL FIX */
+    /* GLOBAL SETUP */
     :global(html) { height: 100%; overflow-y: scroll; scroll-behavior: smooth; }
     :global(body) { 
         margin: 0; min-height: 100vh;
@@ -222,80 +169,81 @@
     .page-content { flex: 1; position: relative; z-index: 1; transition: filter 0.3s; width: 100%; }
     .page-content.blurred { filter: blur(5px) brightness(0.7); pointer-events: none; }
 
-    /* --- STACKED DOCKS --- */
-
-    /* 1. APP DOCK (UPPER STACK) */
-    .holy-grail-dock { 
-        position: fixed; bottom: 90px; /* Stacked above Global Dock */
-        left: 50%; transform: translateX(-50%); 
-        background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border);
-        border-radius: 50px; padding: 8px 20px;
-        display: flex; gap: 15px; z-index: 1000;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-        backdrop-filter: blur(8px);
-        max-width: 90vw; overflow: visible; 
-        transition: 0.3s;
-    }
-    .grail-rune { font-size: 1.5rem; text-decoration: none; transition: transform 0.2s; filter: grayscale(100%); opacity: 0.7; flex-shrink: 0; position: relative; }
-    .grail-rune:hover { transform: scale(1.2) translateY(-10px); filter: grayscale(0%); opacity: 1; }
-    .dock-tooltip { 
-        position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); 
-        background: var(--accent); color: #000; padding: 4px 8px; border-radius: 4px; 
-        font-family: var(--mono); font-size: 0.7rem; font-weight: bold; pointer-events: none; 
-        opacity: 0; transition: opacity 0.2s, transform 0.2s; white-space: nowrap; 
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
-    }
-    .grail-rune:hover .dock-tooltip { opacity: 1; transform: translateX(-50%) translateY(-5px); }
-
-
-    /* 2. GLOBAL DOCK (LOWER STACK) */
-    .global-dock { 
-        position: fixed; bottom: 20px; /* Anchored to bottom */
-        left: 50%; transform: translateX(-50%); z-index: 9999; 
-        width: 90%; max-width: 550px; pointer-events: none; 
-    }
-    .dock-inner { 
-        pointer-events: auto; background: rgba(2, 6, 23, 0.95); border: 1px solid #334155; border-radius: 50px; 
-        padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; 
-        box-shadow: 0 10px 40px rgba(0,0,0,0.9); backdrop-filter: blur(12px); gap: 10px; 
+    /* --- MERGED COMMAND DOCK --- */
+    .command-dock { 
+        position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+        background: rgba(15, 23, 42, 0.9); 
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 8px 16px;
+        display: flex; align-items: center; gap: 12px;
+        z-index: 9999;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        backdrop-filter: blur(12px);
+        max-width: 95vw;
+        overflow-x: auto; /* Allow scroll on small screens */
+        white-space: nowrap;
     }
 
-    /* HOME BUTTON */
-    .dock-home { display: flex; align-items: center; gap: 8px; text-decoration: none; color: #fff; transition: 0.2s; margin-right: 5px; }
-    .dock-home img { height: 20px; width: auto; filter: drop-shadow(0 0 5px rgba(45, 212, 191, 0.5)); }
-    .dock-home span { font-family: 'Space Grotesk'; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px; color: #fff; }
-    .dock-home:hover { opacity: 0.8; transform: scale(1.05); }
+    .divider { width: 1px; height: 24px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
 
-    /* CONTROLS */
-    .channel-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; transition: 0.2s; padding: 0 5px; }
-    .channel-btn:hover { opacity: 1; transform: scale(1.2); }
-    .channel-btn.active { opacity: 1; text-shadow: 0 0 10px var(--glow); transform: scale(1.1); }
+    /* HOME ITEM */
+    .dock-item.home { 
+        display: flex; align-items: center; gap: 8px; 
+        text-decoration: none; color: #fff; 
+        padding-right: 5px; transition: 0.2s;
+    }
+    .dock-item.home img { height: 24px; width: auto; filter: drop-shadow(0 0 5px rgba(45, 212, 191, 0.5)); }
+    .dock-item.home .label { font-family: 'Space Grotesk'; font-weight: bold; font-size: 0.9rem; }
+    .dock-item.home:hover { opacity: 0.8; transform: scale(1.05); }
+
+    /* APPS GRID */
+    .dock-apps { display: flex; gap: 10px; align-items: center; }
+    .app-link { 
+        position: relative; font-size: 1.4rem; text-decoration: none; 
+        transition: 0.2s; opacity: 0.7; filter: grayscale(100%);
+        width: 36px; height: 36px; display: flex; justify-content: center; align-items: center;
+    }
+    .app-link:hover { transform: translateY(-5px) scale(1.1); opacity: 1; filter: grayscale(0%); }
     
-    .logout-btn { background: transparent; border: 1px solid #334155; color: #94a3b8; width: 30px; height: 30px; border-radius: 50%; font-size: 0.8rem; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
-    .logout-btn:hover { color: #ef4444; border-color: #ef4444; }
+    /* TOOLTIP */
+    .tooltip { 
+        position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+        background: var(--accent); color: #000; padding: 2px 6px; border-radius: 4px;
+        font-family: var(--mono); font-size: 0.65rem; font-weight: bold; pointer-events: none;
+        opacity: 0; transition: 0.2s; white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .app-link:hover .tooltip { opacity: 1; transform: translateX(-50%) translateY(-5px); }
 
-    .user-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.8; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
-    .user-btn:hover { transform: scale(1.1); opacity: 1; }
-    .user-btn.logged-in { font-family: 'JetBrains Mono'; font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
-    .user-btn.upgrade-mode { color: #facc15; animation: pulse-gold 2s infinite; }
-    @keyframes pulse-gold { 0% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); } 50% { text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); } 100% { text-shadow: 0 0 0 rgba(250, 204, 21, 0); } }
+    /* AUTH ITEMS */
+    .dock-auth { display: flex; gap: 8px; align-items: center; }
+    
+    .user-pill {
+        background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+        color: #94a3b8; padding: 4px 10px; border-radius: 20px;
+        display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.2s;
+        font-family: var(--mono); font-size: 0.75rem;
+    }
+    .user-pill:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .user-pill.premium { border-color: #facc15; color: #facc15; }
+    .user-pill.premium .status-dot { background: #facc15; box-shadow: 0 0 5px #facc15; }
+    
+    .status-dot { width: 6px; height: 6px; background: #64748b; border-radius: 50%; }
+    
+    .logout-icon { 
+        background: none; border: none; color: #ef4444; font-size: 0.9rem; 
+        cursor: pointer; padding: 5px; opacity: 0.7; transition: 0.2s; 
+    }
+    .logout-icon:hover { opacity: 1; transform: scale(1.1); }
 
-    .online-dot { width: 8px; height: 8px; background: #64748b; border-radius: 50%; box-shadow: 0 0 5px #64748b; }
-    .online-dot.premium { background: #facc15; box-shadow: 0 0 8px #facc15; }
+    .login-btn {
+        background: transparent; border: 1px solid var(--accent); color: var(--accent);
+        padding: 4px 12px; border-radius: 20px; cursor: pointer; font-family: var(--mono);
+        font-size: 0.75rem; display: flex; align-items: center; gap: 6px; transition: 0.2s;
+    }
+    .login-btn:hover { background: var(--accent); color: #000; }
 
-    .sep { width: 1px; height: 20px; background: #334155; margin: 0 5px; }
-    .power-btn { background: transparent; border: 1px solid #ef4444; color: #ef4444; font-family: 'JetBrains Mono'; font-size: 0.7rem; font-weight: bold; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-    .power-btn.on { border-color: #2dd4bf; color: #2dd4bf; }
-
-    .eq-visual { display: flex; gap: 2px; height: 10px; align-items: flex-end; margin-right: 5px; }
-    .eq-visual span { width: 3px; background: #94a3b8; height: 2px; transition: 0.1s; }
-    .eq-visual.active span { background: #2dd4bf; }
-    .eq-visual.active span:nth-child(1) { animation: bounce 0.5s infinite alternate; }
-    .eq-visual.active span:nth-child(2) { animation: bounce 0.7s infinite alternate; }
-    .eq-visual.active span:nth-child(3) { animation: bounce 0.4s infinite alternate; }
-    @keyframes bounce { 0% { height: 2px; } 100% { height: 10px; } }
-
-    /* AUTH & PORTALS */
+    /* --- AUTH & PAYWALL OVERLAYS --- */
     .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; display: flex; justify-content: center; align-items: center; background: rgba(2, 6, 23, 0.4); }
     .auth-glass { width: 400px; padding: 40px; border-radius: 16px; background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); position: relative; animation: slideIn 0.3s ease-out; }
     .auth-glass.shake { animation: shake 0.4s; border-color: #ef4444; }
@@ -311,13 +259,6 @@
     .action-btn { width: 100%; padding: 15px; background: #2dd4bf; color: #020617; border: none; border-radius: 6px; font-weight: bold; font-family: 'JetBrains Mono'; cursor: pointer; transition: 0.2s; }
     .action-btn:hover { background: #fff; box-shadow: 0 0 20px #2dd4bf; }
 
-    .video-portal { position: fixed; width: 320px; max-width: 90vw; background: #000; border: 1px solid #2dd4bf; border-radius: 8px; z-index: 9998; box-shadow: 0 0 20px rgba(45, 212, 191, 0.2); overflow: hidden; }
-    .portal-handle { background: rgba(45, 212, 191, 0.1); padding: 5px 10px; font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #2dd4bf; display: flex; justify-content: space-between; cursor: grab; }
-    .portal-screen { position: relative; padding-bottom: 56.25%; }
-    .portal-screen iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    .drag-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-    .close-btn { background: none; border: none; color: #fff; cursor: pointer; }
-
     .paywall-overlay { height: 80vh; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, rgba(15,23,42,0.9), #020617); z-index: 50; }
     .paywall-card { text-align: center; border: 2px solid #ef4444; padding: 40px; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 0 50px rgba(239, 68, 68, 0.3); animation: shake 0.5s; width: 90%; max-width: 500px; }
     .paywall-card h1 { color: #ef4444; font-size: 2.5rem; margin: 0 0 10px 0; letter-spacing: 5px; }
@@ -326,4 +267,7 @@
     .upgrade-btn { background: #ef4444; color: #000; border: none; padding: 15px 40px; font-size: 1.2rem; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono'; transition: 0.2s; border-radius: 6px; }
     .upgrade-btn:hover { background: #fff; box-shadow: 0 0 30px #ef4444; }
     .retreat-link { display: block; margin-top: 20px; color: #64748b; font-size: 0.8rem; font-family: 'JetBrains Mono'; }
+    
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 </style>
