@@ -219,19 +219,26 @@
             checkPremiumStatus();
             window.addEventListener('resinen-auth-change', checkPremiumStatus);
 
-            // 1. TRY CLOUD SYNC
+            // 1. PULL FROM CLOUD (This was missing!)
             const cloudData = await api.syncFromCloud();
 
             if (cloudData) {
-                // If cloud gave us data, use it!
+                // If backend sent data, use it
                 if (cloudData.resinen_notes) noteContent = cloudData.resinen_notes;
                 if (cloudData.resinen_todos) todos = cloudData.resinen_todos;
                 if (cloudData.resinen_loves) loves = cloudData.resinen_loves;
                 if (cloudData.resinen_projects) projects = cloudData.resinen_projects;
-                if (cloudData.resinen_travel_list) places = cloudData.resinen_travel_list.places;
+                if (cloudData.resinen_travel_list && cloudData.resinen_travel_list.places) {
+                    places = cloudData.resinen_travel_list.places;
+                }
+                
+                // Also update widgets that might save their own state
+                if (cloudData.resinen_habits_v2) localStorage.setItem('resinen_habits_v2', JSON.stringify(cloudData.resinen_habits_v2));
+                if (cloudData.resinen_budget) localStorage.setItem('resinen_budget', JSON.stringify(cloudData.resinen_budget));
+                if (cloudData.resinen_scribble) localStorage.setItem('resinen_scribble', cloudData.resinen_scribble);
             } 
             else if (typeof localStorage !== 'undefined') {
-                // 2. FALLBACK: Load from LocalStorage if Cloud failed or user is anon
+                // 2. OFFLINE FALLBACK (If cloud fetch failed)
                 const sn = localStorage.getItem('resinen_notes'); if (sn) noteContent = sn;
                 const st = localStorage.getItem('resinen_todos'); if (st) todos = JSON.parse(st);
                 const sl = localStorage.getItem('resinen_loves'); if (sl) loves = JSON.parse(sl);
@@ -240,19 +247,8 @@
                 const str = localStorage.getItem('resinen_travel_list'); if (str) places = JSON.parse(str).places;
             }
 
-            async function loadAll(t: number) {
-                artLoading = true;
-                // Now using api.getDashboard instead of raw fetch
-                try { visuals = await api.getDashboard('visuals', { t, art_source: 'aic' }); } catch(e){} finally { artLoading = false; }
-                try { feeds = await api.getDashboard('feeds', { t }); } catch(e){}
-                try { planetary = await api.getDashboard('planetary', {}); } catch(e){}
-                try { zen = await api.getDashboard('zen', { t }); } catch(e){}
-                try { system = await api.getDashboard('system', {}); } catch(e){}
-            }
-
-            // 3. Start Feeds
-            loadAll(Date.now()); 
-            refreshTimer = setInterval(() => loadAll(Date.now()), 300000);
+            refreshAll(); 
+            refreshTimer = setInterval(refreshAll, 300000);
         } catch (e) { console.error(e); } 
     });
     
