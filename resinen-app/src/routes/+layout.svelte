@@ -183,7 +183,6 @@
                 <a href="/games/soccer" class="app-link"><span>⚽️</span><div class="tooltip">Soccer</div></a>
                 <a href="/games/cricket" class="app-link"><span>🏏</span><div class="tooltip">Cricket</div></a>
                 <a href="/games/battleship" class="app-link"><span>🚢</span><div class="tooltip">Battleship</div></a>
-                <a href="/games/ludo" class="app-link"><span>🎲</span><div class="tooltip">Ludo</div></a>
             </div>
 
             <div class="divider"></div>
