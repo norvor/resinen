@@ -4,6 +4,15 @@ from sqlmodel import SQLModel, Field
 
 # --- SHARED PROPERTIES ---
 
+class UserStorage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_email: str = Field(index=True)
+    key: str = Field(index=True)  # e.g., "resinen_projects", "resinen_scribble"
+    
+    # Stores ANY JSON data (lists, objects, strings)
+    value: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+
+
 class ArticleBase(SQLModel):
     title: str
     summary: str
