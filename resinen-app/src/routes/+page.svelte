@@ -52,7 +52,7 @@
             case 'google': url = `https://www.google.com/search?q=${q}`; break;
             case 'youtube': url = `https://www.youtube.com/results?search_query=${q}`; break;
             case 'news': url = `https://news.google.com/search?q=${q}`; break;
-            case 'chatgpt': url = `https://chatgpt.com/?q=${q}`; break; // Direct link
+            case 'chatgpt': url = `https://chatgpt.com/?q=${q}`; break;
         }
         if(url) window.open(url, '_blank');
         searchQuery = ""; // Clear after search
@@ -131,7 +131,6 @@
     <main class="grid-container">
 
         <div class="col col-left">
-            
             <div class="card history-card">
                 <div class="icon-box">📜</div>
                 <div class="content">
@@ -170,7 +169,6 @@
         </div>
 
         <div class="col col-center">
-            
             <section class="mission-section">
                 <MissionControl />
             </section>
@@ -178,7 +176,6 @@
             <section class="workspace-split">
                 <div class="ws-col">
                     <BudgetWidget />
-                    
                     <div class="card zen-card">
                         <div class="zen-icon">☯</div>
                         <p>"{zen?.text || "Stillness is the key."}"</p>
@@ -187,7 +184,6 @@
 
                 <div class="ws-col">
                     <TaskWidget />
-                    
                     <BreathingOrb />
                 </div>
             </section>
@@ -198,7 +194,6 @@
         </div>
 
         <div class="col col-right">
-            
             <div class="photo-frame">
                 <div class="visual-card">
                     <img src={collage[0].url} alt="Inspiration" />
@@ -211,7 +206,6 @@
                         <img src={collage[1].url} alt="Inspiration" />
                     </div>
                 </div>
-
                 <div class="photo-frame small">
                     <div class="visual-card small">
                         <img src={collage[2].url} alt="Inspiration" />
@@ -220,7 +214,6 @@
             </div>
 
             <LoveWidget />
-
             <ScribbleWidget />
         </div>
 
@@ -231,7 +224,12 @@
     /* =========================================
        GLOBAL & THEMES
        ========================================= */
-    :global(body) { margin: 0; padding: 0; font-family: 'Inter', sans-serif; transition: background 0.5s; overflow-x: hidden; }
+    /* REMOVED: Body reset styles (margin/padding/overflow) 
+       These should be in +layout.svelte to avoid conflicts. */
+    :global(body) { 
+        transition: background 0.5s; 
+    }
+    
     :global(body.night-aurora) { background: #020617; color: #e2e8f0; }
     :global(body.cloudy) { background: #f1f5f9; color: #334155; }
 
@@ -245,19 +243,19 @@
     }
 
     /* =========================================
-       LAYOUT GRID (RESTORED DESKTOP)
+       LAYOUT GRID (DESKTOP)
        ========================================= */
     .dashboard-layout {
-        /* DESKTOP DEFAULT: Fixed height with internal scroll */
+        /* Desktop: Fixed viewport height, internal scroll */
         height: 100vh; 
         display: flex; flex-direction: column;
         padding: 20px 40px; box-sizing: border-box;
-        overflow-y: auto; /* Required for desktop scrolling */
+        overflow-y: auto; /* Internal scrollbar */
     }
 
     .grid-container {
         display: grid;
-        grid-template-columns: 320px 1fr 320px; /* Desktop: Fixed Sides, Fluid Center */
+        grid-template-columns: 320px 1fr 320px;
         gap: 24px;
         flex: 1;
         max-width: 1920px; margin: 0 auto; width: 100%;
@@ -270,7 +268,7 @@
        ========================================= */
     .top-bar {
         display: grid; 
-        grid-template-columns: 250px 1fr 250px; /* Left Brand, Center Search, Right Theme */
+        grid-template-columns: 250px 1fr 250px;
         align-items: center;
         margin-bottom: 25px; padding: 10px 0; gap: 20px;
     }
@@ -386,17 +384,15 @@
     .zen-icon { font-size: 1.5rem; }
     :global(body.cloudy) .zen-card { background: #ecfdf5; border-color: #d1fae5; color: #059669; }
 
-    /* Visuals (Collage) - PHOTO FRAMES - FIXED IMAGE FITTING */
+    /* Visuals (Collage) */
     .photo-frame {
-        background: #fff;
-        padding: 10px;
+        background: #fff; padding: 10px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         transform: rotate(-1deg);
         transition: transform 0.3s;
         display: flex; justify-content: center; align-items: center;
     }
     
-    /* FIX: Only apply hover scale if device actually supports hover */
     @media (hover: hover) {
         .photo-frame:hover { transform: rotate(0deg) scale(1.02); z-index: 10; }
     }
@@ -406,14 +402,11 @@
     .visual-card {
         height: 200px; width: 100%; padding: 0; 
         overflow: hidden; 
-        background: #000; /* Matting background */
-        border: 1px solid #eee; border-radius: 0;
+        background: #000; border: 1px solid #eee; border-radius: 0;
         display: flex; justify-content: center; align-items: center;
     }
     .visual-card img {
-        width: 100%; height: 100%; 
-        object-fit: contain; 
-        display: block;
+        width: 100%; height: 100%; object-fit: contain; display: block;
     }
     
     .split-visuals { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -432,9 +425,7 @@
         }
         .col-right { 
             grid-column: span 2; 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
         }
         .photo-frame { grid-column: span 1; }
         .split-visuals { grid-column: span 1; }
@@ -444,11 +435,16 @@
 
     /* Mobile (Single Column) */
     @media (max-width: 850px) {
+        /* FORCE SCROLL: Overriding layout restrictions */
+        :global(body) {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
+
         .dashboard-layout { 
-            /* MOBILE OVERRIDE: Grow with content, let window scroll */
             height: auto; 
             min-height: 100dvh; 
-            overflow-y: visible; 
+            overflow: visible; /* Let body handle scroll */
             padding: 10px; 
         }
         .grid-container { 
@@ -460,10 +456,7 @@
         .search-deck { width: 100%; order: 2; }
         .theme-toggle { order: 1; align-self: flex-end; }
         
-        /* FIX: Prevent iOS zoom by enforcing 16px font size on inputs */
         .search-input { font-size: 16px; }
-
-        /* FIX: Larger touch targets for search buttons (44px min) */
         .s-btn { width: 44px; height: 44px; }
         .search-buttons { gap: 10px; }
         
@@ -471,7 +464,6 @@
         
         .col-right { display: flex; flex-direction: column; }
         .photo-frame { transform: none; width: 100%; box-sizing: border-box; }
-        /* Reset any lingering transforms on mobile */
         .photo-frame:hover { transform: none; }
     }
 </style>
