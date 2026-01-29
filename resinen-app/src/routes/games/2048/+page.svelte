@@ -125,7 +125,6 @@
     <div class="bg-layer stars"></div>
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>NEON 2048</h1>
             <div class="stats">
                 <span>SCORE: <span class="val">{score}</span></span>

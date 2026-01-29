@@ -146,7 +146,6 @@
     
     <div class="poker-table">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>TEXAS HOLD'EM</h1>
             <div class="pot-display">POT: ${pot}</div>
         </div>

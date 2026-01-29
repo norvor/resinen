@@ -123,7 +123,6 @@
     
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>RIVENDELL CHESS</h1>
             <div class="status" class:pulse={isThinking}>{status}</div>
         </div>

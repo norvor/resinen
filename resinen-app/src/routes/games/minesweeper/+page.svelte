@@ -115,8 +115,7 @@
     
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
-            <h1>NEON BREACH</h1>
+            <h1>MINESWEEPER</h1>
             <div class="stats">
                 <span class="stat">MINES: <span class="val">{mineCount - flagsUsed}</span></span>
                 <span class="stat">TIME: <span class="val">{timer}s</span></span>

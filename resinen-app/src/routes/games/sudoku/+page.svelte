@@ -92,7 +92,6 @@
     
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>NEON SUDOKU</h1>
             <div class="stats">
                 <span>MISTAKES: <span class="err">{mistakes}/3</span></span>

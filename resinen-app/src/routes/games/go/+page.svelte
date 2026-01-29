@@ -58,7 +58,6 @@
     
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>NEON GO</h1>
             <div class="scores">
                 <span class="p1">YOU: {capturedPlayer}</span>

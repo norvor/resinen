@@ -56,7 +56,6 @@
 
 <div class="game-container">
     <div class="header">
-        <a href="/" class="back">← DOCK</a>
         <h1>NEON PENALTY</h1>
         <div class="stats">STREAK: {streak} <span class="hs">BEST: {bestStreak}</span></div>
     </div>

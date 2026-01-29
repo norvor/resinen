@@ -254,7 +254,6 @@
     
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>NEON TETRIS</h1>
             <div class="stats">
                 <span>SCORE: <span class="val">{score}</span></span>
