@@ -8,8 +8,8 @@ from passlib.context import CryptContext
 from typing import Optional
 from pydantic import BaseModel
 
-from ../database import get_session
-from ../models import User
+from app.database import get_session
+from app.models import User
 
 # --- CONFIG ---
 SECRET_KEY = "resinen-neural-secret-key"
