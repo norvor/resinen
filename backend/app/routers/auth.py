@@ -1,95 +1,150 @@
-# backend/app/routers/auth.py
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from typing import Optional
 from pydantic import BaseModel
-import sqlite3
-import hashlib
-import uuid
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-DB_FILE = "users.db"
+from app.database import get_session
+from app.models import User
 
-# --- DATABASE MIGRATION ---
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    # Create table with premium columns
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (email TEXT PRIMARY KEY, password TEXT, token TEXT, 
-                  is_premium INTEGER DEFAULT 0, payment_id TEXT)''')
+# --- CONFIG ---
+SECRET_KEY = "resinen-neural-secret-key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 43200 # 30 Days
+
+# FIX 1: Removed prefix="/auth" so routes match frontend (e.g. /token)
+router = APIRouter(tags=["auth"])
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# FIX 2: Point to "token" (root relative) instead of "/auth/login"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# --- SCHEMAS ---
+class UserRead(BaseModel):
+    id: int
+    email: str
+    is_premium: bool
+    country_code: str
     
-    # Migration check
-    try:
-        c.execute("SELECT is_premium FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        print("Migrating DB: Adding premium columns...")
-        c.execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
-        c.execute("ALTER TABLE users ADD COLUMN payment_id TEXT")
-        
-    conn.commit()
-    conn.close()
+    class Config:
+        orm_mode = True
 
-init_db()
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserRead
 
-# --- UTILS ---
-def hash_password(password: str):
-    return hashlib.sha256(password.encode()).hexdigest()
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    country_code: str = "IN"
+    data_consent: bool = True
 
-def get_user_from_token(token: str):
-    if not token: return None
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT email, is_premium FROM users WHERE token=?", (token,))
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return {"email": row[0], "is_premium": bool(row[1])}
-    return None
+# --- HELPERS ---
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 # --- DEPENDENCY ---
-async def require_premium(x_token: str = Header(None)):
-    if not x_token:
-        raise HTTPException(status_code=401, detail="Authentication required")
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), 
+    session: AsyncSession = Depends(get_session)
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
     
-    user = get_user_from_token(x_token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-        
-    if not user['is_premium']:
-        raise HTTPException(status_code=403, detail="Premium Subscription Required")
+    statement = select(User).where(User.email == email)
+    result = await session.execute(statement)
+    user = result.scalars().first()
     
+    if user is None:
+        raise credentials_exception
     return user
 
 # --- ENDPOINTS ---
-class AuthRequest(BaseModel):
-    email: str
-    password: str
 
-@router.post("/signup")
-def signup(req: AuthRequest):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    try:
-        hashed = hash_password(req.password)
-        token = str(uuid.uuid4())
-        c.execute("INSERT INTO users (email, password, token, is_premium) VALUES (?, ?, ?, 0)", 
-                  (req.email, hashed, token))
-        conn.commit()
-        return {"token": token, "email": req.email, "is_premium": False}
-    except sqlite3.IntegrityError:
-        raise HTTPException(status_code=400, detail="User already exists")
-    finally:
-        conn.close()
-
-@router.post("/login")
-def login(req: AuthRequest):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    hashed = hash_password(req.password)
-    c.execute("SELECT token, is_premium FROM users WHERE email=? AND password=?", (req.email, hashed))
-    row = c.fetchone()
-    conn.close()
+# FIX 3: Renamed to /users/signup to match frontend
+@router.post("/users/signup", response_model=Token)
+async def signup(user_data: UserCreate, session: AsyncSession = Depends(get_session)):
+    # 1. Check existing
+    statement = select(User).where(User.email == user_data.email)
+    result = await session.execute(statement)
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    if row:
-        return {"token": row[0], "email": req.email, "is_premium": bool(row[1])}
-    else:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    # 2. Create
+    new_user = User(
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        country_code=user_data.country_code,
+        data_consent=user_data.data_consent
+    )
+    session.add(new_user)
+    await session.commit()
+    await session.refresh(new_user)
+    
+    # 3. Token
+    access_token = create_access_token(
+        data={"sub": new_user.email}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer", "user": new_user}
+
+# FIX 4: Renamed to /token to match frontend
+@router.post("/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    session: AsyncSession = Depends(get_session)
+):
+    # 1. Async Query
+    statement = select(User).where(User.email == form_data.username)
+    result = await session.execute(statement)
+    user = result.scalars().first()
+    
+    # 2. Verify
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 3. Token
+    access_token = create_access_token(
+        data={"sub": user.email}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer", "user": user}
+
+@router.get("/users/me", response_model=UserRead)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user

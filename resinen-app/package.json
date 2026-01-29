@@ -21,6 +21,11 @@
 		"vite": "^7.2.6"
 	},
 	"dependencies": {
-		"chess.js": "^1.4.0"
+		"@tiptap/core": "^3.18.0",
+		"@tiptap/extension-placeholder": "^3.18.0",
+		"@tiptap/extension-typography": "^3.18.0",
+		"@tiptap/starter-kit": "^3.18.0",
+		"chess.js": "^1.4.0",
+		"marked": "^17.0.1"
 	}
 }

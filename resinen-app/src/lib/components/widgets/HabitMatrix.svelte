@@ -1,66 +1,285 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import * as api from '$lib/api'; // <--- 1. Import API
+    import { api } from '$lib/api';
+    import { slide, fade } from 'svelte/transition';
 
-    type Habit = { name: string; grid: boolean[]; };
+    type Habit = {
+        id: number;
+        name: string;
+        grid: number[]; // 35 days (7x5 grid)
+    };
 
-    let habits = $state<Habit[]>([
-        { name: "WORKOUT", grid: Array(35).fill(false) },
-        { name: "READING", grid: Array(35).fill(false) },
-        { name: "CODING", grid: Array(35).fill(false) },
-        { name: "MEDITATE", grid: Array(35).fill(false) }
-    ]);
+    let habits = $state<Habit[]>([]);
+    let activeIndex = $state(0);
+    let newHabitName = $state("");
+    let isAdding = $state(false);
 
-    let currentIndex = $state(0);
-    let currentHabit = $derived(habits[currentIndex]);
-    const COLORS = ["#f472b6", "#2dd4bf", "#fbbf24", "#a78bfa"];
-    let activeColor = $derived(COLORS[currentIndex]);
-    let totalCount = $derived(currentHabit.grid.filter(Boolean).length);
+    // Derived active habit
+    let currentHabit = $derived(habits[activeIndex]);
 
-    function toggle(i: number) {
-        habits[currentIndex].grid[i] = !habits[currentIndex].grid[i];
-        save();
-    }
-
-    function nextHabit() { currentIndex = (currentIndex + 1) % habits.length; }
-    function prevHabit() { currentIndex = (currentIndex - 1 + habits.length) % habits.length; }
-
-    // --- 2. UPDATED SAVE FUNCTION ---
-    function save() {
-        // Now saves to Cloud + LocalStorage
-        api.saveData('resinen_habits_v2', habits); 
-    }
-
-    onMount(() => {
-        // We still load from LocalStorage for instant render
-        // (The +page.svelte sync keeps this fresh)
-        const saved = localStorage.getItem('resinen_habits_v2');
-        if (saved) {
-            try { habits = JSON.parse(saved); } catch (e) {}
+    onMount(async () => {
+        // 1. Local Load
+        if (typeof localStorage !== 'undefined') {
+            const saved = localStorage.getItem('resinen_habits');
+            if (saved) habits = JSON.parse(saved);
         }
+
+        // 2. Cloud Sync
+        try {
+            const data = await api.widgets.loadDashboard();
+            if (data && data.habits && data.habits.grid_data) {
+                // Parse the big blob
+                const parsed = typeof data.habits.grid_data === 'string' 
+                    ? JSON.parse(data.habits.grid_data) 
+                    : data.habits.grid_data;
+                
+                if (Array.isArray(parsed)) {
+                    habits = parsed.map((h: any) => ({
+                        ...h,
+                        // Ensure grid is always 35 long for the matrix view
+                        grid: (h.grid && h.grid.length === 35) ? h.grid : Array(35).fill(0)
+                    }));
+                }
+                saveLocal();
+            }
+        } catch(e) { console.log("Offline"); }
     });
+
+    async function syncBackend() {
+        saveLocal();
+        try {
+            // Send the entire array as one JSON string
+            await api.widgets.updateHabits({ 
+                grid_data: JSON.stringify(habits) 
+            });
+        } catch(e) { console.error("Sync failed", e); }
+    }
+
+    function addHabit() {
+        if (!newHabitName.trim()) return;
+        
+        const newH: Habit = {
+            id: Date.now(),
+            name: newHabitName,
+            grid: Array(35).fill(0) // 7 cols x 5 rows
+        };
+
+        habits = [...habits, newH];
+        activeIndex = habits.length - 1; // Jump to new
+        newHabitName = "";
+        isAdding = false;
+        
+        syncBackend();
+    }
+
+    function toggleCell(index: number) {
+        if (!currentHabit) return;
+        
+        // Toggle 0/1
+        const newGrid = [...currentHabit.grid];
+        newGrid[index] = newGrid[index] ? 0 : 1;
+        
+        // Update state
+        habits[activeIndex].grid = newGrid;
+        
+        syncBackend();
+    }
+
+    function deleteCurrent() {
+        if(!confirm("Delete this habit grid?")) return;
+        
+        habits = habits.filter((_, i) => i !== activeIndex);
+        if (activeIndex >= habits.length) activeIndex = Math.max(0, habits.length - 1);
+        
+        syncBackend();
+    }
+
+    function next() {
+        if (activeIndex < habits.length - 1) activeIndex++;
+        else activeIndex = 0; // Loop
+    }
+
+    function prev() {
+        if (activeIndex > 0) activeIndex--;
+        else activeIndex = habits.length - 1; // Loop
+    }
+
+    function saveLocal() {
+        if (typeof localStorage !== 'undefined') 
+            localStorage.setItem('resinen_habits', JSON.stringify(habits));
+    }
 </script>
 
-<div class="card habit-widget" style="--theme: {activeColor}">
-    <div class="head">
-        <button class="nav-btn" onclick={prevHabit}>‹</button>
-        <div class="title-area">
-            <input type="text" class="habit-name" bind:value={habits[currentIndex].name} oninput={save} maxlength="12"/>
-            <div class="counter">{totalCount} SESSIONS</div>
-        </div>
-        <button class="nav-btn" onclick={nextHabit}>›</button>
+<div class="card habit-widget">
+    <div class="header">
+        <span>HABIT MATRIX</span>
+        <button class="add-btn" onclick={() => isAdding = !isAdding}>{isAdding ? '×' : '+'}</button>
     </div>
-    <div class="matrix-container">
-        <div class="pagination">{#each habits as _, i}<div class="dot" class:active={i === currentIndex}></div>{/each}</div>
-        <div class="matrix-grid">
-            {#each currentHabit.grid as active, i}
-                <button class="cell" class:active={active} onclick={() => toggle(i)}></button>
-            {/each}
+
+    {#if isAdding}
+        <div class="add-overlay" transition:slide>
+            <input type="text" bind:value={newHabitName} placeholder="PROTOCOL NAME..." onkeydown={(e) => e.key === 'Enter' && addHabit()} autoFocus />
+            <button onclick={addHabit}>INITIALIZE</button>
         </div>
+    {/if}
+
+    <div class="carousel-stage">
+        {#if habits.length > 0}
+            <button class="nav-btn left" onclick={prev}>‹</button>
+
+            <div class="habit-card" in:fade={{ duration: 200 }}>
+                <div class="habit-meta">
+                    <span class="habit-name">{currentHabit.name}</span>
+                    <button class="del-btn" onclick={deleteCurrent}>🗑</button>
+                </div>
+
+                <div class="matrix-grid">
+                    {#each currentHabit.grid as cell, i}
+                        <button 
+                            class="cell" 
+                            class:active={cell === 1}
+                            onmousedown={() => toggleCell(i)}
+                            onmouseenter={(e) => e.buttons === 1 && toggleCell(i)} 
+                        ></button>
+                    {/each}
+                </div>
+                
+                <div class="page-indicator">
+                    {activeIndex + 1} / {habits.length}
+                </div>
+            </div>
+
+            <button class="nav-btn right" onclick={next}>›</button>
+        
+        {:else}
+            <div class="empty-state">
+                NO ACTIVE PROTOCOLS.<br>
+                CLICK + TO START.
+            </div>
+        {/if}
     </div>
 </div>
 
 <style>
-    /* ... Copy styles from previous HabitMatrix response ... */
-    .habit-widget { height: 220px; display: flex; flex-direction: column; background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid #334155; border-radius: 12px; transition: border-color 0.3s; } .habit-widget:hover { border-color: var(--theme); } .head { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; gap: 10px; } .nav-btn { background: rgba(255,255,255,0.05); border: 1px solid transparent; color: #94a3b8; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-family: monospace; transition: 0.2s; } .nav-btn:hover { background: var(--theme); color: #000; } .title-area { flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; } .habit-name { background: transparent; border: none; color: var(--theme); font-family: 'Space Grotesk', sans-serif; font-weight: bold; font-size: 0.9rem; text-align: center; width: 100%; outline: none; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 0 10px rgba(0,0,0,0.5); } .habit-name:focus { border-bottom: 1px dashed var(--theme); } .counter { font-size: 0.6rem; color: #64748b; font-family: 'JetBrains Mono', monospace; } .matrix-container { flex: 1; padding: 10px 15px 15px 15px; display: flex; gap: 10px; flex-direction: row; } .pagination { display: flex; flex-direction: column; justify-content: center; gap: 6px; } .dot { width: 4px; height: 4px; border-radius: 50%; background: #334155; transition: 0.3s; } .dot.active { background: var(--theme); height: 12px; border-radius: 4px; box-shadow: 0 0 5px var(--theme); } .matrix-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(5, 1fr); gap: 6px; } .cell { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 3px; cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); padding: 0; } .cell:hover { border-color: var(--theme); } .cell.active { background: var(--theme); border-color: var(--theme); box-shadow: 0 0 8px var(--theme); transform: scale(1.05); } .cell:active { transform: scale(0.9); }
+    .habit-widget {
+        background: rgba(30, 41, 59, 0.4);
+        backdrop-filter: blur(10px);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 15px;
+        display: flex; flex-direction: column;
+        min-height: 280px; /* Taller for the matrix */
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* HEADER */
+    .header {
+        display: flex; justify-content: space-between; align-items: center;
+        font-family: 'JetBrains Mono'; color: #2dd4bf; font-size: 0.8rem;
+        border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px;
+    }
+    .add-btn {
+        background: none; border: 1px solid #2dd4bf; color: #2dd4bf;
+        width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: 0.2s;
+    }
+    .add-btn:hover { background: #2dd4bf; color: #000; }
+
+    /* ADD OVERLAY */
+    .add-overlay {
+        position: absolute; top: 50px; left: 0; right: 0; 
+        background: #0f172a; padding: 20px; z-index: 10;
+        border-bottom: 1px solid #334155;
+        display: flex; gap: 10px;
+    }
+    .add-overlay input {
+        flex: 1; background: #1e293b; border: 1px solid #334155; color: #fff;
+        padding: 8px; outline: none; font-family: 'Space Grotesk';
+    }
+    .add-overlay button {
+        background: #2dd4bf; color: #000; border: none; padding: 0 15px;
+        font-weight: bold; cursor: pointer;
+    }
+
+    /* CAROUSEL */
+    .carousel-stage {
+        flex: 1; display: flex; align-items: center; justify-content: space-between;
+        position: relative;
+    }
+
+    .nav-btn {
+        background: transparent; border: none; color: #64748b;
+        font-size: 2rem; cursor: pointer; padding: 0 5px; transition: 0.2s;
+        z-index: 5;
+    }
+    .nav-btn:hover { color: #fff; transform: scale(1.2); }
+
+    .habit-card {
+        flex: 1; display: flex; flex-direction: column; align-items: center;
+        gap: 10px; width: 100%;
+    }
+
+    .habit-meta {
+        width: 100%; display: flex; justify-content: space-between; align-items: center;
+        padding: 0 10px;
+    }
+    .habit-name { font-weight: bold; color: #fff; font-size: 1rem; letter-spacing: 1px; }
+    .del-btn { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5; }
+    .del-btn:hover { opacity: 1; }
+
+    /* THE MATRIX GRID */
+    .matrix-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr); /* 7 Days wide */
+        grid-template-rows: repeat(5, 1fr);    /* 5 Weeks high */
+        gap: 6px;
+        background: #0f172a;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #334155;
+    }
+
+    .cell {
+        width: 24px; height: 24px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: 0.1s;
+        padding: 0;
+    }
+    .cell:hover { border-color: #2dd4bf; }
+    .cell.active { 
+        background: #2dd4bf; 
+        box-shadow: 0 0 8px #2dd4bf; 
+        border-color: #2dd4bf; 
+    }
+
+    .page-indicator {
+        font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #64748b; margin-top: 5px;
+    }
+
+    .empty-state {
+        width: 100%; text-align: center; color: #64748b; font-size: 0.8rem; font-style: italic;
+    }
+
+    /* === CLOUDY THEME === */
+    :global(body.cloudy) .habit-widget {
+        background: rgba(255, 255, 255, 0.6);
+        border-color: #cbd5e1;
+        color: #334155;
+    }
+    :global(body.cloudy) .header { border-bottom-color: #cbd5e1; color: #0f172a; }
+    :global(body.cloudy) .add-btn { color: #0ea5e9; border-color: #0ea5e9; }
+    :global(body.cloudy) .add-btn:hover { background: #0ea5e9; color: #fff; }
+    
+    :global(body.cloudy) .matrix-grid { background: #f1f5f9; border-color: #cbd5e1; }
+    :global(body.cloudy) .cell { background: #fff; border-color: #cbd5e1; }
+    :global(body.cloudy) .cell.active { background: #0ea5e9; border-color: #0ea5e9; box-shadow: 0 0 5px rgba(14, 165, 233, 0.5); }
+    
+    :global(body.cloudy) .habit-name { color: #334155; }
+    :global(body.cloudy) .nav-btn { color: #94a3b8; }
+    :global(body.cloudy) .nav-btn:hover { color: #0ea5e9; }
 </style>

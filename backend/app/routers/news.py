@@ -1,4 +1,3 @@
-# backend/app/routers/news.py
 from fastapi import APIRouter
 from ..services import (
     get_planetary_state, get_visual_feeds, get_zen_wisdom,
@@ -11,7 +10,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def planetary(): return get_planetary_state()
 
 @router.get("/visuals")
-async def get_visuals(art_source: str = "met"): return await get_visual_feeds(art_source=art_source)
+async def get_visuals(): return await get_visual_feeds()
 
 @router.get("/zen")
 async def zen(): return await get_zen_wisdom()

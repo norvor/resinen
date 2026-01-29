@@ -1,10 +1,9 @@
-# backend/app/services.py
 import httpx
 import random
 import feedparser
 from datetime import datetime, timezone, timedelta
 
-# --- 0. ROBUST FALLBACKS (The Safety Net) ---
+# --- 0. ROBUST FALLBACKS ---
 FALLBACKS = {
     "art": {
         "url": "https://www.artic.edu/iiif/2/25c31d8d-21a4-9ea9-11c1-ac333d963f7b/full/843,/0/default.jpg",
@@ -60,9 +59,8 @@ async def get_visual_feeds(art_source: str = "met"):
     async with httpx.AsyncClient(timeout=5.0) as client:
         results = {}
 
-        # A. ART (Try AIC -> MET -> Fallback)
+        # A. ART
         try:
-            # Art Institute of Chicago (Specific Fields for lighter payload)
             page = random.randint(1, 40)
             url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=1&fields=id,title,image_id,artist_display"
             resp = await client.get(url)
@@ -78,17 +76,14 @@ async def get_visual_feeds(art_source: str = "met"):
             else:
                 raise Exception("No Image ID")
         except:
-            # Fail silently to fallback
             results['art'] = FALLBACKS['art']
 
-        # B. ANIMALS (Try Dog CEO -> RandomFox -> Fallback)
+        # B. ANIMALS
         try:
-            # Dog CEO
             r = await client.get("https://dog.ceo/api/breeds/image/random")
             data = r.json()
             if data['status'] == 'success':
                 url = data['message']
-                # Clean breed name from URL
                 breed = "DOG"
                 if "/breeds/" in url:
                     try:
@@ -98,14 +93,9 @@ async def get_visual_feeds(art_source: str = "met"):
             else:
                 raise Exception("Dog API Failed")
         except:
-            # Fallback to RandomFox if Dog fails
-            try:
-                r = await client.get("https://randomfox.ca/floof/")
-                results['animal'] = {"type": "FOX", "url": r.json()['image']}
-            except:
-                results['animal'] = FALLBACKS['animal']
+            results['animal'] = FALLBACKS['animal']
 
-        # C. FOOD (TheMealDB -> Fallback)
+        # C. FOOD
         try:
             r = await client.get("https://www.themealdb.com/api/json/v1/1/random.php")
             data = r.json()
@@ -118,9 +108,8 @@ async def get_visual_feeds(art_source: str = "met"):
 
         return results
 
-# --- 4. DATA FEEDS (NEWS AGGREGATOR) ---
+# --- 4. DATA FEEDS ---
 def parse_rss_robust(url, limit=4):
-    """Parses RSS with feedparser, returns empty list on failure"""
     try:
         feed = feedparser.parse(url)
         items = []
@@ -137,46 +126,28 @@ async def get_new_feeds():
     async with httpx.AsyncClient() as client:
         data = {}
 
-        # A. MARKETS (Simulated)
-        base_sp, base_gold, base_brent = 5200.00, 2350.00, 85.00
-        sp = base_sp * random.uniform(0.995, 1.005)
-        gold = base_gold * random.uniform(0.995, 1.005)
-        brent = base_brent * random.uniform(0.99, 1.01)
-        data['markets'] = [
-            {"name": "S&P 500", "price": f"{sp:.2f}", "change": f"{random.uniform(-1.2, 1.2):.2f}%"},
-            {"name": "GOLD", "price": f"{gold:.2f}", "change": f"{random.uniform(-0.8, 0.8):.2f}%"},
-            {"name": "BRENT", "price": f"{brent:.2f}", "change": f"{random.uniform(-2.0, 2.0):.2f}%"}
-        ]
-
-        # B. NEWS HUB FEEDS
+        # NEWS
         data['business'] = parse_rss_robust("http://feeds.bbci.co.uk/news/business/rss.xml")
         data['sports'] = parse_rss_robust("http://feeds.bbci.co.uk/sport/rss.xml")
         data['culture'] = parse_rss_robust("https://www.theguardian.com/culture/rss")
-        data['global'] = parse_rss_robust("http://feeds.bbci.co.uk/news/world/rss.xml")
-
-        # C. UPLIFTING FEED (Using DailyGood RSS)
-        uplifting = parse_rss_robust("https://www.dailygood.org/rss/", limit=2)
-        data['uplifting'] = uplifting if uplifting else FALLBACKS['uplifting']
-
-        # D. HISTORY
+        
+        # HISTORY
         try:
-            # Note: history.muffinlabs.com is great but sometimes slow
             r = await client.get(f"https://history.muffinlabs.com/date/{datetime.now().month}/{datetime.now().day}", timeout=3.0)
             fact = random.choice(r.json()['data']['Events'])
             data['history'] = {"year": fact['year'], "text": fact['text']}
         except:
             data['history'] = {"year": "2026", "text": "Resinen Systems operational."}
 
-        # E. JOKE
+        # JOKE
         try:
             r = await client.get("https://official-joke-api.appspot.com/random_joke", timeout=2.0)
             data['joke'] = r.json()
         except: 
-            data['joke'] = {"setup": "Why did the server crash?", "punchline": "It had a bad driver."}
+            data['joke'] = {"setup": "System Status?", "punchline": "Optimal."}
 
         return data
 
-# --- 5. ZEN ---
 async def get_zen_wisdom():
-    quotes = ["The obstacle is the path.", "Act without expectation.", "Stillness speaks.", "Nature does not hurry.", "Be water, my friend."]
+    quotes = ["The obstacle is the path.", "Act without expectation.", "Stillness speaks."]
     return {"text": random.choice(quotes)}

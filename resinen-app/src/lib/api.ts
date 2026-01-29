@@ -1,80 +1,150 @@
-import { writable } from 'svelte/store';
+import { logout } from '$lib/stores';
 
-const IS_LOCAL = false;
-const BASE = IS_LOCAL ? "http://localhost:8000" : "https://api.resinen.com";
-const STORAGE_API = `${BASE}/storage`;
-const DASH_API = `${BASE}/dashboard`;
+const BASE_URL = "https://api.resinen.com";
 
-// Helper to get current user from localStorage
-function getUser() {
-    if (typeof localStorage === 'undefined') return null;
-    const u = localStorage.getItem('resinen_user');
-    return u ? JSON.parse(u) : null;
+function authHeaders() {
+    const token = localStorage.getItem('token');
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
 }
 
-export async function saveData(key: string, data: any) {
-    // 1. Always save to LocalStorage first (Instant UI update)
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(data));
+// Global response handler
+async function handle(res: Response) {
+    if (res.status === 401) {
+        logout(); // Updates store, switches Layout to Login Mode instantly
+        throw new Error("Unauthorized");
     }
+    return res.json();
+}
 
-    // 2. If user is logged in, sync to Backend (Cloud Persistence)
-    const user = getUser();
-    if (user && user.email) {
-        try {
-            await fetch(`${STORAGE_API}/${key}`, {
+export const api = {
+    auth: {
+        login: async (username, password) => {
+            const body = new URLSearchParams();
+            body.append('username', username);
+            body.append('password', password);
+            
+            const res = await fetch(`${BASE_URL}/token`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    user_email: user.email, 
-                    data: data 
-                })
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
             });
-        } catch (e) {
-            console.error("Cloud Sync Failed:", e);
+            if (!res.ok) throw new Error("Login failed");
+            return res.json();
         }
-    }
-}
+    },
 
-export async function loadData(key: string) {
-    // 1. Try LocalStorage first (Fastest)
-    if (typeof localStorage !== 'undefined') {
-        const local = localStorage.getItem(key);
-        if (local) return JSON.parse(local);
-    }
-    return null;
-}
+    widgets: {
+        // --- DASHBOARD ---
+        loadDashboard: async () => {
+            const res = await fetch(`${BASE_URL}/widgets/dashboard`, { headers: authHeaders() });
+            return handle(res);
+        },
 
-export async function getDashboard(endpoint: string, params: Record<string, any> = {}) {
-    try {
-        const url = new URL(`${DASH_API}/${endpoint}`);
-        Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+        // --- PUBLIC FEEDS ---
+        getFeeds: async () => (await fetch(`${BASE_URL}/dashboard/feeds`)).json(),
+        getVisuals: async () => (await fetch(`${BASE_URL}/dashboard/visuals`)).json(),
+        getPlanetary: async () => (await fetch(`${BASE_URL}/dashboard/planetary`)).json(),
+        getZen: async () => (await fetch(`${BASE_URL}/dashboard/zen`)).json(),
+
+        // --- MISSION CONTROL ---
+        getMissions: async () => {
+            const res = await fetch(`${BASE_URL}/widgets/missions`, { headers: authHeaders() });
+            return handle(res);
+        },
+        createMission: async (data: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/missions`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify(data)
+            });
+            return handle(res);
+        },
+        updateMission: async (id: number, data: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/missions/${id}`, {
+                method: 'PUT', headers: authHeaders(), body: JSON.stringify(data)
+            });
+            return handle(res);
+        },
+        abortMission: async (id: number) => {
+            await fetch(`${BASE_URL}/widgets/missions/${id}`, { method: 'DELETE', headers: authHeaders() });
+        },
+
+        // --- TRANSMISSION (MATCHING PYTHON: Singular '/transmission') ---
+        createTransmission: async (title: string, url: string, type: string) => {
+            const res = await fetch(`${BASE_URL}/widgets/transmission`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ title, url, type })
+            });
+            return handle(res);
+        },
+        deleteTransmission: async (id: number) => {
+            await fetch(`${BASE_URL}/widgets/transmission/${id}`, { method: 'DELETE', headers: authHeaders() });
+        },
+
+        // --- LOVES (MATCHING PYTHON: Plural '/loves') ---
+        // Added 'link' parameter to match backend model
+        createLove: async (name: string, category: string, description: string, link: string = "") => {
+            const res = await fetch(`${BASE_URL}/widgets/loves`, {
+                method: 'POST', 
+                headers: authHeaders(), 
+                body: JSON.stringify({ name, category, description, link })
+            });
+            return handle(res);
+        },
+        deleteLove: async (id: number) => {
+            await fetch(`${BASE_URL}/widgets/loves/${id}`, { method: 'DELETE', headers: authHeaders() });
+        },
+
+        // --- NOTES & TASKS ---
+        createNote: async (title: string, content: string) => {
+            const res = await fetch(`${BASE_URL}/widgets/notes`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ title, content })
+            });
+            return handle(res);
+        },
+        updateNote: async (id: number, data: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/notes/${id}`, {
+                method: 'PUT', headers: authHeaders(), body: JSON.stringify(data)
+            });
+            return handle(res);
+        },
+        createTask: async (content: string) => {
+            const res = await fetch(`${BASE_URL}/widgets/tasks`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ content, is_done: false })
+            });
+            return handle(res);
+        },
+        updateTask: async (id: number, task: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/tasks/${id}`, {
+                method: 'PUT', headers: authHeaders(), body: JSON.stringify(task)
+            });
+            return handle(res);
+        },
+        deleteTask: async (id: number) => {
+            await fetch(`${BASE_URL}/widgets/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
+        },
+
+        // --- BUDGET, HABITS, SCRIBBLE ---
+        updateBudget: async (data: { monthly_limit: number, spent: number, currency: string }) => {
+            const res = await fetch(`${BASE_URL}/widgets/budget`, {
+                method: 'POST', 
+                headers: authHeaders(), 
+                body: JSON.stringify(data)
+            });
+            return handle(res);
+        },
+        updateHabits: async (data: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/habits`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify(data)
+            });
+            return handle(res);
+        },
+        updateScribble: async (content: string) => {
+            await fetch(`${BASE_URL}/widgets/scribbles`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ content })
+            });
+        },
+
         
-        const res = await fetch(url.toString());
-        if (!res.ok) throw new Error("Feed Error");
-        return await res.json();
-    } catch (e) {
-        console.error(`Failed to load ${endpoint}`, e);
-        return null;
     }
-}
-
-// Call this on mount to pull fresh data from cloud
-export async function syncFromCloud() {
-    const user = getUser();
-    if (!user || !user.email) return;
-
-    try {
-        const res = await fetch(`${STORAGE_API}/sync/all?user_email=${user.email}`);
-        const cloudData = await res.json();
-        
-        // Update LocalStorage with Cloud Data
-        Object.entries(cloudData).forEach(([key, value]) => {
-            localStorage.setItem(key, JSON.stringify(value));
-        });
-        
-        return cloudData; // Return so components can update state
-    } catch (e) {
-        console.error("Cloud Fetch Failed:", e);
-    }
-}
+};

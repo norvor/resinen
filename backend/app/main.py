@@ -1,52 +1,63 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.database import init_db
-from .database import create_db_and_tables
-from .routers import news, auth, cricket, soccer, cinema, chess, sudoku, payment, battleship, poker, tetris, go, minesweeper, storage # <--- Changed this
 
+from app.database import init_db # <--- CHANGED FROM create_db_and_tables
+from app.routers import (
+    auth, widgets, # Core
+    news, cricket, soccer, cinema, payment, # Apps
+    chess, sudoku, battleship, poker, tetris, go, minesweeper # Games
+)
 
-app = FastAPI(title="The Resinen Times API")
-
+# --- LIFESPAN (Startup/Shutdown) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Starting up: Initializing Database...")
+    # Startup: Create tables
     await init_db()
-    print("✅ Database Initialized.")
     yield
-    print("🛑 Shutting down...")
+    # Shutdown: Clean up (if needed)
 
-app = FastAPI(lifespan=lifespan)
+# --- APP INITIALIZATION ---
+app = FastAPI(
+    title="RESINEN OS API",
+    version="2.0.0",
+    lifespan=lifespan
+)
 
-origins = ["http://localhost:5173", "http://localhost:3000", 'https://resinen.com', 'https://www.resinen.com']
-
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*", 'localhost:5173'], # Allow all for local dev
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
+# --- ROUTER REGISTRATION ---
+# Core
+app.include_router(auth.router)
+app.include_router(widgets.router)
+app.include_router(payment.router)
 
+# Apps
 app.include_router(news.router)
 app.include_router(cinema.router)
+
+# Games
 app.include_router(chess.router)
-app.include_router(sudoku.router)
-app.include_router(poker.router) 
+app.include_router(poker.router)
 app.include_router(tetris.router)
-app.include_router(go.router) 
+app.include_router(sudoku.router)
+app.include_router(go.router)
 app.include_router(minesweeper.router)
 app.include_router(battleship.router)
-app.include_router(auth.router)
-app.include_router(payment.router)
-app.include_router(storage.router)
-app.include_router(cricket.router) # Register Cricket
-app.include_router(soccer.router) # Register it # <--- Added this
+app.include_router(soccer.router)
+app.include_router(cricket.router)
 
 @app.get("/")
-def read_root():
-    return {"status": "Newsroom Online"}
+async def root():
+    return {
+        "system": "RESINEN OS", 
+        "status": "ONLINE", 
+        "time": "NOW"
+    }

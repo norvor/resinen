@@ -1,549 +1,453 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount } from 'svelte';
+    import { api } from '$lib/api';
+    
+    // ASSETS
     import logo from '$lib/assets/logo.svg';
-    import ProjectModal from '$lib/components/ProjectModal.svelte';
-    import TravelModal from '$lib/components/TravelModal.svelte'; 
-    import * as api from '$lib/api';
 
-    // --- IMPORT NEW WIDGETS ---
-    import ScribbleWidget from '$lib/components/widgets/ScribbleWidget.svelte';
+    // WIDGETS
+    import MissionControl from '$lib/components/widgets/MissionControl.svelte';
+    import NoteWidget from '$lib/components/widgets/NoteWidget.svelte';
+    import TaskWidget from '$lib/components/widgets/TaskWidget.svelte';
     import HabitMatrix from '$lib/components/widgets/HabitMatrix.svelte';
-    import TravelList from '$lib/components/widgets/TravelList.svelte'; 
+    import BudgetWidget from '$lib/components/widgets/BudgetWidget.svelte';
+    import ScribbleWidget from '$lib/components/widgets/ScribbleWidget.svelte';
+    
+    // NEW WIDGETS
     import BreathingOrb from '$lib/components/widgets/BreathingOrb.svelte';
-    import BudgetWidget from '$lib/components/widgets/BudgetWidget.svelte'; // Make sure this is imported
+    import TransmissionWidget from '$lib/components/widgets/TransmissionWidget.svelte';
+    import LoveWidget from '$lib/components/widgets/LoveWidget.svelte';
 
     // --- STATE ---
-    let planetary = $state<any>(null);
-    let visuals = $state<any>(null);
-    let feeds = $state<any>(null);
-    let zen = $state<any>(null);
-    let system = $state<any[]>([]);
-    
-    let refreshTimer: any;
-
-    // --- THEME STATE ---
-    let theme = $state('night'); 
-    function setTheme(t: string) { theme = t; }
-
-    // --- TOP DOCK STATE ---
-    let topDockCollapsed = $state(false);
-    function toggleTopDock() { topDockCollapsed = !topDockCollapsed; }
-
-    // --- SEARCH STATE ---
+    let theme = $state('night-aurora'); 
     let searchQuery = $state("");
-    let searchEngine = $state("google"); 
-    function handleSearch() {
-        if (!searchQuery.trim()) return;
+    
+    // Data Containers
+    let news = $state<any[]>([]);
+    let history = $state<any>(null);
+    let joke = $state<any>(null);
+    let planetary = $state<any>(null);
+    let zen = $state<any>(null);
+
+    // --- THE AWESOME COLLAGE ENGINE ---
+    const AWESOME_COLLECTION = [
+        { title: "Starry Night", tag: "WILD", url: "https://burgessart.wordpress.com/wp-content/uploads/2012/07/vincent.jpg" },
+        { title: "Neon Tokyo", tag: "CYBER", url: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Deep Nebula", tag: "SPACE", url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Alpine Peak", tag: "NATURE", url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Abstract Flow", tag: "ART", url: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Urban Canyon", tag: "CITY", url: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Golden Hour", tag: "VIBE", url: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=1000&auto=format&fit=crop" },
+        { title: "Icelandic Road", tag: "TRAVEL", url: "https://images.unsplash.com/photo-1476610182048-b716b8518aae?q=80&w=1000&auto=format&fit=crop" },
+    ];
+
+    // State for the 3 collage images
+    let collage = $state(AWESOME_COLLECTION.slice(0, 3));
+
+    // --- SEARCH FUNCTION ---
+    function performSearch(engine: string) {
         const q = encodeURIComponent(searchQuery);
-        let url = searchEngine === 'news' ? `https://www.google.com/search?tbm=nws&q=${q}` :
-                  searchEngine === 'youtube' ? `https://www.youtube.com/results?search_query=${q}` :
-                  `https://www.google.com/search?q=${q}`;
-        window.open(url, '_blank');
-    }
-
-    // --- CLUB WIDGET STATE ---
-    let clubTab = $state('animal');
-    let artLoading = $state(false); 
-    
-    // --- NEWS HUB STATE ---
-    let newsTab = $state('business');
-
-    // --- LOVES GALLERY STATE ---
-    let loves = $state<string[]>([]);
-    let loveInput = $state("");
-    let loveIndex = $state(0);
-    
-    function addLove() {
-        if (!loveInput.trim()) return;
-        loves = [...loves, loveInput.trim()];
-        loveInput = "";
-        loveIndex = loves.length - 1; 
-        saveLoves();
-    }
-    function removeLove() {
-        if (loves.length === 0) return;
-        loves = loves.filter((_, i) => i !== loveIndex);
-        if (loveIndex >= loves.length) loveIndex = Math.max(0, loves.length - 1);
-        saveLoves();
-    }
-    function nextLove() { if (loves.length > 0) loveIndex = (loveIndex + 1) % loves.length; }
-    function prevLove() { if (loves.length > 0) loveIndex = (loveIndex - 1 + loves.length) % loves.length; }
-    function saveLoves() { api.saveData('resinen_loves', loves); }
-
-    // --- PROJECT CARDS STATE ---
-    type Link = { name: string; url: string };
-    type Project = { 
-        id: number; 
-        name: string; 
-        rune: string; 
-        org?: string;        // New
-        description?: string; // New
-        links: Link[] 
-    };
-    
-    let projects = $state<Project[]>([]);
-    let newProjName = $state("");
-    
-    // Modal State
-    let isModalOpen = $state(false);
-    let editingProject = $state<Project | null>(null);
-
-    const RUNES = ["🔮", "⚔️", "🛡️", "📜", "⚗️", "🧭", "🗝️", "🔋", "🧬", "📡"];
-
-    function addProject() {
-        if (!newProjName.trim()) return;
-        const rune = RUNES[Math.floor(Math.random() * RUNES.length)];
-        projects = [...projects, { id: Date.now(), name: newProjName, rune, links: [], org: "", description: "" }];
-        newProjName = "";
-        saveProjects();
-    }
-    function deleteProject(id: number, e: Event) {
-        e.stopPropagation();
-        if(!confirm("Archive this project protocol?")) return;
-        projects = projects.filter(p => p.id !== id);
-        saveProjects();
-    }
-    function openProject(p: Project) {
-        editingProject = p;
-        isModalOpen = true;
-    }
-    function saveEditedProject(updated: Project) {
-        projects = projects.map(p => p.id === updated.id ? updated : p);
-        saveProjects();
-    }
-    function saveProjects() { api.saveData('resinen_projects', projects); }
-
-    // --- TRAVEL LIST STATE ---
-    type Place = { id: number; name: string; photos: string[] };
-    let places = $state<Place[]>([]);
-    let isTravelModalOpen = $state(false);
-    let viewingPlace = $state<Place | null>(null);
-
-    function addTravelPlace(name: string) {
-        places = [...places, { id: Date.now(), name, photos: [] }];
-        savePlaces();
-    }
-    function deleteTravelPlace(id: number) {
-        if(confirm("Remove destination?")) {
-            places = places.filter(p => p.id !== id);
-            savePlaces();
+        let url = "";
+        switch(engine) {
+            case 'google': url = `https://www.google.com/search?q=${q}`; break;
+            case 'youtube': url = `https://www.youtube.com/results?search_query=${q}`; break;
+            case 'news': url = `https://news.google.com/search?q=${q}`; break;
+            case 'chatgpt': url = `https://chatgpt.com/?q=${q}`; break; // Direct link
         }
-    }
-    function openTravelPlace(p: Place) { viewingPlace = p; isTravelModalOpen = true; }
-    function saveEditedPlace(updated: Place) {
-        places = places.map(p => p.id === updated.id ? updated : p);
-        savePlaces();
-    }
-    function savePlaces() { api.saveData('resinen_travel_list', { places }); }
-
-    // --- CUSTOM TIMER STATE ---
-    let timerDuration = $state(20); 
-    let timerTime = $state(20 * 60);
-    let timerRunning = $state(false);
-    let timerInterval: any;
-    
-    function setCustomTimer() {
-        timerRunning = false;
-        clearInterval(timerInterval);
-        timerTime = timerDuration * 60;
-    }
-    function toggleTimer() { 
-        if (timerRunning) { clearInterval(timerInterval); timerRunning = false; } 
-        else { 
-            timerRunning = true; 
-            timerInterval = setInterval(() => { 
-                if(timerTime > 0) timerTime--; 
-                else { clearInterval(timerInterval); timerRunning = false; alert("Time Complete"); } 
-            }, 1000); 
-        } 
-    }
-    function formatTime(s: number) { 
-        const m = Math.floor(s/60).toString().padStart(2,'0'); 
-        const sec = (s%60).toString().padStart(2,'0'); 
-        return `${m}:${sec}`; 
+        if(url) window.open(url, '_blank');
+        searchQuery = ""; // Clear after search
     }
 
-    // --- YOUTUBE ---
-    let ytLink = $state("");
-    let ytId = $state<string | null>(null);
-    function loadYoutube() {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = ytLink.match(regExp);
-        if (match && match[2].length === 11) {
-            ytId = match[2]; ytLink = ""; 
-            if(typeof localStorage !== 'undefined') localStorage.setItem('resinen_yt_last', ytId);
-        } else { alert("Invalid YouTube Link"); }
-    }
-    function clearYoutube() { ytId = null; if(typeof localStorage !== 'undefined') localStorage.removeItem('resinen_yt_last'); }
-
-    // --- PREMIUM ---
-    let isPremium = $state(false);
-    function checkPremiumStatus() {
-        if (typeof localStorage !== 'undefined') {
-            const user = JSON.parse(localStorage.getItem('resinen_user') || 'null');
-            isPremium = (user && user.is_premium) === true;
-        } else { isPremium = false; }
+    function handleEnter(e: KeyboardEvent) {
+        if (e.key === 'Enter') performSearch('google');
     }
 
-    // --- WIDGETS ---
-    let noteContent = $state("");
-    function saveNotes() { api.saveData('resinen_notes', noteContent); }
-    
-    let todoInput = $state("");
-    let todos = $state<{text: string, done: boolean}[]>([]);
-    function addTodo() { if (!todoInput.trim()) return; todos = [...todos, { text: todoInput, done: false }]; todoInput = ""; saveTodos(); }
-    function toggleTodo(i: number) { todos[i].done = !todos[i].done; saveTodos(); }
-    function removeTodo(i: number) { todos = todos.filter((_, idx) => idx !== i); saveTodos(); }
-    function saveTodos() { api.saveData('resinen_todos', todos); }
+    // --- LOAD LIVE DATA ---
+    onMount(async () => {
+        const shuffled = [...AWESOME_COLLECTION].sort(() => 0.5 - Math.random());
+        collage = shuffled.slice(0, 3);
 
-    // --- DATA ---
-    const API = "https://api.resinen.com/dashboard";
-    async function loadVisuals(t: number) { 
-        artLoading = true;
-        try { const res = await fetch(`${API}/visuals?t=${t}&art_source=aic`); visuals = await res.json(); } catch(e) {}
-        finally { artLoading = false; }
-    }
-    async function loadFeeds(t: number) { try { const res = await fetch(`${API}/feeds?t=${t}`); feeds = await res.json(); } catch(e) {} }
-    async function loadPlanetary() { try { const res = await fetch(`${API}/planetary`); planetary = await res.json(); } catch(e) {} }
-    async function loadZen(t: number) { try { const res = await fetch(`${API}/zen?t=${t}`); zen = await res.json(); } catch(e) {} }
-    async function loadSystem() { try { const res = await fetch(`${API}/system`); system = await res.json(); } catch(e) {} }
+        try {
+            const [feedsData, planetData, zenData] = await Promise.all([
+                api.widgets.getFeeds(),
+                api.widgets.getPlanetary(),
+                api.widgets.getZen()
+            ]);
 
-    function refreshAll() {
-        const t = Date.now();
-        loadVisuals(t); loadFeeds(t); loadPlanetary(); loadZen(t); loadSystem();
-    }
-    function triggerPay() { alert("🔒 PREMIUM FEATURE LOCKED\n\nClick the pulsing 'UPGRADE' button in the global dock to Initialize Payment."); }
-
-    onMount(async () => { 
-        try { 
-            checkPremiumStatus();
-            window.addEventListener('resinen-auth-change', checkPremiumStatus);
-
-            // 1. PULL FROM CLOUD (This was missing!)
-            const cloudData = await api.syncFromCloud();
-
-            if (cloudData) {
-                // If backend sent data, use it
-                if (cloudData.resinen_notes) noteContent = cloudData.resinen_notes;
-                if (cloudData.resinen_todos) todos = cloudData.resinen_todos;
-                if (cloudData.resinen_loves) loves = cloudData.resinen_loves;
-                if (cloudData.resinen_projects) projects = cloudData.resinen_projects;
-                if (cloudData.resinen_travel_list && cloudData.resinen_travel_list.places) {
-                    places = cloudData.resinen_travel_list.places;
-                }
-                
-                // Also update widgets that might save their own state
-                if (cloudData.resinen_habits_v2) localStorage.setItem('resinen_habits_v2', JSON.stringify(cloudData.resinen_habits_v2));
-                if (cloudData.resinen_budget) localStorage.setItem('resinen_budget', JSON.stringify(cloudData.resinen_budget));
-                if (cloudData.resinen_scribble) localStorage.setItem('resinen_scribble', cloudData.resinen_scribble);
-            } 
-            else if (typeof localStorage !== 'undefined') {
-                // 2. OFFLINE FALLBACK (If cloud fetch failed)
-                const sn = localStorage.getItem('resinen_notes'); if (sn) noteContent = sn;
-                const st = localStorage.getItem('resinen_todos'); if (st) todos = JSON.parse(st);
-                const sl = localStorage.getItem('resinen_loves'); if (sl) loves = JSON.parse(sl);
-                const sp = localStorage.getItem('resinen_projects'); if (sp) projects = JSON.parse(sp);
-                const savedYt = localStorage.getItem('resinen_yt_last'); if (savedYt) ytId = savedYt;
-                const str = localStorage.getItem('resinen_travel_list'); if (str) places = JSON.parse(str).places;
-            }
-
-            refreshAll(); 
-            refreshTimer = setInterval(refreshAll, 300000);
-        } catch (e) { console.error(e); } 
+            news = feedsData.business || [];
+            history = feedsData.history;
+            joke = feedsData.joke;
+            planetary = planetData;
+            zen = zenData;
+        } catch(e) { console.error("Dash Load Error", e); }
     });
-    
-    onDestroy(() => { clearInterval(refreshTimer); clearInterval(timerInterval); if (typeof window !== 'undefined') window.removeEventListener('resinen-auth-change', checkPremiumStatus); });
+
+    function toggleTheme() {
+        theme = theme === 'night-aurora' ? 'cloudy' : 'night-aurora';
+        document.body.className = theme;
+    }
 </script>
 
 <svelte:head>
-    <title>Resinen // Life Command</title>
+    <title>Resinen OS</title>
 </svelte:head>
 
-<div class="app-wrapper" class:theme-night={theme === 'night'} class:theme-sunrise={theme === 'sunrise'} class:theme-beach={theme === 'beach'}>
-    {#if theme === 'night'}<div class="bg-layer stars"></div><div class="bg-layer aurora"></div>
-    {:else if theme === 'sunrise'}<div class="bg-layer lake-gradient"></div><div class="bg-layer sun-glow"></div>
-    {:else if theme === 'beach'}<div class="bg-layer sand-sea"></div><div class="bg-layer bright-sun"></div>
-    {/if}
+<div class="app-background">
+    <div class="aurora-glow"></div>
+    <div class="stars"></div>
+</div>
 
-    <div class="top-dock-container" class:collapsed={topDockCollapsed}>
-        <div class="system-bar">
-            <span class="sys-label">SYS:</span>
-            {#if system.length > 0}{#each system as sys}<div class="sys-item"><span class="sys-dot"></span>{sys.name}</div>{/each}
-            {:else}<div class="sys-item"><span class="sys-dot"></span>CONNECTING...</div>{/if}
-            <div class="theme-switch">
-                <button class:active={theme==='night'} onclick={() => setTheme('night')} title="Night Sky">🌙</button>
-                <button class:active={theme==='sunrise'} onclick={() => setTheme('sunrise')} title="Lake Sunrise">🌅</button>
-                <button class:active={theme==='beach'} onclick={() => setTheme('beach')} title="Sunny Beach">🏖️</button>
-            </div>
-            <div class="spacer"></div>
-            <div class="date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
-            <button class="dock-collapse-btn" onclick={toggleTopDock} title="Collapse Dock">▲</button>
-        </div>
-
-        <div class="search-command-row">
-            <div class="brand-display"><img src={logo} alt="Resinen" class="brand-logo" /></div>
-            <div class="search-module">
-                <div class="search-engines">
-                    <button class:active={searchEngine === 'google'} onclick={() => searchEngine = 'google'}>GGL</button>
-                    <button class:active={searchEngine === 'news'} onclick={() => searchEngine = 'news'}>NEWS</button>
-                    <button class:active={searchEngine === 'youtube'} onclick={() => searchEngine = 'youtube'}>YT</button>
-                </div>
-                <input type="text" bind:value={searchQuery} onkeydown={(e) => e.key === 'Enter' && handleSearch()} placeholder="INITIATE GLOBAL SEARCH QUERY..." />
-                <button class="go-btn" onclick={handleSearch}>→</button>
-            </div>
-            <div class="zen-mini">
-                {#if zen}<span>"{zen.text}"</span>{:else}<div class="skeleton skeleton-text" style="width: 200px; display:inline-block"></div>{/if}
-            </div>
-        </div>
-    </div>
+<div class="dashboard-layout">
     
-    <button class="dock-handle" class:visible={topDockCollapsed} onclick={toggleTopDock}>▼</button>
+    <header class="top-bar">
+        <div class="brand">
+            <img src={logo} alt="Resinen" class="app-logo" />
+            <span class="logo-text">RESINEN</span>
+        </div>
+        
+        <div class="search-deck">
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="Google Search..." 
+                bind:value={searchQuery}
+                onkeydown={handleEnter}
+            />
+            <div class="search-buttons">
+                <button class="s-btn google" onclick={() => performSearch('google')} title="Google Search">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/></svg>
+                </button>
+            </div>
+        </div>
 
-    <div class="layout" class:shifted={!topDockCollapsed}>
-        <div class="grid">
+        <button class="theme-toggle" onclick={toggleTheme}>
+            {theme === 'night-aurora' ? '🌙 Night Aurora' : '☁️ Cloudy'}
+        </button>
+    </header>
+
+    <main class="grid-container">
+
+        <div class="col col-left">
             
-            <section class="col">
-                <div class="card loves-widget">
-                    <div class="head"><span>MY LOVES ({loves.length})</span>{#if loves.length > 0}<button class="del-btn" onclick={removeLove}>×</button>{/if}</div>
-                    {#if loves.length === 0}
-                        <div class="loves-empty"><div class="empty-icon">♡</div><div class="empty-text">Paste image links below</div></div>
-                    {:else}
-                        <div class="loves-display" style="background-image: url({loves[loveIndex]})">
-                            <button class="nav-arrow left" onclick={prevLove}>‹</button><button class="nav-arrow right" onclick={nextLove}>›</button>
-                            <div class="love-counter">{loveIndex + 1} / {loves.length}</div>
-                        </div>
+            <div class="card history-card">
+                <div class="icon-box">📜</div>
+                <div class="content">
+                    <div class="label">ON THIS DAY {history?.year || '...'}</div>
+                    <p>{history?.text || "Loading archives..."}</p>
+                </div>
+            </div>
+
+            <TransmissionWidget />
+
+            <div class="card news-card">
+                <div class="card-header">
+                    <span>📡 GLOBAL FEED</span>
+                </div>
+                <div class="news-list">
+                    {#each news.slice(0, 5) as item}
+                        <a href={item.link} target="_blank" class="news-item">
+                            {item.title}
+                        </a>
+                    {/each}
+                    {#if news.length === 0}
+                        <div class="loading">Scanning frequencies...</div>
                     {/if}
-                    <div class="loves-input"><input type="text" bind:value={loveInput} placeholder="https://..." onkeydown={(e) => e.key === 'Enter' && addLove()} /><button onclick={addLove}>+</button></div>
                 </div>
+            </div>
 
-                <div class="card news-hub">
-                    <div class="head"><span>WHAT'S HAPPENING</span><div class="hub-toggles">
-                        <button class:active={newsTab === 'business'} onclick={() => newsTab = 'business'}>BUS</button>
-                        <button class:active={newsTab === 'sports'} onclick={() => newsTab = 'sports'}>SPT</button>
-                        <button class:active={newsTab === 'culture'} onclick={() => newsTab = 'culture'}>CUL</button>
-                        <button class:active={newsTab === 'global'} onclick={() => newsTab = 'global'}>GLB</button>
-                    </div></div>
-                    <div class="hub-content">
-                        {#if feeds && feeds[newsTab]}{#each feeds[newsTab] as item}<a href={item.link} target="_blank" class="hub-item"><span class="bullet">›</span><span class="title">{item.title}</span></a>{/each}
-                        {:else}<div class="skeleton-lines"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>{/if}
-                    </div>
+            <div class="card joke-card">
+                <div class="card-header">🃏 MORALE BOOST</div>
+                <div class="joke-body">
+                    <p class="setup">{joke?.setup || "..."}</p>
+                    <p class="punch">{joke?.punchline || ""}</p>
                 </div>
-                
-                <div class="card club-widget">
-                    <div class="head"><span>THE CLUB</span><div class="club-toggles">
-                        <button class:active={clubTab === 'animal'} onclick={() => clubTab = 'animal'}>🐶</button>
-                        <button class:active={clubTab === 'art'} onclick={() => clubTab = 'art'}>🎨</button>
-                        <button class:active={clubTab === 'food'} onclick={() => clubTab = 'food'}>🍜</button>
-                    </div></div>
-                    <div class="club-viewport">
-                        {#if clubTab === 'animal'}
-                            {#if visuals?.animal}<div class="club-content" style="background-image: url({visuals.animal.url})"><div class="club-tag">TYPE: {visuals.animal.type}</div></div>
-                            {:else}<div class="club-content skeleton"></div>{/if}
-                        {:else if clubTab === 'art'}
-                            {#if visuals?.art}<div class="club-content" style="background-image: url({visuals.art.url})"><div class="club-overlay"><div class="art-title">{visuals.art.title}</div><div class="art-artist">{visuals.art.artist}</div></div></div>
-                            {:else}<div class="club-content skeleton"></div>{/if}
-                        {:else if clubTab === 'food'}
-                            {#if visuals?.food}<div class="club-content" style="background-image: url({visuals.food})"><div class="club-tag">YUMMY</div></div>
-                            {:else}<div class="club-content skeleton"></div>{/if}
-                        {/if}
-                    </div>
-                </div>
+            </div>
 
-                <div class="card news"><div class="head">UPLIFTING</div>
-                    {#if feeds?.uplifting}{#each feeds.uplifting as n}<a href={n.url} target="_blank" class="news-item">★ {n.title}</a>{/each}
-                    {:else}<div style="padding: 10px;"><div class="skeleton skeleton-text" style="width: 90%;"></div><div class="skeleton skeleton-text" style="width: 80%;"></div></div>{/if}
-                </div>
-                
-                {#if feeds?.joke}<div class="card joke"><div class="head">HUMOR</div><div class="joke-text"><p>Q: {feeds.joke.setup}</p><p class="punch">A: {feeds.joke.punchline}</p></div></div>
-                {:else}<div class="card joke"><div class="head">HUMOR</div><div class="skeleton" style="height: 60px; margin: 10px; width: auto;"></div></div>{/if}
+            <HabitMatrix />
+        </div>
+
+        <div class="col col-center">
+            
+            <section class="mission-section">
+                <MissionControl />
             </section>
-
-            <section class="col center-focus">
-                <div class="projects-section">
-                    <div class="section-header"><span>MISSION CONTROL</span><div class="proj-adder"><input type="text" bind:value={newProjName} placeholder="New Operation Name..." onkeydown={(e) => e.key === 'Enter' && addProject()} /><button onclick={addProject}>INIT</button></div></div>
-                    
-                    <div class="projects-grid">
-                        {#each projects as p}
-                            <div class="project-card" onclick={() => openProject(p)}>
-                                <div class="p-rune">{p.rune}</div>
-                                <div class="p-info">
-                                    <div class="p-title">{p.name}</div>
-                                    <div class="p-meta">{p.links.length} UPLINKS ACTIVE</div>
-                                </div>
-                                <button class="p-del" onclick={(e) => deleteProject(p.id, e)}>×</button>
-                            </div>
-                        {/each}
-                        {#if projects.length === 0}<div class="empty-projects">NO ACTIVE OPERATIONS.<br/>INITIALIZE NEW WORKSPACE.</div>{/if}
-                    </div>
-                </div>
-
-                <div class="utility-row">
-                    <ScribbleWidget />
-                    <TravelList 
-                        places={places} 
-                        onOpenPlace={openTravelPlace} 
-                        onAddPlace={addTravelPlace} 
-                        onDeletePlace={deleteTravelPlace} 
-                    />
-                </div>
-
-                <div class="utility-row">
+            
+            <section class="workspace-split">
+                <div class="ws-col">
                     <BudgetWidget />
-                    <div class="card timer-card"><div class="head">CUSTOM TIMER</div>
-                        <div class="timer-body"><div class="time-display">{formatTime(timerTime)}</div>
-                            <div class="timer-controls"><input type="number" bind:value={timerDuration} min="1" max="180" onchange={setCustomTimer} disabled={timerRunning} /><span>MIN</span><button class="action-btn" class:active={timerRunning} onclick={toggleTimer}>{timerRunning ? 'PAUSE' : 'START'}</button><button class="reset-btn" onclick={setCustomTimer}>RESET</button></div>
-                        </div>
+                    
+                    <div class="card zen-card">
+                        <div class="zen-icon">☯</div>
+                        <p>"{zen?.text || "Stillness is the key."}"</p>
                     </div>
                 </div>
 
-                <div class="utility-row">
+                <div class="ws-col">
+                    <TaskWidget />
+                    
                     <BreathingOrb />
-                    <HabitMatrix />
                 </div>
-
-                <div class="card todo"><div class="head">TASKS {#if !isPremium}🔒{/if}</div>
-                    {#if isPremium}<div class="todo-input-row"><input type="text" bind:value={todoInput} onkeydown={(e) => e.key === 'Enter' && addTodo()} placeholder="Add task..." /><button onclick={addTodo}>+</button></div>
-                    <div class="todo-list">{#each todos as todo, i}<div class="todo-item" class:done={todo.done}><span onclick={() => toggleTodo(i)}>{todo.text}</span><button onclick={() => removeTodo(i)}>×</button></div>{/each}</div>
-                    {:else}<div class="locked-widget" onclick={triggerPay}><div class="lock-icon">🔒</div><div class="lock-text">PREMIUM FEATURE</div></div>{/if}
-                </div>
-
-                <div class="card fixed-notes"><div class="head">SCRATCHPAD</div><textarea bind:value={noteContent} oninput={saveNotes} placeholder="Quick notes..."></textarea></div>
             </section>
-
-            <section class="col">
-                <div class="card yt-widget"><div class="head"><span>TRANSMISSION LINK</span>{#if ytId}<button class="eject-btn" onclick={clearYoutube}>⏏</button>{/if}</div>
-                    {#if ytId}<div class="yt-screen"><iframe src="https://www.youtube.com/embed/{ytId}?autoplay=1" title="YouTube" frameborder="0" allowfullscreen></iframe><div class="scanlines"></div></div>
-                    {:else}<div class="yt-standby"><div class="standby-text">SIGNAL LOST</div><div class="yt-input-row"><input type="text" bind:value={ytLink} placeholder="Paste YouTube Link..." onkeydown={(e) => e.key === 'Enter' && loadYoutube()}/><button onclick={loadYoutube}>CONNECT</button></div></div>{/if}
-                </div>
-
-                <div class="card markets"><div class="head">MARKETS</div>
-                    {#if feeds?.markets}<div class="ticker-row">{#each feeds.markets as m}<div class="tick"><span class="label">{m.name}</span><span class="val">${m.price}</span><span class="chg" class:pos={!m.change.includes('-')} class:neg={m.change.includes('-')}>{m.change}</span></div>{/each}</div>
-                    {:else}<div class="ticker-row"><div class="skeleton" style="width: 100%; height: 40px;"></div></div>{/if}
-                </div>
-
-                <div class="clock-row">
-                    {#if planetary}{#each planetary.watch as c}<div class="clock"><span class="city">{c.city}</span><span class="t">{c.time}</span></div>{/each}
-                    {:else}<div class="skeleton" style="height: 50px; width: 100%;"></div>{/if}
-                </div>
-
-                <div class="card history"><div class="head">TIME CAPSULE</div>
-                    {#if feeds?.history}<div class="hist-content"><div class="hist-year">{feeds.history.year}</div><div class="hist-text">{feeds.history.text}</div></div>
-                    {:else}<div class="hist-content"><div class="skeleton" style="width: 80px; height: 40px; margin: 0 auto 10px auto;"></div><div class="skeleton skeleton-text" style="width: 100%;"></div></div>{/if}
-                </div>
+            
+            <section class="note-section">
+                <NoteWidget />
             </section>
         </div>
-    </div>
 
-    {#if editingProject && isModalOpen}
-        <ProjectModal 
-            project={editingProject} 
-            isOpen={isModalOpen} 
-            onClose={() => isModalOpen = false} 
-            onSave={saveEditedProject} 
-        />
-    {/if}
+        <div class="col col-right">
+            
+            <div class="photo-frame">
+                <div class="visual-card">
+                    <img src={collage[0].url} alt="Inspiration" />
+                </div>
+            </div>
 
-    {#if viewingPlace && isTravelModalOpen}
-        <TravelModal 
-            place={viewingPlace} 
-            isOpen={isTravelModalOpen} 
-            onClose={()=>isTravelModalOpen=false} 
-            onSave={saveEditedPlace} 
-        />
-    {/if}
+            <div class="split-visuals">
+                <div class="photo-frame small">
+                    <div class="visual-card small">
+                        <img src={collage[1].url} alt="Inspiration" />
+                    </div>
+                </div>
+
+                <div class="photo-frame small">
+                    <div class="visual-card small">
+                        <img src={collage[2].url} alt="Inspiration" />
+                    </div>
+                </div>
+            </div>
+
+            <LoveWidget />
+
+            <ScribbleWidget />
+        </div>
+
+    </main>
 </div>
 
 <style>
-    /* STYLES FROM PREVIOUS RESPONSE - NO CHANGES NEEDED BUT INCLUDED FOR COMPLETENESS */
-    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-    .skeleton { background: #1e293b; background-image: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; opacity: 0.6; }
-    .skeleton-text { height: 14px; margin-bottom: 8px; border-radius: 2px; }
-    .skeleton-lines { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .sk { height: 12px; background: rgba(255,255,255,0.1); width: 100%; border-radius: 2px; }
+    /* =========================================
+       GLOBAL & THEMES
+       ========================================= */
+    :global(body) { margin: 0; padding: 0; font-family: 'Inter', sans-serif; transition: background 0.5s; overflow-x: hidden; }
+    :global(body.night-aurora) { background: #020617; color: #e2e8f0; }
+    :global(body.cloudy) { background: #f1f5f9; color: #334155; }
 
-    /* LAYOUT SPACING (INCREASED) */
-    .grid { display: grid; grid-template-columns: 300px 1fr 300px; gap: 2.5rem; /* Increased from 2rem */ }
-    .col { display: flex; flex-direction: column; gap: 2rem; /* Increased from 1.5rem */ }
-    .center-focus { flex: 1; }
+    .app-background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+    
+    :global(body.night-aurora) .aurora-glow {
+        position: absolute; top: -20%; left: -20%; width: 140%; height: 140%;
+        background: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.15), transparent 60%),
+                    radial-gradient(circle at 80% 20%, rgba(168, 85, 247, 0.1), transparent 50%);
+        filter: blur(80px); opacity: 1; transition: 1s;
+    }
 
-    /* UTILITY ROW FOR NEW WIDGETS */
-    .utility-row { 
+    /* =========================================
+       LAYOUT GRID
+       ========================================= */
+    .dashboard-layout {
+        height: 100vh; display: flex; flex-direction: column;
+        padding: 20px 40px; box-sizing: border-box;
+        overflow-y: auto;
+    }
+
+    .grid-container {
+        display: grid;
+        grid-template-columns: 320px 1fr 320px; /* Desktop: Fixed Sides, Fluid Center */
+        gap: 24px;
+        flex: 1;
+        max-width: 1920px; margin: 0 auto; width: 100%;
+    }
+
+    .col { display: flex; flex-direction: column; gap: 24px; }
+
+    /* =========================================
+       HEADER & SEARCH DECK
+       ========================================= */
+    .top-bar {
         display: grid; 
-        grid-template-columns: 1fr 1fr; 
-        gap: 20px; 
+        grid-template-columns: 250px 1fr 250px; /* Left Brand, Center Search, Right Theme */
+        align-items: center;
+        margin-bottom: 25px; padding: 10px 0; gap: 20px;
+    }
+    
+    .brand { display: flex; align-items: center; gap: 15px; }
+    .app-logo { height: 40px; width: auto; }
+    .logo-text { font-weight: 800; font-size: 1.2rem; letter-spacing: 2px; }
+
+    /* SEARCH DECK */
+    .search-deck {
+        display: flex; align-items: center; gap: 10px;
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255,255,255,0.1);
+        padding: 6px 10px; border-radius: 50px;
+        width: 100%; max-width: 600px; margin: 0 auto;
+        backdrop-filter: blur(12px);
+        transition: 0.3s;
+    }
+    :global(body.cloudy) .search-deck {
+        background: #fff; border-color: #cbd5e1; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
     }
 
-    /* BEAUTIFIED PROJECT CARDS */
-    .projects-section { margin-bottom: 20px; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-family: var(--mono); color: var(--accent); font-size: 0.9rem; letter-spacing: 1px; }
-    .proj-adder { display: flex; gap: 5px; }
-    .proj-adder input { background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: #fff; padding: 5px 10px; border-radius: 4px; font-family: var(--mono); font-size: 0.8rem; width: 200px; }
-    .proj-adder button { background: var(--accent); border: none; color: #000; font-weight: bold; padding: 5px 15px; border-radius: 4px; cursor: pointer; }
-    
-    .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
-    .empty-projects { grid-column: 1 / -1; text-align: center; color: #64748b; font-family: var(--mono); padding: 40px; border: 2px dashed #334155; border-radius: 8px; }
-    
-    .project-card { 
-        background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border); border-radius: 12px; padding: 15px; 
-        display: flex; align-items: center; gap: 15px; transition: 0.3s; cursor: pointer; position: relative; overflow: hidden;
-        backdrop-filter: blur(10px);
+    .search-input {
+        flex: 1; background: transparent; border: none; outline: none;
+        color: inherit; font-family: 'Inter', sans-serif; font-size: 0.9rem;
+        padding: 5px 10px;
     }
-    .project-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); background: rgba(30, 41, 59, 0.7); }
     
-    .p-rune { font-size: 2rem; background: rgba(0,0,0,0.3); width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
-    .p-info { flex: 1; }
-    .p-title { font-weight: bold; color: #fff; font-size: 1.1rem; line-height: 1.2; }
-    .p-meta { font-family: var(--mono); font-size: 0.65rem; color: var(--accent); margin-top: 4px; }
-    .p-del { background: none; border: none; color: #64748b; cursor: pointer; font-size: 1.5rem; transition: 0.2s; padding: 0 5px; opacity: 0; }
-    .project-card:hover .p-del { opacity: 1; }
-    .p-del:hover { color: #ef4444; }
+    .search-buttons { display: flex; gap: 5px; }
+    .s-btn {
+        width: 32px; height: 32px; border-radius: 50%; border: none;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        transition: 0.2s; color: #fff;
+    }
+    .s-btn svg { width: 16px; height: 16px; }
+    .s-btn:hover { transform: scale(1.1); }
 
-    /* WIDGET STYLES (Existing) */
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; backdrop-filter: blur(10px); transition: border-color 0.2s; } .card:hover { border-color: var(--accent); }
-    .head { padding: 8px 12px; font-family: var(--mono); font-size: 0.65rem; color: var(--accent); border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; } 
+    .chatgpt { background: #10a37f; }
+    .google { background: #4285f4; }
+    .youtube { background: #ff0000; }
+    .news { background: #fbbc05; color: #000; }
+
+    .theme-toggle {
+        justify-self: end;
+        background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+        color: inherit; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+        font-family: inherit; font-size: 0.85rem; font-weight: 600; transition: 0.2s;
+    }
+    :global(body.cloudy) .theme-toggle { background: #fff; border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+    /* =========================================
+       CENTER COLUMN
+       ========================================= */
+    .mission-section { width: 100%; }
     
-    /* NEWS HUB */
-    .news-hub { display: flex; flex-direction: column; min-height: 300px; }
-    .hub-toggles { display: flex; gap: 8px; }
-    .hub-toggles button { background: transparent; border: none; color: #64748b; font-family: var(--mono); font-size: 0.65rem; cursor: pointer; transition: 0.2s; }
-    .hub-toggles button.active { color: var(--accent); font-weight: bold; text-decoration: underline; text-shadow: 0 0 5px rgba(45, 212, 191, 0.4); }
-    .hub-content { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
-    .hub-item { display: flex; gap: 8px; text-decoration: none; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: flex-start; }
-    .hub-item:hover .title { color: var(--accent); }
-    .hub-item .bullet { color: var(--accent); font-weight: bold; font-size: 1.2rem; line-height: 0.8rem; }
-    .hub-item .title { color: #cbd5e1; font-size: 0.85rem; line-height: 1.3; transition: 0.2s; }
+    .workspace-split {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;
+    }
+    .ws-col { display: flex; flex-direction: column; gap: 24px; }
 
-    /* GENERAL */
-    .timer-card { text-align: center; padding-bottom: 15px; } .time-display { font-family: var(--mono); font-size: 3.5rem; font-weight: bold; margin: 10px 0; color: #fff; text-shadow: 0 0 20px rgba(45, 212, 191, 0.4); } .timer-controls { display: flex; justify-content: center; align-items: center; gap: 10px; font-family: var(--mono); color: #94a3b8; font-size: 0.8rem; } .timer-controls input { background: transparent; border: 1px solid var(--border); color: #fff; width: 50px; text-align: center; font-family: var(--mono); padding: 5px; border-radius: 4px; } .timer-controls .action-btn { background: var(--accent); color: #000; border: none; font-weight: bold; padding: 6px 15px; cursor: pointer; border-radius: 4px; } .timer-controls .action-btn.active { background: #ef4444; color: #fff; } .reset-btn { background: transparent; border: 1px solid var(--border); color: #94a3b8; padding: 6px 10px; cursor: pointer; border-radius: 4px; }
-    .fixed-notes textarea { width: 100%; height: 300px; background: transparent; border: none; color: #fff; padding: 15px; font-family: var(--mono); font-size: 0.85rem; resize: none; outline: none; line-height: 1.5; }
+    .note-section { width: 100%; flex: 1; min-height: 400px; display: flex; flex-direction: column; }
+    :global(.note-section .notebook-editor) { min-height: 500px; flex: 1; }
+    :global(.note-section .app-root) { min-height: 500px; flex: 1; }
+
+    /* =========================================
+       CARDS & WIDGETS
+       ========================================= */
+    .card {
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(12px);
+        border-radius: 12px;
+        padding: 20px;
+        transition: 0.3s;
+    }
+    :global(body.cloudy) .card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        color: #1e293b;
+    }
+
+    /* History */
+    .history-card { display: flex; gap: 15px; align-items: flex-start; background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), transparent); border-color: rgba(245, 158, 11, 0.2); }
+    .history-card .icon-box { font-size: 1.5rem; }
+    .history-card .label { font-size: 0.7rem; font-weight: 700; color: #facc15; margin-bottom: 4px; letter-spacing: 1px; }
+    :global(body.cloudy) .history-card .label { color: #d97706; }
+    .history-card p { margin: 0; font-size: 0.9rem; line-height: 1.4; }
+
+    /* News */
+    .news-card { padding: 0; overflow: hidden; }
+    .news-card .card-header { padding: 12px 20px; background: rgba(0,0,0,0.1); font-size: 0.75rem; font-weight: 700; opacity: 0.8; letter-spacing: 1px; }
+    .news-list { display: flex; flex-direction: column; }
+    .news-item { padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); text-decoration: none; color: inherit; font-size: 0.9rem; transition: 0.2s; }
+    .news-item:hover { background: rgba(255,255,255,0.03); color: #2dd4bf; }
+    :global(body.cloudy) .news-item { border-bottom-color: #f1f5f9; }
+    :global(body.cloudy) .news-item:hover { background: #f8fafc; color: #0284c7; }
+
+    /* Joke */
+    .joke-card { text-align: center; border-left: 4px solid #a855f7; }
+    .joke-card .card-header { font-size: 0.7rem; color: #a855f7; font-weight: 700; margin-bottom: 10px; }
+    .setup { font-weight: 600; margin-bottom: 4px; }
+    .punch { font-style: italic; opacity: 0.8; }
+
+    /* Zen */
+    .zen-card { 
+        display: flex; align-items: center; justify-content: center; gap: 15px; 
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent); 
+        border-color: rgba(16, 185, 129, 0.2);
+        font-style: italic; color: #10b981; min-height: 80px;
+    }
+    .zen-icon { font-size: 1.5rem; }
+    :global(body.cloudy) .zen-card { background: #ecfdf5; border-color: #d1fae5; color: #059669; }
+
+    /* Visuals (Collage) - PHOTO FRAMES - FIXED IMAGE FITTING */
+    .photo-frame {
+        background: #fff;
+        padding: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        transform: rotate(-1deg);
+        transition: transform 0.3s;
+        /* Frame itself is a flex container to center image */
+        display: flex; justify-content: center; align-items: center;
+    }
+    .photo-frame:hover { transform: rotate(0deg) scale(1.02); z-index: 10; }
+    .photo-frame.small { padding: 6px; transform: rotate(1deg); }
+
+    .visual-card {
+        height: 200px; width: 100%; padding: 0; 
+        overflow: hidden; 
+        background: #000; /* Matting background */
+        border: 1px solid #eee; border-radius: 0;
+        display: flex; justify-content: center; align-items: center;
+    }
+    .visual-card img {
+        width: 100%; height: 100%; 
+        object-fit: contain; /* KEY FIX: Fits whole image inside */
+        display: block;
+    }
     
-    /* ... (Existing styles for other widgets remain) ... */
-    .loves-widget { height: 260px; display: flex; flex-direction: column; } .loves-display { flex: 1; background-size: cover; background-position: center; position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0 5px; } .loves-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2); } .empty-icon { font-size: 3rem; color: #334155; } .empty-text { font-family: var(--mono); color: #64748b; font-size: 0.7rem; margin-top: 5px; } .nav-arrow { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid var(--border); border-radius: 50%; width: 30px; height: 30px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-family: var(--mono); transition: 0.2s; backdrop-filter: blur(4px); } .nav-arrow:hover { background: var(--accent); color: #000; } .love-counter { position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.8); color: #fff; font-family: var(--mono); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; } .loves-input { display: flex; border-top: 1px solid var(--border); } .loves-input input { flex: 1; background: transparent; border: none; padding: 8px; color: #fff; outline: none; } .loves-input button { background: var(--accent); border: none; width: 40px; cursor: pointer; font-weight: bold; } .del-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; line-height: 0.5; }
+    .split-visuals { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .visual-card.small { height: 110px; }
+
+    /* =========================================
+       RESPONSIVE BREAKPOINTS
+       ========================================= */
     
-    .club-widget { height: 280px; display: flex; flex-direction: column; } .club-toggles { display: flex; gap: 5px; } .club-toggles button { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.4; transition: 0.2s; padding: 0 4px; } .club-toggles button.active { opacity: 1; transform: scale(1.2); text-shadow: 0 0 10px rgba(255,255,255,0.5); } .club-viewport { flex: 1; position: relative; overflow: hidden; } .club-content { width: 100%; height: 100%; background-size: cover; background-position: center; position: relative; } .club-tag { position: absolute; bottom: 10px; left: 10px; background: #000; color: var(--accent); font-family: var(--mono); font-size: 0.7rem; padding: 2px 6px; border: 1px solid var(--accent); } .club-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(to top, #000, transparent); padding: 20px 10px 10px 10px; } .art-title { font-weight: bold; font-size: 1rem; text-shadow: 0 2px 2px #000; line-height: 1.1; } .art-artist { font-family: var(--mono); font-size: 0.7rem; color: #cbd5e1; margin-top: 4px; }
+    /* Tablet (Two Columns) */
+    @media (max-width: 1400px) {
+        .dashboard-layout { padding: 10px 20px; }
+        .grid-container { 
+            grid-template-columns: 300px 1fr; 
+            gap: 20px;
+        }
+        .col-right { 
+            grid-column: span 2; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px;
+        }
+        .photo-frame { grid-column: span 1; }
+        .split-visuals { grid-column: span 1; }
+        
+        .top-bar { grid-template-columns: 200px 1fr 150px; }
+    }
 
-    .yt-widget { height: 280px; display: flex; flex-direction: column; border-color: #f0f; box-shadow: 0 0 10px rgba(255, 0, 255, 0.1); } .yt-widget:hover { border-color: #f0f; box-shadow: 0 0 20px rgba(255, 0, 255, 0.3); } .yt-widget .head { color: #f0f; border-bottom-color: #505; } .yt-screen { flex: 1; position: relative; background: #000; } .yt-screen iframe { width: 100%; height: 100%; display: block; } .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%); background-size: 100% 4px; pointer-events: none; opacity: 0.6; } .yt-standby { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #110011; gap: 15px; } .standby-text { color: #505; font-family: var(--mono); letter-spacing: 2px; animation: pulse 2s infinite; } .yt-input-row { display: flex; width: 80%; border: 1px solid #505; border-radius: 4px; overflow: hidden; } .yt-input-row input { flex: 1; background: transparent; border: none; color: #f0f; font-family: var(--mono); font-size: 0.7rem; padding: 8px; outline: none; } .yt-input-row button { background: #505; color: #fff; border: none; padding: 0 12px; font-family: var(--mono); font-size: 0.7rem; cursor: pointer; transition: 0.2s; } .yt-input-row button:hover { background: #f0f; color: #000; } .eject-btn { background: none; border: none; color: #f0f; cursor: pointer; }
-
-    .brand-display { display: flex; align-items: center; gap: 12px; height: 36px; padding-right: 20px; user-select: none; } .brand-logo { height: 42px; width: auto; filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.4)); }
-    :root { --accent: #2dd4bf; --card: rgba(30, 41, 59, 0.7); --border: #334155; --mono: 'JetBrains Mono', monospace; }
-    .app-wrapper { min-height: 100vh; position: relative; padding-bottom: 220px; transition: background 0.5s; background-color: #020617; }
-    .app-wrapper.theme-night { background-color: #020617; } .app-wrapper.theme-night .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; } .app-wrapper.theme-night .aurora { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(circle at 50% -10%, #4c1d95, transparent 60%); opacity: 0.3; filter: blur(80px); }
-    .app-wrapper.theme-sunrise { background: linear-gradient(to bottom, #1e1b4b, #431407, #0f172a); } .app-wrapper.theme-sunrise .lake-gradient { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, #7c2d12 0%, transparent 50%); opacity: 0.4; z-index: 0; } .app-wrapper.theme-sunrise .sun-glow { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 800px; height: 400px; background: radial-gradient(circle, #ea580c, transparent 70%); filter: blur(60px); opacity: 0.6; z-index: 0; }
-    .app-wrapper.theme-beach { background: linear-gradient(to bottom, #0284c7, #38bdf8); } .app-wrapper.theme-beach .sand-sea { position: fixed; bottom: 0; left: 0; width: 100%; height: 40%; background: linear-gradient(to top, #fde047 0%, #0ea5e9 100%); opacity: 0.8; z-index: 0; } .app-wrapper.theme-beach .bright-sun { position: fixed; top: -100px; right: -100px; width: 500px; height: 500px; background: radial-gradient(circle, #fef08a, transparent 60%); filter: blur(40px); opacity: 0.8; z-index: 0; }
-
-    .theme-switch { display: flex; gap: 5px; margin-left: 10px; background: rgba(0,0,0,0.3); border-radius: 20px; padding: 2px; } .theme-switch button { background: transparent; border: none; font-size: 0.9rem; cursor: pointer; padding: 2px 6px; border-radius: 50%; transition: 0.2s; opacity: 0.5; } .theme-switch button:hover { opacity: 1; transform: scale(1.2); } .theme-switch button.active { opacity: 1; background: rgba(255,255,255,0.1); box-shadow: 0 0 5px rgba(255,255,255,0.2); }
-    .layout { position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; padding: 20px; transition: padding-top 0.4s cubic-bezier(0.16, 1, 0.3, 1); padding-top: 120px; } .layout.shifted { padding-top: 140px; }
-    .top-dock-container { position: fixed; top: 0; left: 0; width: 100%; z-index: 2000; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); } .top-dock-container.collapsed { transform: translateY(-100%); } .dock-handle { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1999; background: var(--accent); color: #000; border: none; border-radius: 0 0 8px 8px; font-family: var(--mono); cursor: pointer; padding: 4px 15px; font-weight: bold; transition: transform 0.4s, opacity 0.4s; transform: translateX(-50%) translateY(-100%); opacity: 0; box-shadow: 0 5px 15px rgba(0,0,0,0.5); } .dock-handle.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-    .system-bar { display: flex; flex-wrap: wrap; gap: 15px; font-family: var(--mono); font-size: 0.7rem; padding: 8px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center; } .sys-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; display: inline-block; margin-right: 5px; box-shadow: 0 0 5px var(--accent); } .dock-collapse-btn { background: transparent; border: none; color: #64748b; cursor: pointer; font-weight: bold; margin-left: 10px; transition: 0.2s; } .dock-collapse-btn:hover { color: var(--accent); } .search-command-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; max-width: 1600px; margin: 0 auto; gap: 20px; }
-    .search-module { display: flex; gap: 10px; flex: 1; max-width: 800px; } .search-engines { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; height: 36px; } .search-engines button { background: transparent; color: #64748b; border: none; font-family: var(--mono); font-size: 0.75rem; padding: 0 12px; cursor: pointer; border-right: 1px solid var(--border); transition: 0.2s; height: 100%; } .search-engines button:last-child { border-right: none; } .search-engines button:hover { color: #fff; background: rgba(255,255,255,0.05); } .search-engines button.active { background: var(--accent); color: #000; font-weight: bold; } .search-module input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: #fff; font-family: var(--mono); font-size: 0.9rem; padding: 0 15px; outline: none; letter-spacing: 1px; border-radius: 4px; height: 36px; } .search-module input:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(45, 212, 191, 0.1); } .search-module .go-btn { background: transparent; color: var(--accent); border: 1px solid var(--accent); width: 40px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; height: 36px; } .search-module .go-btn:hover { background: var(--accent); color: #000; } .zen-mini { font-family: var(--mono); font-style: italic; color: #94a3b8; font-size: 0.8rem; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; border-left: 2px solid var(--accent); padding-left: 15px; opacity: 0.8; }
-    .todo-input-row { display: flex; border-bottom: 1px solid var(--border); } .todo-input-row input { flex: 1; background: transparent; border: none; padding: 8px 12px; color: #fff; font-family: var(--mono); font-size: 0.8rem; outline: none; } .todo-input-row button { background: var(--accent); border: none; color: #000; font-weight: bold; width: 30px; cursor: pointer; } .todo-list { max-height: 150px; overflow-y: auto; } .todo-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; } .todo-item span { cursor: pointer; flex: 1; } .todo-item.done span { text-decoration: line-through; opacity: 0.5; color: var(--accent); } .todo-item button { background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; }
-    .news { padding: 10px; } .news-item { display: block; font-size: 0.8rem; margin-bottom: 8px; color: #cbd5e1; transition: color 0.2s; line-height: 1.3; } .news-item:hover { color: var(--accent); } .joke { padding: 15px; font-size: 0.9rem; line-height: 1.4; } .punch { margin-top: 5px; color: var(--accent); font-weight: bold; }
-    .locked-widget { height: 150px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; background: rgba(0,0,0,0.3); transition: 0.2s; border-radius: 8px; } .locked-widget:hover { background: rgba(239, 68, 68, 0.1); } .lock-icon { font-size: 2rem; margin-bottom: 10px; } .lock-text { font-family: 'JetBrains Mono'; color: #ef4444; font-size: 0.8rem; letter-spacing: 2px; }
-    .clock-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 5px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; } .clock .city { font-size: 0.6rem; color: #94a3b8; font-family: var(--mono); display: block; } .clock .t { font-weight: bold; display: block; font-size: 1rem; }
-    .hist-content { padding: 15px; text-align: center; } .hist-year { font-family: var(--mono); font-size: 2rem; font-weight: bold; color: var(--accent); margin-bottom: 5px; } .hist-text { font-size: 0.9rem; line-height: 1.4; color: #cbd5e1; }
-    .ticker-row { display: flex; justify-content: space-between; padding: 15px; flex-wrap: wrap; gap: 10px; } .tick { display: flex; flex-direction: column; align-items: center; min-width: 60px; } .tick .label { font-family: var(--mono); font-size: 0.65rem; color: #94a3b8; } .tick .val { color: #fff; font-weight: bold; font-size: 0.9rem; } .tick .chg { font-size: 0.7rem; } .pos { color: #4ade80; } .neg { color: #ef4444; }
-    .spacer { flex: 1; }
-    
-    @media (max-width: 1024px) { .grid { grid-template-columns: 1fr 1fr; } .col:nth-child(3) { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; } }
-    @media (max-width: 768px) { .layout { padding: 10px; padding-top: 160px; } .grid { display: flex; flex-direction: column; gap: 1rem; } .col { width: 100%; } .col:nth-child(3) { display: flex; flex-direction: column; } .search-command-row { flex-direction: column; align-items: stretch; gap: 10px; } .zen-mini { text-align: center; border: none; padding: 0; border-top: 1px solid var(--border); padding-top: 5px; } }
+    /* Mobile (Single Column) */
+    @media (max-width: 850px) {
+        .dashboard-layout { padding: 10px; height: auto; overflow-y: visible; }
+        .grid-container { 
+            display: flex; flex-direction: column; 
+        }
+        
+        .top-bar { display: flex; flex-direction: column; gap: 15px; }
+        .brand { margin-bottom: 0; }
+        .search-deck { width: 100%; order: 2; }
+        .theme-toggle { order: 1; align-self: flex-end; }
+        
+        .workspace-split { grid-template-columns: 1fr; }
+        
+        .col-right { display: flex; flex-direction: column; }
+        .photo-frame { transform: none; width: 100%; box-sizing: border-box; }
+        .photo-frame:hover { transform: none; }
+    }
 </style>
