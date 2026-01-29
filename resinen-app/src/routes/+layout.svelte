@@ -23,7 +23,8 @@
         { name: 'Snake', icon: '🐍', path: '/games/snake' },
         { name: 'Soccer', icon: '⚽', path: '/games/soccer' },
         { name: 'Sudoku', icon: '🧩', path: '/games/sudoku' },
-        { name: 'Tetris', icon: '🧱', path: '/games/tetris' }
+        { name: 'Tetris', icon: '🧱', path: '/games/tetris' },
+        { name: 'Ludo', icon: '🌈', path: '/games/ludo' }
     ];
 
     // --- AUTH STATE ---
