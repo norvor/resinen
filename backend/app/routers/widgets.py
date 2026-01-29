@@ -4,8 +4,8 @@ from sqlmodel import select
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.database import get_session
-from app.models import (
+from ../database import get_session
+from ../models import (
     User, BudgetWidget, HabitWidget, ScribbleWidget, TravelWidget, 
     TaskWidget, NoteWidget, LoveWidget, TransmissionWidget, Mission
 )
