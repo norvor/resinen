@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.database import init_db # <--- CHANGED FROM create_db_and_tables
-from app.routers import (
+from database import init_db # <--- CHANGED FROM create_db_and_tables
+from routers import (
     auth, widgets, # Core
     news, cricket, soccer, cinema, payment, # Apps
     chess, sudoku, battleship, poker, tetris, go, minesweeper # Games
