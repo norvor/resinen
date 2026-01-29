@@ -341,14 +341,23 @@
 
     /* FEED LIST */
     .feed-list { 
-        flex: 1; overflow-y: auto; padding: 10px 15px; z-index: 12; 
-        display: flex; flex-direction: column; gap: 8px; 
+        flex: 1; 
+        overflow-y: auto; 
+        padding: 10px 15px; 
+        z-index: 12; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 8px; 
+        /* Added max-height to ensure scrolling works within the container */
+        max-height: 250px; 
     }
     
     .feed-item {
         display: flex; align-items: center; gap: 12px; padding: 10px;
         border-bottom: 1px dashed #3e2723; transition: 0.2s;
         background: rgba(255, 255, 255, 0.02);
+        /* Prevent item shrinking */
+        flex-shrink: 0;
     }
     .feed-item:hover {
         background: rgba(205, 133, 63, 0.05);

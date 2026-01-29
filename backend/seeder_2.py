@@ -12,8 +12,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- 📝 EDIT THIS LIST TO ADD NEW USERS ---
 NEW_USERS = [
-    "vaibhav@resinen.com",
-    "arantish@resinen.com",
+    "guestone@resinen.com",
+    "guesttwo@resinen.com",
 ]
 
 async def seed_additional():
