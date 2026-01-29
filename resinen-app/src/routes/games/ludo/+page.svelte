@@ -112,7 +112,7 @@
             if (p.isCpu) {
                 setTimeout(() => aiDecideMove(p.pieces, validMoves), 600);
             } else {
-                // Optional: Auto-move if forced? Kept manual for feel.
+                // Auto-select logic could go here, but manual is better for feel
             }
         }
     }
@@ -408,8 +408,12 @@
 </div>
 
 <style>
+    /* === GLOBAL & NEON DAYBREAK THEME === */
     :global(body) { 
-        margin: 0; background: #000; color: #fff; 
+        margin: 0; 
+        /* UPDATED: Deep Blue-Grey Background (Lighter than Black) */
+        background: radial-gradient(circle at 50% 30%, #334155 0%, #0f172a 100%); 
+        color: #fff; 
         font-family: 'Space Grotesk', sans-serif; overflow: hidden; 
         touch-action: none;
     }
@@ -422,7 +426,6 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(circle at 50% 30%, #1e293b 0%, #000 70%);
         overflow: hidden;
     }
     
@@ -436,7 +439,7 @@
     .setup-overlay {
         position: absolute; z-index: 200;
         width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85);
+        background: rgba(15, 23, 42, 0.95);
         backdrop-filter: blur(10px);
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
@@ -489,21 +492,21 @@
     }
     
     .back-btn, .restart-btn { 
-        pointer-events: auto; text-decoration: none; color: #64748b; 
-        border: 1px solid #334155; padding: 5px 10px; border-radius: 4px;
-        font-family: 'JetBrains Mono'; font-size: 0.8rem; background: rgba(0,0,0,0.8);
+        pointer-events: auto; text-decoration: none; color: #cbd5e1; 
+        border: 1px solid #475569; padding: 5px 10px; border-radius: 4px;
+        font-family: 'JetBrains Mono'; font-size: 0.8rem; background: rgba(15, 23, 42, 0.9);
         cursor: pointer;
     }
     .restart-btn:hover { color: #fff; border-color: #fff; }
     
     .status-bar {
         font-family: 'JetBrains Mono'; color: #2dd4bf; 
-        background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px;
+        background: rgba(15, 23, 42, 0.9); padding: 5px 15px; border-radius: 20px;
         border: 1px solid rgba(45, 212, 191, 0.3); font-weight: bold;
         letter-spacing: 1px;
     }
 
-    /* --- BOARD --- */
+    /* --- BOARD (LIGHTER GLASS) --- */
     .board-container {
         width: 90vmin; height: 90vmin;
         max-width: 600px; max-height: 600px;
@@ -514,30 +517,35 @@
     .board-container.blurred { filter: blur(5px) brightness(0.5); transform: rotateX(20deg) scale(0.9); }
     
     .board-tilt { width: 100%; height: 100%; transform-style: preserve-3d; position: relative; }
+    
     .board-thickness {
         position: absolute; top: 10px; left: 10px; width: 100%; height: 100%;
-        background: #0f172a; transform: translateZ(-20px);
-        border-radius: 12px; box-shadow: 0 50px 80px rgba(0,0,0,0.8);
+        background: #020617; transform: translateZ(-20px);
+        border-radius: 12px; box-shadow: 0 50px 80px rgba(0,0,0,0.6);
     }
+    
+    /* UPDATED: Lighter Board Surface */
     .board-surface {
         width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.9); border: 2px solid #334155;
+        background: rgba(30, 41, 59, 0.85); /* Much lighter Slate */
+        border: 2px solid #64748b;
         border-radius: 12px; display: grid;
         grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);
-        transform-style: preserve-3d; backdrop-filter: blur(5px);
-        box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        transform-style: preserve-3d; backdrop-filter: blur(10px);
+        box-shadow: inset 0 0 50px rgba(255,255,255,0.05);
     }
 
-    /* Zones */
-    .zone { position: absolute; opacity: 0.2; }
+    /* Zones - More visible */
+    .zone { position: absolute; opacity: 0.3; }
     .zone.red { grid-area: 1/1/7/7; background: #ef4444; border-bottom: 2px solid #ef4444; border-right: 2px solid #ef4444; }
     .zone.green { grid-area: 1/10/7/16; background: #22c55e; border-bottom: 2px solid #22c55e; border-left: 2px solid #22c55e; }
     .zone.yellow { grid-area: 10/10/16/16; background: #eab308; border-top: 2px solid #eab308; border-left: 2px solid #eab308; }
     .zone.blue { grid-area: 10/1/16/7; background: #3b82f6; border-top: 2px solid #3b82f6; border-right: 2px solid #3b82f6; }
     .zone.center { grid-area: 7/7/10/10; background: radial-gradient(circle, #fff 0%, #000 100%); opacity: 0.1; }
 
-    .cell { border: 1px solid rgba(255,255,255,0.05); }
-    .cell.safe { background: rgba(255,255,255,0.1); box-shadow: inset 0 0 10px rgba(255,255,255,0.1); }
+    /* Cells - Brighter borders */
+    .cell { border: 1px solid rgba(255,255,255,0.15); }
+    .cell.safe { background: rgba(255,255,255,0.2); box-shadow: inset 0 0 10px rgba(255,255,255,0.1); }
 
     /* Tokens */
     .token {
@@ -548,14 +556,14 @@
     .token-body {
         width: 100%; height: 100%; border-radius: 50%; background: var(--color);
         box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5), 0 0 10px var(--color);
-        transform: rotateX(-40deg);
+        transform: rotateX(-40deg); border: 1px solid rgba(255,255,255,0.5);
     }
     .token-shadow {
         position: absolute; bottom: -10px; left: 10%; width: 80%; height: 20%;
         background: rgba(0,0,0,0.6); filter: blur(4px); border-radius: 50%;
         transform: translateZ(-10px);
     }
-    .token.active .token-body { animation: float 1s infinite ease-in-out; border: 2px solid #fff; }
+    .token.active .token-body { animation: float 1s infinite ease-in-out; border: 2px solid #fff; box-shadow: 0 0 15px #fff; }
     @keyframes float { 0%, 100% { transform: rotateX(-40deg) translateY(0); } 50% { transform: rotateX(-40deg) translateY(-15px); } }
 
     /* --- FLAT CONTROLS --- */
@@ -568,9 +576,9 @@
     .flat-controls button { pointer-events: auto; }
 
     .turn-indicators {
-        display: flex; gap: 15px; background: rgba(0,0,0,0.5);
+        display: flex; gap: 15px; background: rgba(15, 23, 42, 0.8);
         padding: 8px 15px; border-radius: 20px;
-        backdrop-filter: blur(5px);
+        backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1);
     }
     .p-dot { 
         width: 12px; height: 12px; border-radius: 50%; opacity: 0.3; transition: 0.3s; 
@@ -582,14 +590,16 @@
         font-size: 0.6rem; font-family: 'JetBrains Mono'; color: #fff;
     }
 
-    /* REAL DIE BUTTON */
+    /* UPDATED: HIGH VISIBILITY WHITE DIE */
     .real-die-btn {
-        width: 80px; height: 80px; background: #e2e8f0; border-radius: 16px; border: none;
-        box-shadow: 0 8px 0 #94a3b8, 0 10px 20px rgba(0,0,0,0.5);
+        width: 90px; height: 90px; 
+        background: #ffffff; /* PURE WHITE */
+        border-radius: 20px; border: none;
+        box-shadow: 0 10px 0 #cbd5e1, 0 20px 40px rgba(0,0,0,0.5);
         cursor: pointer; transition: all 0.1s;
         display: flex; justify-content: center; align-items: center;
     }
-    .real-die-btn:active { transform: translateY(8px); box-shadow: 0 0 0 #94a3b8, 0 0 0 rgba(0,0,0,0.5); }
+    .real-die-btn:active { transform: translateY(8px); box-shadow: 0 0 0 #cbd5e1, 0 0 0 rgba(0,0,0,0.5); }
     .real-die-btn:disabled { filter: grayscale(1) brightness(0.7); cursor: not-allowed; }
     .real-die-btn.rolling { animation: shake 0.1s infinite; }
     .real-die-btn.cpu-turn { opacity: 0.8; cursor: wait; pointer-events: none; }
@@ -597,10 +607,14 @@
     .die-face {
         width: 100%; height: 100%; display: grid;
         grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
-        padding: 12px; box-sizing: border-box;
+        padding: 14px; box-sizing: border-box;
     }
+    
+    /* UPDATED: BLACK DOTS */
     .dot {
-        width: 12px; height: 12px; background: #000; border-radius: 50%;
+        width: 14px; height: 14px; 
+        background: #000000; /* BLACK */
+        border-radius: 50%;
         align-self: center; justify-self: center; opacity: 0;
     }
     .dot.visible { opacity: 1; }

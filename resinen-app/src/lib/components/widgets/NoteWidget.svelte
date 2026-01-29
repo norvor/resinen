@@ -202,7 +202,9 @@
     /* --- GLOBAL --- */
     .app-root {
         display: flex; flex-direction: column;
-        height: 100%; min-height: 650px;
+        height: 100%; 
+        /* UPDATED: Better default height for mobile vs desktop */
+        min-height: 50vh; 
         border-radius: 12px; overflow: hidden;
         border: 1px solid transparent;
         position: relative;
@@ -211,15 +213,22 @@
     /* HEADER */
     .app-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 12px 20px; z-index: 30; background: inherit;
+        padding: 12px 15px; z-index: 30; background: inherit;
+        gap: 10px;
     }
-    .file-info { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .file-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
     .file-title {
         background: transparent; border: none; outline: none;
-        font-size: 1.2rem; font-weight: 700; width: 100%;
+        font-size: 1.1rem; font-weight: 700; width: 100%;
+        text-overflow: ellipsis;
     }
-    .header-controls { display: flex; align-items: center; gap: 15px; }
-    .status { font-size: 0.75rem; opacity: 0.7; font-weight: 500; }
+    .header-controls { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    
+    .status { 
+        font-size: 0.75rem; opacity: 0.7; font-weight: 500; 
+        display: none; /* Hide on very small screens */
+    }
+    @media (min-width: 500px) { .status { display: block; } }
 
     /* THEME SWITCHER */
     .theme-switcher {
@@ -233,40 +242,50 @@
         transition: 0.2s;
     }
 
-    /* --- TOOLBAR (CRITICAL FIXES) --- */
+    /* --- TOOLBAR (RESPONSIVE FIX) --- */
     .toolbar-float-container {
         position: sticky; top: 10px; z-index: 100;
         display: flex; justify-content: center;
-        padding: 0 20px; pointer-events: none;
+        padding: 0 10px; pointer-events: none;
+        max-width: 100%;
     }
 
     .glass-toolbar {
         pointer-events: auto;
-        display: flex; justify-content: space-between; align-items: center; gap: 20px;
-        padding: 8px 16px; border-radius: 12px;
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 12px; border-radius: 12px;
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
         box-shadow: 0 10px 40px -10px rgba(0,0,0,0.3);
+        
+        /* SCROLLABLE ON MOBILE */
+        overflow-x: auto;
+        max-width: 100%;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
     }
+    .glass-toolbar::-webkit-scrollbar { display: none; }
 
-    .tools-section { display: flex; align-items: center; gap: 6px; }
+    .tools-section { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
     
     .sep { 
-        width: 1px; height: 20px; margin: 0 8px; 
+        width: 1px; height: 20px; margin: 0 6px; 
         background: currentColor; opacity: 0.3; 
     }
     
     .glass-toolbar button {
-        width: 36px; height: 36px; border-radius: 6px; border: none; cursor: pointer;
+        width: 34px; height: 34px; border-radius: 6px; border: none; cursor: pointer;
         display: flex; align-items: center; justify-content: center; background: transparent;
-        color: inherit; /* This ensures it takes the theme color */
+        color: inherit;
         transition: 0.1s;
+        flex-shrink: 0;
     }
     .glass-toolbar button:hover { background: rgba(0,0,0,0.1); }
     
     .format-select {
         background: transparent; border: none; outline: none; cursor: pointer;
-        font-size: 0.9rem; font-weight: 700; color: inherit; padding: 4px;
+        font-size: 0.85rem; font-weight: 700; color: inherit; padding: 4px;
+        max-width: 90px;
     }
 
     /* WORKSPACE */
@@ -276,7 +295,12 @@
     }
     .page-sheet {
         width: 100%; max-width: 800px; min-height: 100%;
-        padding: 40px 50px 100px 50px; cursor: text; transition: 0.3s;
+        /* RESPONSIVE PADDING */
+        padding: 20px 20px 80px 20px; 
+        cursor: text; transition: 0.3s;
+    }
+    @media (min-width: 768px) {
+        .page-sheet { padding: 40px 50px 100px 50px; }
     }
     .page-sheet:focus { outline: none; }
 
@@ -288,11 +312,11 @@
     .theme-modern .app-header { background: #fff; border-bottom: 1px solid #e5e7eb; }
     .theme-modern .file-title { color: #111; }
     
-    /* Modern Toolbar: White glass, Black icons */
+    /* Modern Toolbar */
     .theme-modern .glass-toolbar {
         background: rgba(255, 255, 255, 0.95); 
         border: 1px solid rgba(0,0,0,0.1);
-        color: #000000; /* FORCE BLACK ICONS */
+        color: #000000;
     }
     .theme-modern .glass-toolbar button.active { background: #000; color: #fff; }
 
@@ -312,12 +336,12 @@
     .theme-retro .app-header { background: #333; color: #ddd; border-bottom: 1px solid #111; }
     .theme-retro .file-title { color: #facc15; text-transform: uppercase; letter-spacing: 1px; }
 
-    /* Retro Toolbar: Off-white glass, Black icons */
+    /* Retro Toolbar */
     .theme-retro .glass-toolbar {
-        background: #e5e5e5; /* Opaque Grey-White */
+        background: #e5e5e5;
         border: 2px solid #000;
         box-shadow: 4px 4px 0px #000;
-        color: #000000; /* FORCE BLACK ICONS */
+        color: #000000;
     }
     .theme-retro .glass-toolbar button:hover { background: #ccc; }
     .theme-retro .glass-toolbar button.active { background: #000; color: #facc15; }
@@ -339,12 +363,12 @@
     .theme-cyber .app-header { background: #020617; border-bottom: 1px solid #1e293b; }
     .theme-cyber .file-title { color: #2dd4bf; text-shadow: 0 0 8px rgba(45, 212, 191, 0.4); }
 
-    /* Cyber Toolbar: Dark glass, Neon icons */
+    /* Cyber Toolbar */
     .theme-cyber .glass-toolbar {
         background: rgba(15, 23, 42, 0.9); 
         border: 1px solid rgba(45, 212, 191, 0.4);
         box-shadow: 0 0 15px rgba(45, 212, 191, 0.15);
-        color: #2dd4bf; /* NEON TEAL ICONS */
+        color: #2dd4bf;
     }
     .theme-cyber .glass-toolbar button:hover { background: rgba(45, 212, 191, 0.15); color: #fff; }
     .theme-cyber .glass-toolbar button.active { background: #2dd4bf; color: #000; box-shadow: 0 0 10px #2dd4bf; }
