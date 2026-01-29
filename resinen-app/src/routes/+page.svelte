@@ -90,6 +90,7 @@
 
 <svelte:head>
     <title>Resinen OS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 </svelte:head>
 
 <div class="app-background">
@@ -107,11 +108,13 @@
         
         <div class="search-deck">
             <input 
-                type="text" 
+                type="search" 
                 class="search-input" 
                 placeholder="Google Search..." 
                 bind:value={searchQuery}
                 onkeydown={handleEnter}
+                enterkeyhint="search"
+                autocomplete="off"
             />
             <div class="search-buttons">
                 <button class="s-btn google" onclick={() => performSearch('google')} title="Google Search">
@@ -242,12 +245,14 @@
     }
 
     /* =========================================
-       LAYOUT GRID
+       LAYOUT GRID (RESTORED DESKTOP)
        ========================================= */
     .dashboard-layout {
-        height: 100vh; display: flex; flex-direction: column;
+        /* DESKTOP DEFAULT: Fixed height with internal scroll */
+        height: 100vh; 
+        display: flex; flex-direction: column;
         padding: 20px 40px; box-sizing: border-box;
-        overflow-y: auto;
+        overflow-y: auto; /* Required for desktop scrolling */
     }
 
     .grid-container {
@@ -292,6 +297,7 @@
         flex: 1; background: transparent; border: none; outline: none;
         color: inherit; font-family: 'Inter', sans-serif; font-size: 0.9rem;
         padding: 5px 10px;
+        -webkit-appearance: none;
     }
     
     .search-buttons { display: flex; gap: 5px; }
@@ -387,10 +393,14 @@
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         transform: rotate(-1deg);
         transition: transform 0.3s;
-        /* Frame itself is a flex container to center image */
         display: flex; justify-content: center; align-items: center;
     }
-    .photo-frame:hover { transform: rotate(0deg) scale(1.02); z-index: 10; }
+    
+    /* FIX: Only apply hover scale if device actually supports hover */
+    @media (hover: hover) {
+        .photo-frame:hover { transform: rotate(0deg) scale(1.02); z-index: 10; }
+    }
+    
     .photo-frame.small { padding: 6px; transform: rotate(1deg); }
 
     .visual-card {
@@ -402,7 +412,7 @@
     }
     .visual-card img {
         width: 100%; height: 100%; 
-        object-fit: contain; /* KEY FIX: Fits whole image inside */
+        object-fit: contain; 
         display: block;
     }
     
@@ -434,7 +444,13 @@
 
     /* Mobile (Single Column) */
     @media (max-width: 850px) {
-        .dashboard-layout { padding: 10px; height: auto; overflow-y: visible; }
+        .dashboard-layout { 
+            /* MOBILE OVERRIDE: Grow with content, let window scroll */
+            height: auto; 
+            min-height: 100dvh; 
+            overflow-y: visible; 
+            padding: 10px; 
+        }
         .grid-container { 
             display: flex; flex-direction: column; 
         }
@@ -444,10 +460,18 @@
         .search-deck { width: 100%; order: 2; }
         .theme-toggle { order: 1; align-self: flex-end; }
         
+        /* FIX: Prevent iOS zoom by enforcing 16px font size on inputs */
+        .search-input { font-size: 16px; }
+
+        /* FIX: Larger touch targets for search buttons (44px min) */
+        .s-btn { width: 44px; height: 44px; }
+        .search-buttons { gap: 10px; }
+        
         .workspace-split { grid-template-columns: 1fr; }
         
         .col-right { display: flex; flex-direction: column; }
         .photo-frame { transform: none; width: 100%; box-sizing: border-box; }
+        /* Reset any lingering transforms on mobile */
         .photo-frame:hover { transform: none; }
     }
 </style>
