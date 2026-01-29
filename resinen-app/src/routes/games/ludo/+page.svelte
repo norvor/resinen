@@ -2,13 +2,12 @@
     import { onMount } from 'svelte';
 
     // --- CONFIG ---
-    const COLORS = ['#ef4444', '#22c55e', '#eab308', '#3b82f6']; // Red, Green, Yellow, Blue
+    const COLORS = ['#ef4444', '#22c55e', '#eab308', '#3b82f6']; 
     const BASES = [0, 13, 26, 39]; 
     const SAFE_SPOTS = [0, 8, 13, 21, 26, 34, 39, 47];
 
     // --- STATE ---
     let gameStarted = $state(false);
-    // Default: P1 Human, others CPU
     let players = $state([
         { id: 0, color: 'red', pieces: [-1, -1, -1, -1], home: 0, isCpu: false },
         { id: 1, color: 'green', pieces: [-1, -1, -1, -1], home: 0, isCpu: true },
@@ -24,7 +23,6 @@
     let msg = $state("WAITING FOR HOST");
     let winner = $state<number | null>(null);
 
-    // Derived state for validation
     let allAi = $derived(players.every(p => p.isCpu));
 
     // --- AUDIO & HAPTICS ---
@@ -50,7 +48,6 @@
     }
 
     function restartGame() {
-        // Reset Logic
         gameStarted = false;
         winner = null;
         turn = 0;
@@ -59,13 +56,7 @@
         msg = "WAITING FOR HOST";
         canRoll = true;
         diceRolling = false;
-
-        // Reset positions but KEEP setup (isCpu)
-        players = players.map(p => ({
-            ...p,
-            pieces: [-1, -1, -1, -1],
-            home: 0
-        }));
+        players = players.map(p => ({ ...p, pieces: [-1, -1, -1, -1], home: 0 }));
     }
 
     // --- CORE GAME LOGIC ---
@@ -108,11 +99,8 @@
             setTimeout(nextTurn, 800);
         } else {
             msg = "MOVE";
-            
             if (p.isCpu) {
                 setTimeout(() => aiDecideMove(p.pieces, validMoves), 600);
-            } else {
-                // Auto-select logic could go here, but manual is better for feel
             }
         }
     }
@@ -131,16 +119,13 @@
         moves.forEach(pieceIdx => {
             const currentPos = currentPieces[pieceIdx];
             let score = 0;
-            
             let newPos = currentPos;
             if (currentPos === -1) newPos = 0;
             else newPos += diceValue;
 
-            // HEURISTICS
-            if (currentPos === -1) score += 50; // Leave base
-            if (newPos === 56) score += 100; // Finish
+            if (currentPos === -1) score += 50; 
+            if (newPos === 56) score += 100; 
 
-            // Kill check
             if (newPos < 51) {
                 const globalPos = getGlobalPos(turn, newPos);
                 if (!SAFE_SPOTS.includes(globalPos)) {
@@ -148,9 +133,7 @@
                         if (oppIdx !== turn) {
                             opp.pieces.forEach(oppP => {
                                 if (oppP !== -1 && oppP < 51) {
-                                    if (getGlobalPos(oppIdx, oppP) === globalPos) {
-                                        score += 200; // KILL!
-                                    }
+                                    if (getGlobalPos(oppIdx, oppP) === globalPos) score += 200;
                                 }
                             });
                         }
@@ -158,7 +141,6 @@
                 }
             }
 
-            // Safety check
             if (newPos < 51) {
                 const globalPos = getGlobalPos(turn, newPos);
                 if (SAFE_SPOTS.includes(globalPos)) score += 30;
@@ -198,7 +180,6 @@
                 p.pieces[pieceIdx] = newPos;
             }
             
-            // Kill Logic
             if (newPos < 51) { 
                 const globalPos = getGlobalPos(turn, newPos);
                 if (!SAFE_SPOTS.includes(globalPos)) {
@@ -218,7 +199,6 @@
                 }
             }
         }
-        
         finishMove();
     }
 
@@ -227,9 +207,7 @@
         if (diceValue === 6) {
             msg = "AGAIN";
             canRoll = true;
-            if (players[turn].isCpu && winner === null) {
-                setTimeout(aiTurn, 1000);
-            }
+            if (players[turn].isCpu && winner === null) setTimeout(aiTurn, 1000);
         } else {
             nextTurn();
         }
@@ -239,9 +217,7 @@
         turn = (turn + 1) % 4;
         canRoll = true;
         msg = `P${turn + 1}`;
-        if (players[turn].isCpu && winner === null) {
-            setTimeout(aiTurn, 1000);
-        }
+        if (players[turn].isCpu && winner === null) setTimeout(aiTurn, 1000);
     }
 
     // --- MAPPINGS ---
@@ -266,8 +242,7 @@
             [7,0], [8,0],[8,1],[8,2],[8,3],[8,4],[8,5], [9,6],[10,6],[11,6],[12,6],[13,6],[14,6],
             [14,7], [14,8],[13,8],[12,8],[11,8],[10,8],[9,8], [8,9],[8,10],[8,11],[8,12],[8,13],[8,14],
             [7,14], [6,14],[6,13],[6,12],[6,11],[6,10],[6,9], [5,8],[4,8],[3,8],[2,8],[1,8],[0,8],
-            [0,7], 
-            [1,7],[2,7],[3,7],[4,7],[5,7],[6,7] 
+            [0,7], [1,7],[2,7],[3,7],[4,7],[5,7],[6,7] 
         ];
 
         const coords = path0[relPos];
@@ -311,11 +286,9 @@
                     </button>
                 {/each}
             </div>
-            
             {#if allAi}
                 <div class="error-msg">⚠ AT LEAST 1 HUMAN REQUIRED</div>
             {/if}
-
             <button class="start-btn" onclick={startGame} disabled={allAi}>
                 {allAi ? 'LOCKED' : 'INITIATE'}
             </button>
@@ -340,7 +313,6 @@
                 <div class="zone yellow"></div>
                 <div class="zone blue"></div>
                 <div class="zone center"></div>
-
                 {#each Array(15) as _, r}
                     {#each Array(15) as _, c}
                         {#if (r>=6 && r<=8) || (c>=6 && c<=8)}
@@ -350,12 +322,10 @@
                         {/if}
                     {/each}
                 {/each}
-
                 {#each players as p, pIdx}
                     {#each p.pieces as pos, pieceIdx}
                         {@const coords = getCoordinates(pIdx, pos)}
                         {@const baseOffsets = [{x:0, y:0}, {x:100, y:0}, {x:0, y:100}, {x:100, y:100}]}
-                        
                         <button 
                             class="token"
                             class:active={gameStarted && turn === pIdx && validMoves.includes(pieceIdx)}
@@ -384,13 +354,10 @@
                     <div class="p-dot" 
                         class:active={turn === i} 
                         style="background: {COLORS[i]}; box-shadow: 0 0 {turn===i ? '15px' : '0'} {COLORS[i]}">
-                        {#if p.isCpu}
-                             <span class="cpu-tag">AI</span>
-                        {/if}
+                        {#if p.isCpu}<span class="cpu-tag">AI</span>{/if}
                     </div>
                 {/each}
             </div>
-
             <button class="real-die-btn" 
                 onclick={rollDice} 
                 disabled={!canRoll || diceRolling || (players[turn].isCpu)}
@@ -408,11 +375,11 @@
 </div>
 
 <style>
-    /* === GLOBAL & NEON DAYBREAK THEME === */
+    /* === NEON DAYBREAK THEME (MOBILE OPTIMIZED) === */
     :global(body) { 
         margin: 0; 
-        /* UPDATED: Deep Blue-Grey Background (Lighter than Black) */
-        background: radial-gradient(circle at 50% 30%, #334155 0%, #0f172a 100%); 
+        /* FIXED: Linear gradient ensures bottom of screen stays bright Blue/Grey */
+        background: linear-gradient(to bottom, #475569 0%, #1e293b 100%);
         color: #fff; 
         font-family: 'Space Grotesk', sans-serif; overflow: hidden; 
         touch-action: none;
@@ -435,12 +402,13 @@
         background-size: 40px 40px; opacity: 0.3; pointer-events: none;
     }
 
-    /* --- SETUP OVERLAY --- */
+    /* --- SETUP OVERLAY (LIGHTER) --- */
     .setup-overlay {
         position: absolute; z-index: 200;
         width: 100%; height: 100%;
-        background: rgba(15, 23, 42, 0.95);
-        backdrop-filter: blur(10px);
+        /* FIXED: More transparent/lighter overlay */
+        background: rgba(30, 41, 59, 0.85);
+        backdrop-filter: blur(8px);
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         gap: 20px;
@@ -451,7 +419,7 @@
     .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 400px; }
     
     .player-toggle {
-        background: rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.1);
         border: 1px solid var(--c);
         padding: 15px; border-radius: 8px;
         display: flex; flex-direction: column; align-items: center;
@@ -459,14 +427,14 @@
         color: #fff; font-family: 'JetBrains Mono';
         position: relative; overflow: hidden;
     }
-    .player-toggle:hover { background: rgba(255,255,255,0.1); }
+    .player-toggle:hover { background: rgba(255,255,255,0.2); }
     .player-toggle .p-status-light {
         width: 100%; height: 4px; background: var(--c);
         position: absolute; bottom: 0; left: 0;
         box-shadow: 0 0 10px var(--c);
     }
     .player-toggle.cpu { opacity: 0.7; border-style: dashed; }
-    .player-toggle.cpu .p-type { color: #94a3b8; }
+    .player-toggle.cpu .p-type { color: #cbd5e1; }
     .p-name { font-weight: bold; }
     .p-type { font-size: 0.8rem; margin-top: 5px; }
 
@@ -480,9 +448,9 @@
         transition: 0.2s;
     }
     .start-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px #2dd4bf; }
-    .start-btn:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
+    .start-btn:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; box-shadow: none; transform: none; }
     
-    .exit-link { color: #64748b; text-decoration: none; font-family: 'JetBrains Mono'; font-size: 0.9rem; }
+    .exit-link { color: #94a3b8; text-decoration: none; font-family: 'JetBrains Mono'; font-size: 0.9rem; }
 
     /* --- TOP UI --- */
     .ui-layer.top {
@@ -492,12 +460,13 @@
     }
     
     .back-btn, .restart-btn { 
-        pointer-events: auto; text-decoration: none; color: #cbd5e1; 
-        border: 1px solid #475569; padding: 5px 10px; border-radius: 4px;
-        font-family: 'JetBrains Mono'; font-size: 0.8rem; background: rgba(15, 23, 42, 0.9);
+        pointer-events: auto; text-decoration: none; color: #fff; 
+        border: 1px solid #94a3b8; padding: 5px 10px; border-radius: 4px;
+        font-family: 'JetBrains Mono'; font-size: 0.8rem; 
+        background: rgba(30, 41, 59, 0.8);
         cursor: pointer;
     }
-    .restart-btn:hover { color: #fff; border-color: #fff; }
+    .restart-btn:hover { color: #fff; border-color: #fff; background: #475569; }
     
     .status-bar {
         font-family: 'JetBrains Mono'; color: #2dd4bf; 
@@ -506,7 +475,7 @@
         letter-spacing: 1px;
     }
 
-    /* --- BOARD (LIGHTER GLASS) --- */
+    /* --- BOARD (BRIGHTER) --- */
     .board-container {
         width: 90vmin; height: 90vmin;
         max-width: 600px; max-height: 600px;
@@ -514,40 +483,40 @@
         transform: rotateX(40deg) translateY(-80px); 
         transition: transform 0.5s, filter 0.5s;
     }
-    .board-container.blurred { filter: blur(5px) brightness(0.5); transform: rotateX(20deg) scale(0.9); }
+    /* FIXED: Removed brightness penalty on blur */
+    .board-container.blurred { filter: blur(5px); transform: rotateX(20deg) scale(0.9); }
     
     .board-tilt { width: 100%; height: 100%; transform-style: preserve-3d; position: relative; }
-    
     .board-thickness {
         position: absolute; top: 10px; left: 10px; width: 100%; height: 100%;
-        background: #020617; transform: translateZ(-20px);
-        border-radius: 12px; box-shadow: 0 50px 80px rgba(0,0,0,0.6);
+        background: #0f172a; transform: translateZ(-20px);
+        border-radius: 12px; box-shadow: 0 50px 80px rgba(0,0,0,0.5);
     }
     
-    /* UPDATED: Lighter Board Surface */
+    /* UPDATED: Lighter, Frosted Glass Board */
     .board-surface {
         width: 100%; height: 100%;
-        background: rgba(30, 41, 59, 0.85); /* Much lighter Slate */
-        border: 2px solid #64748b;
+        background: rgba(51, 65, 85, 0.85); /* Slate 700ish, partially transparent */
+        border: 2px solid #94a3b8;
         border-radius: 12px; display: grid;
         grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);
-        transform-style: preserve-3d; backdrop-filter: blur(10px);
-        box-shadow: inset 0 0 50px rgba(255,255,255,0.05);
+        transform-style: preserve-3d; backdrop-filter: blur(12px);
+        box-shadow: inset 0 0 60px rgba(255,255,255,0.1);
     }
 
-    /* Zones - More visible */
-    .zone { position: absolute; opacity: 0.3; }
+    /* ZONES */
+    .zone { position: absolute; opacity: 0.4; }
     .zone.red { grid-area: 1/1/7/7; background: #ef4444; border-bottom: 2px solid #ef4444; border-right: 2px solid #ef4444; }
     .zone.green { grid-area: 1/10/7/16; background: #22c55e; border-bottom: 2px solid #22c55e; border-left: 2px solid #22c55e; }
     .zone.yellow { grid-area: 10/10/16/16; background: #eab308; border-top: 2px solid #eab308; border-left: 2px solid #eab308; }
     .zone.blue { grid-area: 10/1/16/7; background: #3b82f6; border-top: 2px solid #3b82f6; border-right: 2px solid #3b82f6; }
-    .zone.center { grid-area: 7/7/10/10; background: radial-gradient(circle, #fff 0%, #000 100%); opacity: 0.1; }
+    .zone.center { grid-area: 7/7/10/10; background: radial-gradient(circle, #fff 0%, #cbd5e1 100%); opacity: 0.2; }
 
-    /* Cells - Brighter borders */
-    .cell { border: 1px solid rgba(255,255,255,0.15); }
-    .cell.safe { background: rgba(255,255,255,0.2); box-shadow: inset 0 0 10px rgba(255,255,255,0.1); }
+    /* CELLS */
+    .cell { border: 1px solid rgba(255,255,255,0.2); }
+    .cell.safe { background: rgba(255,255,255,0.25); box-shadow: inset 0 0 10px rgba(255,255,255,0.2); }
 
-    /* Tokens */
+    /* TOKENS */
     .token {
         width: 60%; height: 60%; justify-self: center; align-self: center;
         background: none; border: none; cursor: pointer; padding: 0;
@@ -556,11 +525,11 @@
     .token-body {
         width: 100%; height: 100%; border-radius: 50%; background: var(--color);
         box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5), 0 0 10px var(--color);
-        transform: rotateX(-40deg); border: 1px solid rgba(255,255,255,0.5);
+        transform: rotateX(-40deg); border: 1px solid rgba(255,255,255,0.6);
     }
     .token-shadow {
         position: absolute; bottom: -10px; left: 10%; width: 80%; height: 20%;
-        background: rgba(0,0,0,0.6); filter: blur(4px); border-radius: 50%;
+        background: rgba(0,0,0,0.4); filter: blur(4px); border-radius: 50%;
         transform: translateZ(-10px);
     }
     .token.active .token-body { animation: float 1s infinite ease-in-out; border: 2px solid #fff; box-shadow: 0 0 15px #fff; }
@@ -576,9 +545,9 @@
     .flat-controls button { pointer-events: auto; }
 
     .turn-indicators {
-        display: flex; gap: 15px; background: rgba(15, 23, 42, 0.8);
+        display: flex; gap: 15px; background: rgba(30, 41, 59, 0.9);
         padding: 8px 15px; border-radius: 20px;
-        backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.2);
     }
     .p-dot { 
         width: 12px; height: 12px; border-radius: 50%; opacity: 0.3; transition: 0.3s; 
@@ -590,7 +559,7 @@
         font-size: 0.6rem; font-family: 'JetBrains Mono'; color: #fff;
     }
 
-    /* UPDATED: HIGH VISIBILITY WHITE DIE */
+    /* --- BIG WHITE DIE (HIGH CONTRAST) --- */
     .real-die-btn {
         width: 90px; height: 90px; 
         background: #ffffff; /* PURE WHITE */
@@ -600,7 +569,7 @@
         display: flex; justify-content: center; align-items: center;
     }
     .real-die-btn:active { transform: translateY(8px); box-shadow: 0 0 0 #cbd5e1, 0 0 0 rgba(0,0,0,0.5); }
-    .real-die-btn:disabled { filter: grayscale(1) brightness(0.7); cursor: not-allowed; }
+    .real-die-btn:disabled { filter: grayscale(1) brightness(0.9); cursor: not-allowed; opacity: 0.7; }
     .real-die-btn.rolling { animation: shake 0.1s infinite; }
     .real-die-btn.cpu-turn { opacity: 0.8; cursor: wait; pointer-events: none; }
 
@@ -610,10 +579,10 @@
         padding: 14px; box-sizing: border-box;
     }
     
-    /* UPDATED: BLACK DOTS */
+    /* BLACK DOTS */
     .dot {
         width: 14px; height: 14px; 
-        background: #000000; /* BLACK */
+        background: #000000;
         border-radius: 50%;
         align-self: center; justify-self: center; opacity: 0;
     }
