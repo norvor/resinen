@@ -1,24 +1,52 @@
 version: '3.8'
 
 services:
-  # ... your existing database service (postgres) ...
-  
-  minio:
-    image: minio/minio
-    container_name: resinen_minio
-    ports:
-      - "9000:9000" # API Port
-      - "9001:9001" # Web Console Port
+  # --- Database ---
+  db:
+    image: postgres:15
+    container_name: resinen_db
     environment:
-      MINIO_ROOT_USER: resinen_minio_admin
-      MINIO_ROOT_PASSWORD: minio_secure_password_123
+      POSTGRES_USER: resinen_user
+      POSTGRES_PASSWORD: resinen_password
+      POSTGRES_DB: resinen_db
     volumes:
-      - ./minio_data:/data
-    command: server /data --console-address ":9001"
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - resinen-network
+    restart: unless-stopped
+
+  # --- Backend ---
+  backend:
+    build: ./backend
+    container_name: resinen_backend
+    ports:
+      - "8000:8000"
+    environment:
+      # FIX: Added '+asyncpg' to match create_async_engine requirements
+      - DATABASE_URL=postgresql+asyncpg://resinen_user:resinen_password@db:5432/resinen_db
+    depends_on:
+      - db
+    networks:
+      - resinen-network
+    restart: unless-stopped
+
+  # --- Frontend ---
+  frontend:
+    build: ./resinen-app
+    container_name: resinen_frontend
+    ports:
+      - "5173:3000"
+    environment:
+      - PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - resinen-network
+    restart: unless-stopped
 
 networks:
   resinen-network:
     driver: bridge
+
+volumes:
+  postgres_data:
