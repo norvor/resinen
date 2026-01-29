@@ -35,7 +35,7 @@ services:
     build: ./resinen-app
     container_name: resinen_frontend
     ports:
-      - "5173:3000"
+      - "3000:3000"
     environment:
       - PUBLIC_API_URL=http://backend:8000
     depends_on:

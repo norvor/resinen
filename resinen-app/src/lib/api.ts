@@ -1,6 +1,6 @@
 import { logout } from '$lib/stores';
 
-const BASE_URL = "https://api.resinen.com";
+const BASE_URL = "https://api.resinen.com"; 
 
 function authHeaders() {
     const token = localStorage.getItem('token');

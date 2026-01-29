@@ -141,7 +141,7 @@
     .dest { font-weight: bold; color: #f8fafc; font-size: 0.95rem; }
     .date { font-size: 0.75rem; color: #94a3b8; font-family: 'JetBrains Mono'; }
 
-    .status {
+    .status { 
         display: flex; align-items: center; gap: 6px;
         font-size: 0.65rem; font-family: 'JetBrains Mono'; color: #cbd5e1;
         background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 20px;
