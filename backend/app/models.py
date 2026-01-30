@@ -14,6 +14,23 @@ class User(SQLModel, table=True):
     marketing_consent: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # --- NEW: Preference Storage ---
+    widget_prefs: Dict[str, bool] = Field(
+        default={
+            "history": True, 
+            "news": True, 
+            "joke": True, 
+            "zen": True, 
+            "budget": True, 
+            "tasks": True,
+            "scribble": True,
+            "notes": True,
+            "love": True,
+            "transmission": True
+        }, 
+        sa_column=Column(JSON)
+    )
+
     # Relationships (One-to-One / One-to-Many)
     budget: Optional["BudgetWidget"] = Relationship(back_populates="user", sa_relationship_kwargs={"uselist": False})
     habits: Optional["HabitWidget"] = Relationship(back_populates="user", sa_relationship_kwargs={"uselist": False})
@@ -55,7 +72,6 @@ class TravelWidget(SQLModel, table=True):
     __tablename__ = "travel_widget"
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    # FIX: Explicitly naming it 'places' to match frontend/router
     places: List[Dict[str, Any]] = Field(default=[], sa_column=Column(JSON))
     user: Optional[User] = Relationship(back_populates="travel")
 
@@ -63,7 +79,6 @@ class TaskWidget(SQLModel, table=True):
     __tablename__ = "task_widget"
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    # FIX: Using 'content' to match router
     content: str 
     is_done: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -86,7 +101,7 @@ class LoveWidget(SQLModel, table=True):
     name: str
     category: str # book, movie, person
     description: Optional[str] = None
-    link: Optional[str] = None # Added link field
+    link: Optional[str] = None
     user: Optional[User] = Relationship(back_populates="loves")
 
 class TransmissionWidget(SQLModel, table=True):
@@ -102,24 +117,15 @@ class TransmissionWidget(SQLModel, table=True):
 class Mission(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    
-    # The Identity
-    codename: str  # e.g., "PROJECT_TITAN"
-    rune: str      # e.g., "🚀"
-    color: str     # e.g., "#ef4444" (Red), "#3b82f6" (Blue)
-    
-    # The State
-    status: str = "ACTIVE" # ACTIVE, STEALTH, COMPLETED, ABORTED
-    progress: int = 0      # 0 to 100
-    
-    # The Intel
-    briefing: str = ""     # Markdown description of the mission
+    codename: str
+    rune: str
+    color: str
+    status: str = "ACTIVE"
+    progress: int = 0
+    briefing: str = ""
     deadline: Optional[str] = None
-    
-    # System Metadata
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-# --- BLOG / CMS (Future Use) ---
 class Article(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     slug: str = Field(index=True)

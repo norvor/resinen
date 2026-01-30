@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel
 
 from app.database import get_session
@@ -65,6 +65,35 @@ async def get_dashboard(
         "loves": loves,
         "transmission": transmission
     }
+
+# --- NEW: PREFERENCES ---
+class WidgetPreferences(BaseModel):
+    prefs: Dict[str, bool]
+
+@router.get("/preferences")
+async def get_preferences(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    # Return default if empty
+    if not user.widget_prefs:
+        return {
+            "history": True, "news": True, "joke": True, "zen": True,
+            "budget": True, "tasks": True, "scribble": True, 
+            "notes": True, "love": True, "transmission": True
+        }
+    return user.widget_prefs
+
+@router.post("/preferences")
+async def save_preferences(
+    data: WidgetPreferences,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    user.widget_prefs = data.prefs
+    session.add(user)
+    await session.commit()
+    return {"status": "updated", "prefs": user.widget_prefs}
 
 # --- BUDGET ---
 @router.post("/budget", response_model=BudgetWidget)
@@ -192,7 +221,6 @@ async def delete_task(id: int, user: User = Depends(get_current_user), session: 
 
 # --- NOTES ---
 
-# NEW: Validation model for partial updates
 class NoteUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
@@ -209,7 +237,7 @@ async def create_note(n: NoteWidget, user: User = Depends(get_current_user), ses
 @router.put("/notes/{id}", response_model=NoteWidget)
 async def update_note(
     id: int, 
-    update_data: NoteUpdate, # Uses the new loose model
+    update_data: NoteUpdate,
     user: User = Depends(get_current_user), 
     session: AsyncSession = Depends(get_session)
 ):
@@ -219,7 +247,6 @@ async def update_note(
     if not note: 
         raise HTTPException(404, detail="Note not found")
 
-    # Only update fields that were actually sent
     if update_data.title is not None:
         note.title = update_data.title
     if update_data.content is not None:
@@ -277,12 +304,12 @@ async def delete_trans(id: int, user: User = Depends(get_current_user), session:
         await session.commit()
     return {"ok": True}
 
+# --- MISSIONS ---
 @router.get("/missions", response_model=List[Mission])
 async def get_missions(
     user: User = Depends(get_current_user), 
     session: AsyncSession = Depends(get_session)
 ):
-    # Fetch all missions, ordered by active status then creation
     res = await session.execute(
         select(Mission).where(Mission.user_id == user.id).order_by(Mission.status, Mission.created_at.desc())
     )
@@ -294,9 +321,8 @@ async def init_mission(
     user: User = Depends(get_current_user), 
     session: AsyncSession = Depends(get_session)
 ):
-    # Force user association
     new_mission = Mission(
-        codename=m.codename.upper(), # Auto-uppercase codenames
+        codename=m.codename.upper(),
         rune=m.rune,
         color=m.color,
         briefing=m.briefing,
@@ -327,7 +353,6 @@ async def update_mission(
     if not mission: 
         raise HTTPException(404, detail="Mission not found")
 
-    # Apply updates
     if update.codename is not None: mission.codename = update.codename.upper()
     if update.rune is not None: mission.rune = update.rune
     if update.status is not None: mission.status = update.status

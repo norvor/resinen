@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { api } from '$lib/api';
-    
     // ASSETS
     import logo from '$lib/assets/logo.svg';
 
@@ -12,16 +11,16 @@
     import HabitMatrix from '$lib/components/widgets/HabitMatrix.svelte';
     import BudgetWidget from '$lib/components/widgets/BudgetWidget.svelte';
     import ScribbleWidget from '$lib/components/widgets/ScribbleWidget.svelte';
-    
     // NEW WIDGETS
     import BreathingOrb from '$lib/components/widgets/BreathingOrb.svelte';
     import TransmissionWidget from '$lib/components/widgets/TransmissionWidget.svelte';
     import LoveWidget from '$lib/components/widgets/LoveWidget.svelte';
-
+    
     // --- STATE ---
     let theme = $state('night-aurora'); 
     let searchQuery = $state("");
-    
+    let isCustomizing = $state(false);
+
     // Data Containers
     let news = $state<any[]>([]);
     let history = $state<any>(null);
@@ -29,20 +28,19 @@
     let planetary = $state<any>(null);
     let zen = $state<any>(null);
 
-    // --- THE AWESOME COLLAGE ENGINE ---
-    const AWESOME_COLLECTION = [
-        { title: "Starry Night", tag: "WILD", url: "https://burgessart.wordpress.com/wp-content/uploads/2012/07/vincent.jpg" },
-        { title: "Neon Tokyo", tag: "CYBER", url: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Deep Nebula", tag: "SPACE", url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Alpine Peak", tag: "NATURE", url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Abstract Flow", tag: "ART", url: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Urban Canyon", tag: "CITY", url: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Golden Hour", tag: "VIBE", url: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=1000&auto=format&fit=crop" },
-        { title: "Icelandic Road", tag: "TRAVEL", url: "https://images.unsplash.com/photo-1476610182048-b716b8518aae?q=80&w=1000&auto=format&fit=crop" },
-    ];
-
-    // State for the 3 collage images
-    let collage = $state(AWESOME_COLLECTION.slice(0, 3));
+    // --- PREFERENCES ---
+    let widgetPrefs = $state({
+        history: true,
+        news: true,
+        joke: true,
+        zen: true,
+        budget: true,
+        tasks: true,
+        scribble: true,
+        notes: true,
+        love: true,
+        transmission: true
+    });
 
     // --- SEARCH FUNCTION ---
     function performSearch(engine: string) {
@@ -55,23 +53,33 @@
             case 'chatgpt': url = `https://chatgpt.com/?q=${q}`; break;
         }
         if(url) window.open(url, '_blank');
-        searchQuery = ""; // Clear after search
+        searchQuery = "";
     }
 
     function handleEnter(e: KeyboardEvent) {
         if (e.key === 'Enter') performSearch('google');
     }
 
+    // --- SAVE LAYOUT ---
+    async function saveLayout() {
+        try {
+            const cleanPrefs = JSON.parse(JSON.stringify(widgetPrefs));
+            await api.widgets.savePreferences(cleanPrefs);
+            isCustomizing = false; 
+        } catch(e) {
+            console.error("Failed to save layout", e);
+            alert("Could not save layout.");
+        }
+    }
+
     // --- LOAD LIVE DATA ---
     onMount(async () => {
-        const shuffled = [...AWESOME_COLLECTION].sort(() => 0.5 - Math.random());
-        collage = shuffled.slice(0, 3);
-
         try {
-            const [feedsData, planetData, zenData] = await Promise.all([
+            const [feedsData, planetData, zenData, prefsData] = await Promise.all([
                 api.widgets.getFeeds(),
                 api.widgets.getPlanetary(),
-                api.widgets.getZen()
+                api.widgets.getZen(),
+                api.widgets.getPreferences()
             ]);
 
             news = feedsData.business || [];
@@ -79,9 +87,13 @@
             joke = feedsData.joke;
             planetary = planetData;
             zen = zenData;
+            
+            if (prefsData) {
+                widgetPrefs = { ...widgetPrefs, ...prefsData };
+            }
         } catch(e) { console.error("Dash Load Error", e); }
     });
-
+    
     function toggleTheme() {
         theme = theme === 'night-aurora' ? 'cloudy' : 'night-aurora';
         document.body.className = theme;
@@ -110,7 +122,7 @@
             <input 
                 type="search" 
                 class="search-input" 
-                placeholder="Google Search..." 
+                placeholder="Search the void..." 
                 bind:value={searchQuery}
                 onkeydown={handleEnter}
                 enterkeyhint="search"
@@ -123,49 +135,116 @@
             </div>
         </div>
 
-        <button class="theme-toggle" onclick={toggleTheme}>
-            {theme === 'night-aurora' ? '🌙 Night Aurora' : '☁️ Cloudy'}
-        </button>
+        <div class="header-actions">
+            <button class="theme-toggle" onclick={() => isCustomizing = true}>⚙️ Layout</button>
+            <button class="theme-toggle" onclick={toggleTheme}>
+                {theme === 'night-aurora' ? '🌙 Night' : '☁️ Day'}
+            </button>
+        </div>
     </header>
+
+    {#if isCustomizing}
+        <div class="modal-backdrop" onclick={() => isCustomizing = false} role="presentation"></div>
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h3>Dashboard Layout</h3>
+                <button class="close-btn" onclick={() => isCustomizing = false}>✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="toggle-grid">
+                    <label class="toggle-card {widgetPrefs.history ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.history}>
+                        <span class="icon">📜</span> <span class="label">History</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.news ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.news}>
+                        <span class="icon">📡</span> <span class="label">News Feed</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.transmission ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.transmission}>
+                        <span class="icon">📶</span> <span class="label">Transmission</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.joke ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.joke}>
+                        <span class="icon">🃏</span> <span class="label">Jokes</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.budget ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.budget}>
+                        <span class="icon">💰</span> <span class="label">Budget</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.zen ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.zen}>
+                        <span class="icon">☯</span> <span class="label">Zen</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.tasks ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.tasks}>
+                        <span class="icon">✅</span> <span class="label">Tasks</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.notes ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.notes}>
+                        <span class="icon">📝</span> <span class="label">Notes</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.love ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.love}>
+                        <span class="icon">❤️</span> <span class="label">Love</span>
+                    </label>
+                    <label class="toggle-card {widgetPrefs.scribble ? 'active' : ''}">
+                        <input type="checkbox" bind:checked={widgetPrefs.scribble}>
+                        <span class="icon">✏️</span> <span class="label">Scribble</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="action-btn cancel" onclick={() => isCustomizing = false}>Cancel</button>
+                <button class="action-btn save" onclick={saveLayout}>Save Changes</button>
+            </div>
+        </div>
+    {/if}
 
     <main class="grid-container">
 
         <div class="col col-left">
-            <div class="card history-card">
-                <div class="icon-box">📜</div>
-                <div class="content">
-                    <div class="label">ON THIS DAY {history?.year || '...'}</div>
-                    <p>{history?.text || "Loading archives..."}</p>
+            {#if widgetPrefs.history}
+                <div class="card history-card">
+                    <div class="icon-box">📜</div>
+                    <div class="content">
+                        <div class="label">ON THIS DAY {history?.year || '...'}</div>
+                        <p>{history?.text || "Loading archives..."}</p>
+                    </div>
                 </div>
-            </div>
+            {/if}
 
-            <TransmissionWidget />
+            {#if widgetPrefs.transmission}
+                <TransmissionWidget />
+            {/if}
 
-            <div class="card news-card">
-                <div class="card-header">
-                    <span>📡 GLOBAL FEED</span>
+            {#if widgetPrefs.news}
+                <div class="card news-card">
+                    <div class="card-header">
+                        <span>📡 GLOBAL FEED</span>
+                    </div>
+                    <div class="news-list">
+                        {#each news.slice(0, 5) as item}
+                            <a href={item.link} target="_blank" class="news-item">
+                                {item.title}
+                            </a>
+                        {/each}
+                        {#if news.length === 0}
+                            <div class="loading">Scanning frequencies...</div>
+                        {/if}
+                    </div>
                 </div>
-                <div class="news-list">
-                    {#each news.slice(0, 5) as item}
-                        <a href={item.link} target="_blank" class="news-item">
-                            {item.title}
-                        </a>
-                    {/each}
-                    {#if news.length === 0}
-                        <div class="loading">Scanning frequencies...</div>
-                    {/if}
-                </div>
-            </div>
+            {/if}
 
-            <div class="card joke-card">
-                <div class="card-header">🃏 MORALE BOOST</div>
-                <div class="joke-body">
-                    <p class="setup">{joke?.setup || "..."}</p>
-                    <p class="punch">{joke?.punchline || ""}</p>
+            {#if widgetPrefs.joke}
+                <div class="card joke-card">
+                    <div class="card-header">🃏 MORALE BOOST</div>
+                    <div class="joke-body">
+                        <p class="setup">{joke?.setup || "..."}</p>
+                        <p class="punch">{joke?.punchline || ""}</p>
+                    </div>
                 </div>
-            </div>
-
-            <HabitMatrix />
+            {/if}
         </div>
 
         <div class="col col-center">
@@ -175,46 +254,43 @@
             
             <section class="workspace-split">
                 <div class="ws-col">
-                    <BudgetWidget />
-                    <div class="card zen-card">
-                        <div class="zen-icon">☯</div>
-                        <p>"{zen?.text || "Stillness is the key."}"</p>
-                    </div>
+                    {#if widgetPrefs.budget}
+                        <BudgetWidget />
+                    {/if}
+
+                    {#if widgetPrefs.zen}
+                        <div class="card zen-card">
+                            <div class="zen-icon">☯</div>
+                            <p>"{zen?.text || "Stillness is the key."}"</p>
+                        </div>
+                    {/if}
                 </div>
 
                 <div class="ws-col">
-                    <TaskWidget />
+                    {#if widgetPrefs.tasks}
+                        <TaskWidget />
+                    {/if}
                     <BreathingOrb />
                 </div>
             </section>
             
             <section class="note-section">
-                <NoteWidget />
+                {#if widgetPrefs.notes}
+                    <NoteWidget />
+                {/if}
             </section>
         </div>
 
         <div class="col col-right">
-            <div class="photo-frame">
-                <div class="visual-card">
-                    <img src={collage[0].url} alt="Inspiration" />
-                </div>
-            </div>
+            <HabitMatrix />
 
-            <div class="split-visuals">
-                <div class="photo-frame small">
-                    <div class="visual-card small">
-                        <img src={collage[1].url} alt="Inspiration" />
-                    </div>
-                </div>
-                <div class="photo-frame small">
-                    <div class="visual-card small">
-                        <img src={collage[2].url} alt="Inspiration" />
-                    </div>
-                </div>
-            </div>
-
-            <LoveWidget />
-            <ScribbleWidget />
+            {#if widgetPrefs.love}
+                <LoveWidget />
+            {/if}
+            
+            {#if widgetPrefs.scribble}
+                <ScribbleWidget />
+            {/if}
         </div>
 
     </main>
@@ -224,17 +300,11 @@
     /* =========================================
        GLOBAL & THEMES
        ========================================= */
-    /* REMOVED: Body reset styles (margin/padding/overflow) 
-       These should be in +layout.svelte to avoid conflicts. */
-    :global(body) { 
-        transition: background 0.5s; 
-    }
-    
+    :global(body) { transition: background 0.5s; }
     :global(body.night-aurora) { background: #020617; color: #e2e8f0; }
     :global(body.cloudy) { background: #f1f5f9; color: #334155; }
 
     .app-background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
-    
     :global(body.night-aurora) .aurora-glow {
         position: absolute; top: -20%; left: -20%; width: 140%; height: 140%;
         background: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.15), transparent 60%),
@@ -243,123 +313,142 @@
     }
 
     /* =========================================
-       LAYOUT GRID (DESKTOP)
+       LAYOUT GRID
        ========================================= */
     .dashboard-layout {
-        /* Desktop: Fixed viewport height, internal scroll */
-        height: 100vh; 
-        display: flex; flex-direction: column;
-        padding: 20px 40px; box-sizing: border-box;
-        overflow-y: auto; /* Internal scrollbar */
+        height: 100vh; display: flex; flex-direction: column;
+        padding: 20px 40px; box-sizing: border-box; overflow-y: auto;
     }
 
     .grid-container {
-        display: grid;
-        grid-template-columns: 320px 1fr 320px;
-        gap: 24px;
-        flex: 1;
-        max-width: 1920px; margin: 0 auto; width: 100%;
+        display: grid; grid-template-columns: 320px 1fr 320px;
+        gap: 24px; flex: 1; max-width: 1920px; margin: 0 auto; width: 100%;
     }
 
     .col { display: flex; flex-direction: column; gap: 24px; }
 
     /* =========================================
-       HEADER & SEARCH DECK
+       HEADER
        ========================================= */
     .top-bar {
-        display: grid; 
-        grid-template-columns: 250px 1fr 250px;
-        align-items: center;
-        margin-bottom: 25px; padding: 10px 0; gap: 20px;
+        display: grid; grid-template-columns: 250px 1fr 250px;
+        align-items: center; margin-bottom: 25px; padding: 10px 0; gap: 20px;
     }
-    
     .brand { display: flex; align-items: center; gap: 15px; }
     .app-logo { height: 40px; width: auto; }
     .logo-text { font-weight: 800; font-size: 1.2rem; letter-spacing: 2px; }
 
-    /* SEARCH DECK */
     .search-deck {
         display: flex; align-items: center; gap: 10px;
         background: rgba(30, 41, 59, 0.6);
         border: 1px solid rgba(255,255,255,0.1);
         padding: 6px 10px; border-radius: 50px;
         width: 100%; max-width: 600px; margin: 0 auto;
-        backdrop-filter: blur(12px);
-        transition: 0.3s;
+        backdrop-filter: blur(12px); transition: 0.3s;
     }
-    :global(body.cloudy) .search-deck {
-        background: #fff; border-color: #cbd5e1; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    }
+    :global(body.cloudy) .search-deck { background: #fff; border-color: #cbd5e1; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 
     .search-input {
         flex: 1; background: transparent; border: none; outline: none;
         color: inherit; font-family: 'Inter', sans-serif; font-size: 0.9rem;
-        padding: 5px 10px;
-        -webkit-appearance: none;
+        padding: 5px 10px; -webkit-appearance: none;
     }
-    
     .search-buttons { display: flex; gap: 5px; }
     .s-btn {
         width: 32px; height: 32px; border-radius: 50%; border: none;
         cursor: pointer; display: flex; align-items: center; justify-content: center;
         transition: 0.2s; color: #fff;
     }
-    .s-btn svg { width: 16px; height: 16px; }
     .s-btn:hover { transform: scale(1.1); }
-
-    .chatgpt { background: #10a37f; }
     .google { background: #4285f4; }
-    .youtube { background: #ff0000; }
-    .news { background: #fbbc05; color: #000; }
-
+    .header-actions { justify-self: end; display: flex; gap: 10px; }
     .theme-toggle {
-        justify-self: end;
-        background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
         color: inherit; padding: 8px 16px; border-radius: 8px; cursor: pointer;
         font-family: inherit; font-size: 0.85rem; font-weight: 600; transition: 0.2s;
     }
+    .theme-toggle:hover { background: rgba(255,255,255,0.1); }
     :global(body.cloudy) .theme-toggle { background: #fff; border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
     /* =========================================
-       CENTER COLUMN
+       MODAL: CUSTOMIZATION
        ========================================= */
-    .mission-section { width: 100%; }
-    
-    .workspace-split {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;
+    .modal-backdrop {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 998;
     }
-    .ws-col { display: flex; flex-direction: column; gap: 24px; }
+    .modal-panel {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 100%; max-width: 800px;
+        background: #0f172a; border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px; padding: 0; z-index: 999;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        color: #fff; display: flex; flex-direction: column;
+    }
+    :global(body.cloudy) .modal-panel { background: #ffffff; color: #0f172a; border-color: #e2e8f0; }
 
-    .note-section { width: 100%; flex: 1; min-height: 400px; display: flex; flex-direction: column; }
-    :global(.note-section .notebook-editor) { min-height: 500px; flex: 1; }
-    :global(.note-section .app-root) { min-height: 500px; flex: 1; }
+    .modal-header {
+        padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    :global(body.cloudy) .modal-header { border-bottom-color: #e2e8f0; }
+    .modal-header h3 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+    .close-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: inherit; opacity: 0.5; }
+    .close-btn:hover { opacity: 1; }
+    .modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+    .toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+
+    .toggle-card {
+        display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px; cursor: pointer; transition: 0.2s;
+    }
+    .toggle-card:hover { background: rgba(255,255,255,0.06); }
+    .toggle-card.active { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.4); }
+    :global(body.cloudy) .toggle-card { background: #f8fafc; border-color: #e2e8f0; }
+    :global(body.cloudy) .toggle-card.active { background: #ecfdf5; border-color: #34d399; }
+    .toggle-card input { display: none; }
+    .toggle-card .icon { font-size: 1.2rem; }
+    .toggle-card .label { font-weight: 500; font-size: 0.95rem; }
+
+    .modal-footer {
+        padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.05);
+        display: flex; justify-content: flex-end; gap: 12px;
+    }
+    :global(body.cloudy) .modal-footer { border-top-color: #e2e8f0; }
+    .action-btn {
+        padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;
+        font-size: 0.9rem; border: none; transition: 0.2s;
+    }
+    .action-btn.cancel { background: transparent; color: inherit; opacity: 0.7; }
+    .action-btn.cancel:hover { opacity: 1; background: rgba(255,255,255,0.05); }
+    .action-btn.save { background: #10b981; color: #fff; }
+    .action-btn.save:hover { background: #059669; }
 
     /* =========================================
-       CARDS & WIDGETS
+       WIDGETS & CARDS
        ========================================= */
+    .mission-section { width: 100%; }
+    .workspace-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%; }
+    .ws-col { display: flex; flex-direction: column; gap: 24px; }
+    .note-section { width: 100%; flex: 1; min-height: 400px; display: flex; flex-direction: column; }
+    :global(.note-section .notebook-editor), :global(.note-section .app-root) { min-height: 500px; flex: 1; }
+
     .card {
-        background: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(12px);
-        border-radius: 12px;
-        padding: 20px;
-        transition: 0.3s;
+        background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(12px); border-radius: 12px; padding: 20px; transition: 0.3s;
     }
     :global(body.cloudy) .card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
-        color: #1e293b;
+        background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.03); color: #1e293b;
     }
 
-    /* History */
     .history-card { display: flex; gap: 15px; align-items: flex-start; background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), transparent); border-color: rgba(245, 158, 11, 0.2); }
     .history-card .icon-box { font-size: 1.5rem; }
     .history-card .label { font-size: 0.7rem; font-weight: 700; color: #facc15; margin-bottom: 4px; letter-spacing: 1px; }
     :global(body.cloudy) .history-card .label { color: #d97706; }
     .history-card p { margin: 0; font-size: 0.9rem; line-height: 1.4; }
 
-    /* News */
     .news-card { padding: 0; overflow: hidden; }
     .news-card .card-header { padding: 12px 20px; background: rgba(0,0,0,0.1); font-size: 0.75rem; font-weight: 700; opacity: 0.8; letter-spacing: 1px; }
     .news-list { display: flex; flex-direction: column; }
@@ -367,103 +456,38 @@
     .news-item:hover { background: rgba(255,255,255,0.03); color: #2dd4bf; }
     :global(body.cloudy) .news-item { border-bottom-color: #f1f5f9; }
     :global(body.cloudy) .news-item:hover { background: #f8fafc; color: #0284c7; }
+    .loading { padding: 20px; text-align: center; opacity: 0.6; font-size: 0.8rem; font-style: italic; }
 
-    /* Joke */
     .joke-card { text-align: center; border-left: 4px solid #a855f7; }
     .joke-card .card-header { font-size: 0.7rem; color: #a855f7; font-weight: 700; margin-bottom: 10px; }
     .setup { font-weight: 600; margin-bottom: 4px; }
     .punch { font-style: italic; opacity: 0.8; }
 
-    /* Zen */
     .zen-card { 
         display: flex; align-items: center; justify-content: center; gap: 15px; 
         background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent); 
-        border-color: rgba(16, 185, 129, 0.2);
-        font-style: italic; color: #10b981; min-height: 80px;
+        border-color: rgba(16, 185, 129, 0.2); font-style: italic; color: #10b981; min-height: 80px;
     }
     .zen-icon { font-size: 1.5rem; }
     :global(body.cloudy) .zen-card { background: #ecfdf5; border-color: #d1fae5; color: #059669; }
 
-    /* Visuals (Collage) */
-    .photo-frame {
-        background: #fff; padding: 10px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        transform: rotate(-1deg);
-        transition: transform 0.3s;
-        display: flex; justify-content: center; align-items: center;
-    }
-    
-    @media (hover: hover) {
-        .photo-frame:hover { transform: rotate(0deg) scale(1.02); z-index: 10; }
-    }
-    
-    .photo-frame.small { padding: 6px; transform: rotate(1deg); }
-
-    .visual-card {
-        height: 200px; width: 100%; padding: 0; 
-        overflow: hidden; 
-        background: #000; border: 1px solid #eee; border-radius: 0;
-        display: flex; justify-content: center; align-items: center;
-    }
-    .visual-card img {
-        width: 100%; height: 100%; object-fit: contain; display: block;
-    }
-    
-    .split-visuals { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .visual-card.small { height: 110px; }
-
     /* =========================================
-       RESPONSIVE BREAKPOINTS
+       RESPONSIVE
        ========================================= */
-    
-    /* Tablet (Two Columns) */
     @media (max-width: 1400px) {
         .dashboard-layout { padding: 10px 20px; }
-        .grid-container { 
-            grid-template-columns: 300px 1fr; 
-            gap: 20px;
-        }
-        .col-right { 
-            grid-column: span 2; 
-            display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-        }
-        .photo-frame { grid-column: span 1; }
-        .split-visuals { grid-column: span 1; }
-        
+        .grid-container { grid-template-columns: 300px 1fr; gap: 20px; }
+        .col-right { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .top-bar { grid-template-columns: 200px 1fr 150px; }
     }
-
-    /* Mobile (Single Column) */
     @media (max-width: 850px) {
-        /* FORCE SCROLL: Overriding layout restrictions */
-        :global(body) {
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-        }
-
-        .dashboard-layout { 
-            height: auto; 
-            min-height: 100dvh; 
-            overflow: visible; /* Let body handle scroll */
-            padding: 10px; 
-        }
-        .grid-container { 
-            display: flex; flex-direction: column; 
-        }
-        
+        :global(body) { overflow-y: auto !important; overflow-x: hidden !important; }
+        .dashboard-layout { height: auto; min-height: 100dvh; overflow: visible; padding: 10px; }
+        .grid-container { display: flex; flex-direction: column; }
         .top-bar { display: flex; flex-direction: column; gap: 15px; }
-        .brand { margin-bottom: 0; }
         .search-deck { width: 100%; order: 2; }
-        .theme-toggle { order: 1; align-self: flex-end; }
-        
-        .search-input { font-size: 16px; }
-        .s-btn { width: 44px; height: 44px; }
-        .search-buttons { gap: 10px; }
-        
+        .header-actions { order: 1; align-self: flex-end; }
         .workspace-split { grid-template-columns: 1fr; }
-        
         .col-right { display: flex; flex-direction: column; }
-        .photo-frame { transform: none; width: 100%; box-sizing: border-box; }
-        .photo-frame:hover { transform: none; }
     }
 </style>

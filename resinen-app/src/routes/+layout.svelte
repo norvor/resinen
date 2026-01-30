@@ -8,7 +8,9 @@
 
     // --- CONFIGURATION ---
     const APPS = [
-        { name: 'Cinema', icon: '🎬', path: '/apps/cinema' }
+        { name: 'Cinema', icon: '🎬', path: '/apps/cinema' },
+        { name: 'Studio', icon: '📷', path: '/apps/studio' },
+        { name: 'TimePass', icon: '😎', path: '/apps/timepass' }
     ];
 
     const GAMES = [

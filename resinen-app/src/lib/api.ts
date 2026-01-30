@@ -1,6 +1,6 @@
 import { logout } from '$lib/stores';
 
-const localDev = false;
+const localDev = true;
 const BASE_URL = localDev ? "http://localhost:8000" : "https://api.resinen.com";
 
 function authHeaders() {
@@ -80,6 +80,19 @@ export const api = {
         },
         deleteTransmission: async (id: number) => {
             await fetch(`${BASE_URL}/widgets/transmission/${id}`, { method: 'DELETE', headers: authHeaders() });
+        },
+
+        getPreferences: async () => {
+            const res = await fetch(`${BASE_URL}/widgets/preferences`, { headers: authHeaders() });
+            return handle(res);
+        },
+        savePreferences: async (prefs: any) => {
+            const res = await fetch(`${BASE_URL}/widgets/preferences`, {
+                method: 'POST', 
+                headers: authHeaders(), 
+                body: JSON.stringify({ prefs })
+            });
+            return handle(res);
         },
 
         // --- LOVES (MATCHING PYTHON: Plural '/loves') ---
