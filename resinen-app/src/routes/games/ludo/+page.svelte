@@ -31,7 +31,6 @@
 
     // --- DERIVED ---
     let allAi = $derived(players.every(p => p.isCpu));
-    let currentPlayer = $derived(players[turn]);
     let turnColor = $derived(COLORS[PLAYER_ORDER[turn] as keyof typeof COLORS].main);
 
     // --- AUDIO / HAPTICS ---
@@ -236,7 +235,6 @@
         return (BASES[pIdx] + localPos) % 52;
     }
 
-    // Converts logic state to CSS Grid Coordinates (1-15)
     function getGridPos(pIdx: number, localPos: number, pieceIdx: number) {
         // 1. BASE STATE
         if (localPos === -1) {
@@ -255,7 +253,6 @@
         }
 
         // 3. TRACK STATE
-        // Logic path for Player 0 (Red)
         const path0 = [
             [7,2], [7,3], [7,4], [7,5], [7,6], // 0-4 (Out & Right)
             [6,7], [5,7], [4,7], [3,7], [2,7], [1,7], // 5-10 (Up)
@@ -290,6 +287,42 @@
         }
 
         return { r, c, z: 0 };
+    }
+
+    // --- COLLISION VISUALIZER ---
+    // Calculates offset if multiple pieces are on the same cell
+    function getVisualOffset(pIdx: number, pieceIdx: number, r: number, c: number) {
+        // Find all pieces at this location
+        const occupants: { pid: number, uid: number }[] = [];
+        
+        players.forEach((p, i) => {
+            p.pieces.forEach((pos, j) => {
+                const posCoords = getGridPos(i, pos, j);
+                if (posCoords.r === r && posCoords.c === c) {
+                    occupants.push({ pid: i, uid: j });
+                }
+            });
+        });
+
+        // If only 1, no offset needed
+        if (occupants.length <= 1) return { x: 0, y: 0, scale: 1 };
+
+        // Deterministic sort to keep positions stable
+        occupants.sort((a, b) => (a.pid * 4 + a.uid) - (b.pid * 4 + b.uid));
+        
+        const myIndex = occupants.findIndex(o => o.pid === pIdx && o.uid === pieceIdx);
+        
+        // Circular spread logic
+        const spread = 20; // Pixels apart
+        const angle = (360 / occupants.length) * myIndex;
+        // Convert to radians
+        const rad = angle * (Math.PI / 180);
+        
+        return {
+            x: Math.cos(rad) * spread,
+            y: Math.sin(rad) * spread,
+            scale: 0.7 // Shrink overlapping pieces
+        };
     }
 
 </script>
@@ -359,6 +392,8 @@
             {#each players as p, pIdx}
                 {#each p.pieces as pos, i}
                     {@const coords = getGridPos(pIdx, pos, i)}
+                    {@const visual = getVisualOffset(pIdx, i, coords.r, coords.c)}
+                    
                     <button class="piece"
                         class:movable={gameStarted && turn === pIdx && validMoves.includes(i)}
                         onclick={() => handleMove(i)}
@@ -367,6 +402,8 @@
                             --p-glow: {COLORS[PLAYER_ORDER[pIdx]].glow};
                             grid-row: {coords.r};
                             grid-column: {coords.c};
+                            transform: translate({visual.x}px, {visual.y}px) scale({visual.scale});
+                            z-index: {visual.scale < 1 ? 20 : 10};
                         ">
                         <div class="piece-head"></div>
                         <div class="piece-base"></div>

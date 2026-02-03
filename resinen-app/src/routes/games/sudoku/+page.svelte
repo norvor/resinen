@@ -12,12 +12,14 @@
     let mistakes = $state(0);
     let solved = $state(false);
 
+    // --- API & LOGIC ---
     async function newGame() {
         loading = true;
         solved = false;
         mistakes = 0;
         selected = null;
         try {
+            // Using the requested API endpoint
             const res = await fetch(`https://api.resinen.com/games/sudoku/new?difficulty=${difficulty}`);
             const data = await res.json();
             puzzle = data.puzzle;
@@ -51,7 +53,6 @@
             checkWin();
         } else {
             mistakes++;
-            // Optional: Shake effect or red flash?
         }
     }
 
@@ -100,7 +101,9 @@
         </div>
 
         {#if loading}
-            <div class="loading">GENERATING MATRIX...</div>
+            <div class="loading">
+                <span>GENERATING MATRIX...</span>
+            </div>
         {:else if solved}
             <div class="win-screen">
                 <h2>SYSTEM SOLVED</h2>
@@ -113,6 +116,8 @@
                         {#each row as cell, c}
                             <div 
                                 class="cell" 
+                                role="button"
+                                tabindex="0"
                                 class:fixed={initialMask[r][c]}
                                 class:selected={selected?.r === r && selected?.c === c}
                                 class:highlight={selected && (selected.r === r || selected.c === c)}
@@ -143,57 +148,70 @@
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
+    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; user-select: none; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none;}
     
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; }
     
     .header { text-align: center; width: 100%; position: relative; }
-    .back-btn { position: absolute; left: -120px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; transition: 0.2s; }
-    .back-btn:hover { color: #fff; border-color: #fff; }
     h1 { font-size: 2rem; letter-spacing: 2px; margin: 0; color: #fff; text-shadow: 0 0 10px #2dd4bf; }
     .stats { font-family: 'JetBrains Mono'; color: #94a3b8; font-size: 0.8rem; margin-top: 5px; display: flex; gap: 20px; justify-content: center; }
     .err { color: #ef4444; }
 
+    /* RESPONSIVE GRID LOGIC */
     .sudoku-grid { 
-        border: 2px solid #2dd4bf; background: rgba(15, 23, 42, 0.9); 
+        /* Calculate cell size to fit:
+           1. 10.5% of Viewport Width (mobile)
+           2. 5.5% of Viewport Height (landscape)
+           3. Max 50px (Desktop)
+        */
+        --cell-size: min(50px, 10.5vw, 5.5vh);
+        
+        border: 2px solid #2dd4bf; 
+        background: rgba(15, 23, 42, 0.9); 
         display: flex; flex-direction: column; 
         box-shadow: 0 0 40px rgba(45, 212, 191, 0.2);
-    }
-    .row { display: flex; }
-    .cell { 
-        width: 50px; height: 50px; 
-        border: 1px solid #334155; 
-        display: flex; justify-content: center; align-items: center; 
-        font-family: 'JetBrains Mono'; font-size: 1.5rem; 
-        cursor: pointer; transition: 0.1s; user-select: none;
+        touch-action: manipulation; /* Prevents double-tap zoom */
     }
     
-    /* Grid Borders (Thicker lines for 3x3 boxes) */
+    .row { display: flex; }
+    
+    .cell { 
+        width: var(--cell-size); 
+        height: var(--cell-size); 
+        border: 1px solid #334155; 
+        display: flex; justify-content: center; align-items: center; 
+        font-family: 'JetBrains Mono'; 
+        font-size: calc(var(--cell-size) * 0.6); /* Responsive font */
+        cursor: pointer; transition: 0.1s;
+    }
+    
+    /* Grid Borders */
     .cell:nth-child(3n) { border-right: 2px solid #2dd4bf; }
     .cell:nth-child(9) { border-right: 1px solid #334155; }
     .row:nth-child(3n) .cell { border-bottom: 2px solid #2dd4bf; }
     .row:nth-child(9) .cell { border-bottom: 1px solid #334155; }
 
     /* States */
-    .cell.fixed { color: #94a3b8; font-weight: normal; } /* Pre-filled numbers */
-    .cell:not(.fixed) { color: #2dd4bf; font-weight: bold; text-shadow: 0 0 10px #2dd4bf; } /* User numbers */
+    .cell.fixed { color: #94a3b8; font-weight: normal; }
+    .cell:not(.fixed) { color: #2dd4bf; font-weight: bold; text-shadow: 0 0 10px #2dd4bf; }
     
     .cell.selected { background: rgba(45, 212, 191, 0.3); border-color: #fff; }
     .cell.highlight { background: rgba(45, 212, 191, 0.1); }
     .cell.match { background: rgba(45, 212, 191, 0.4); color: #fff; }
     .cell.err { color: #ef4444; text-shadow: 0 0 10px #ef4444; animation: shake 0.3s; }
 
-    .numpad { display: flex; gap: 5px; margin-top: 10px; }
+    .numpad { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
     .numpad button { 
-        width: 40px; height: 40px; background: transparent; border: 1px solid #334155; 
+        width: 40px; height: 40px; 
+        background: transparent; border: 1px solid #334155; 
         color: #2dd4bf; font-family: 'JetBrains Mono'; font-size: 1.2rem; cursor: pointer; 
         border-radius: 4px; transition: 0.2s; 
     }
-    .numpad button:hover { border-color: #2dd4bf; background: rgba(45, 212, 191, 0.1); }
+    .numpad button:hover, .numpad button:active { border-color: #2dd4bf; background: rgba(45, 212, 191, 0.1); }
 
-    .controls { display: flex; gap: 10px; margin-top: 20px; }
+    .controls { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
     .controls button {
         background: transparent; border: 1px solid #94a3b8; color: #94a3b8; 
         padding: 8px 20px; font-family: 'JetBrains Mono'; font-size: 0.8rem; 
@@ -201,9 +219,25 @@
     }
     .controls button:hover { border-color: #fff; color: #fff; }
 
-    .loading, .win-screen { height: 450px; width: 450px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #2dd4bf; font-family: 'JetBrains Mono'; border: 2px solid #2dd4bf; background: rgba(15, 23, 42, 0.9); }
-    .win-screen h2 { font-size: 2rem; margin-bottom: 20px; text-shadow: 0 0 20px #2dd4bf; }
+    /* Responsive Loading/Win Screen */
+    .loading, .win-screen { 
+        /* Match grid size approx */
+        height: calc(var(--cell-size, 50px) * 9); 
+        width: calc(var(--cell-size, 50px) * 9); 
+        max-width: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        color: #2dd4bf; font-family: 'JetBrains Mono'; border: 2px solid #2dd4bf; 
+        background: rgba(15, 23, 42, 0.9); 
+    }
+    .win-screen h2 { font-size: 1.5rem; margin-bottom: 20px; text-shadow: 0 0 20px #2dd4bf; text-align: center; }
     .win-screen button { background: #2dd4bf; color: #000; border: none; padding: 10px 30px; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono'; }
 
     @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(5px); } 75% { transform: translateX(-5px); } 100% { transform: translateX(0); } }
+
+    /* MOBILE TWEAKS */
+    @media (max-width: 500px) {
+        h1 { font-size: 1.5rem; }
+        .game-ui { gap: 10px; }
+        .numpad button { width: 10vw; height: 10vw; max-width: 40px; max-height: 40px; }
+    }
 </style>

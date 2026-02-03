@@ -7,6 +7,10 @@
     let best = $state(0);
     let gameOver = $state(false);
 
+    // --- TOUCH STATE ---
+    let touchStartX = 0;
+    let touchStartY = 0;
+
     // --- ENGINE ---
     function init() {
         if (typeof localStorage !== 'undefined') best = parseInt(localStorage.getItem('resinen_2048_best') || '0');
@@ -32,14 +36,9 @@
 
     function move(dir: 'UP'|'DOWN'|'LEFT'|'RIGHT') {
         if (gameOver) return;
-        let moved = false;
         
         // Deep copy
         let newGrid = grid.map(row => [...row]);
-        
-        // Logic for sliding and merging (simplified 1D logic applied 4 times)
-        // ... (Standard 2048 Algo) ...
-        // Implementing concise slide logic:
         
         const slideRow = (row: number[]) => {
             let arr = row.filter(x => x); // Remove zeros
@@ -108,6 +107,35 @@
         if (e.key === 'ArrowRight') move('RIGHT');
     }
 
+    // --- TOUCH HANDLERS ---
+    function handleTouchStart(e: TouchEvent) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+        if (gameOver) return;
+        
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        
+        // Threshold to ignore accidental taps
+        if (Math.abs(diffX) < 30 && Math.abs(diffY) < 30) return;
+
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            // Horizontal
+            if (diffX > 0) move('RIGHT');
+            else move('LEFT');
+        } else {
+            // Vertical
+            if (diffY > 0) move('DOWN');
+            else move('UP');
+        }
+    }
+
     function getColor(val: number) {
         const colors: any = { 
             2: '#eee4da', 4: '#ede0c8', 8: '#f2b179', 16: '#f59563', 
@@ -117,12 +145,26 @@
         return colors[val] || '#3c3a32';
     }
 
-    onMount(() => { init(); window.addEventListener('keydown', handleKey); });
-    onDestroy(() => { if(typeof window!=='undefined') window.removeEventListener('keydown', handleKey); });
+    onMount(() => { 
+        init(); 
+        window.addEventListener('keydown', handleKey);
+        
+        // Prevent scrolling when swiping inside the game area
+        const container = document.querySelector('.game-container');
+        container?.addEventListener('touchmove', (e: Event) => e.preventDefault(), { passive: false });
+    });
+    
+    onDestroy(() => { 
+        if(typeof window!=='undefined') window.removeEventListener('keydown', handleKey); 
+    });
 </script>
 
-<div class="game-container">
+<div class="game-container" 
+     ontouchstart={handleTouchStart} 
+     ontouchend={handleTouchEnd}>
+     
     <div class="bg-layer stars"></div>
+    
     <div class="game-ui">
         <div class="header">
             <h1>NEON 2048</h1>
@@ -142,36 +184,72 @@
             <div class="grid">
                 {#each grid as row}
                     {#each row as cell}
-                        <div class="cell" class:empty={cell===0} style="background-color: {cell ? getColor(cell) : 'rgba(255,255,255,0.05)'}; color: {cell > 4 ? '#fff' : '#776e65'}; box-shadow: 0 0 {cell > 0 ? 10 : 0}px {getColor(cell)}">
+                        <div class="cell" 
+                             class:empty={cell===0} 
+                             style="
+                                background-color: {cell ? getColor(cell) : 'rgba(255,255,255,0.05)'}; 
+                                color: {cell > 4 ? '#fff' : '#776e65'}; 
+                                box-shadow: 0 0 {cell > 0 ? 10 : 0}px {getColor(cell)};
+                             ">
                             {cell > 0 ? cell : ''}
                         </div>
                     {/each}
                 {/each}
             </div>
         </div>
-        <div class="hint">USE ARROW KEYS TO MERGE</div>
+        
+        <div class="hint">
+            <span class="desktop-hint">USE ARROW KEYS TO MERGE</span>
+            <span class="mobile-hint">SWIPE TO MERGE</span>
+        </div>
     </div>
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-    .header { text-align: center; position: relative; }
-    .back-btn { position: absolute; left: -80px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; font-family: 'JetBrains Mono'; }
+    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: none; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none; }
+    
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; }
+    
+    .header { text-align: center; position: relative; width: 100%; }
     h1 { font-size: 2.5rem; margin: 0; color: #facc15; text-shadow: 0 0 20px #facc15; }
-    .stats { display: flex; gap: 20px; justify-content: center; font-family: 'JetBrains Mono'; color: #94a3b8; }
+    .stats { display: flex; gap: 20px; justify-content: center; font-family: 'JetBrains Mono'; color: #94a3b8; margin-top: 5px; }
     .val { color: #fff; font-weight: bold; }
 
-    .board-wrapper { position: relative; padding: 10px; background: #1e293b; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
-    .grid { display: grid; grid-template-columns: repeat(4, 80px); grid-template-rows: repeat(4, 80px); gap: 10px; }
-    .cell { display: flex; justify-content: center; align-items: center; font-size: 2rem; font-weight: bold; border-radius: 4px; transition: 0.1s; }
+    .board-wrapper { position: relative; padding: 10px; background: #1e293b; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,0.5); touch-action: none; }
+    
+    /* RESPONSIVE GRID */
+    .grid { 
+        /* Calculate cell size: Max 80px, but shrink if screen is narrow (20vw) or short (18vh) */
+        --cell-size: min(80px, 20vw, 18vh);
+        --gap: min(10px, 2vw);
+        
+        display: grid; 
+        grid-template-columns: repeat(4, var(--cell-size)); 
+        grid-template-rows: repeat(4, var(--cell-size)); 
+        gap: var(--gap); 
+    }
+    
+    .cell { 
+        display: flex; justify-content: center; align-items: center; 
+        font-weight: bold; border-radius: 4px; transition: 0.1s;
+        /* Dynamic font size based on cell size */
+        font-size: calc(var(--cell-size) * 0.4);
+    }
     .cell.empty { background: rgba(255,255,255,0.05); }
 
-    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 6px; backdrop-filter: blur(5px); }
-    .overlay h2 { color: #ef4444; margin-bottom: 20px; }
+    .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 6px; backdrop-filter: blur(5px); z-index: 10; }
+    .overlay h2 { color: #ef4444; margin-bottom: 20px; font-size: 1.5rem; }
     .overlay button { background: #fff; border: none; padding: 10px 30px; font-weight: bold; cursor: pointer; }
     
-    .hint { font-family: 'JetBrains Mono'; font-size: 0.8rem; color: #64748b; margin-top: 10px; }
+    .hint { font-family: 'JetBrains Mono'; font-size: 0.8rem; color: #64748b; margin-top: 10px; text-align: center;}
+    .mobile-hint { display: none; }
+
+    /* MOBILE TWEAKS */
+    @media (max-width: 600px) {
+        h1 { font-size: 2rem; }
+        .desktop-hint { display: none; }
+        .mobile-hint { display: inline; }
+    }
 </style>

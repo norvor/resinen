@@ -151,7 +151,7 @@
         </div>
 
         <div class="player-area bot">
-            <div class="chips">CHIPS: ${botChips}</div>
+            <div class="chips">BOT: ${botChips}</div>
             <div class="hand">
                 {#each botHand as card}
                     <div class="card back" class:revealed={stage === 'showdown'}>
@@ -190,12 +190,12 @@
                     </div>
                 {/each}
             </div>
-            <div class="chips">CHIPS: ${playerChips}</div>
+            <div class="chips">YOU: ${playerChips}</div>
         </div>
 
         <div class="controls" class:disabled={stage === 'showdown' || loading}>
             <button class="fold" onclick={() => handleAction('fold')}>FOLD</button>
-            <button class="check" onclick={() => handleAction('check')}>CHECK/CALL</button>
+            <button class="check" onclick={() => handleAction('check')}>CHECK</button>
             <button class="bet" onclick={() => handleAction('bet')}>BET $50</button>
         </div>
         
@@ -206,44 +206,75 @@
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #050505; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
+    :global(body) { margin: 0; background-color: #050505; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: manipulation; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none;}
     
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%); }
-    .poker-table { width: 800px; display: flex; flex-direction: column; align-items: center; gap: 20px; z-index: 1; }
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%); }
+    
+    .poker-table { 
+        width: 100%; 
+        max-width: 900px; 
+        display: flex; flex-direction: column; align-items: center; 
+        gap: 2vh; 
+        z-index: 1; 
+        padding: 10px; 
+        box-sizing: border-box; 
+    }
     
     .header { text-align: center; width: 100%; position: relative; }
-    .back-btn { position: absolute; left: 0; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; }
-    h1 { font-size: 2.5rem; letter-spacing: 2px; margin: 0; color: #facc15; text-shadow: 0 0 20px rgba(250, 204, 21, 0.3); }
+    h1 { font-size: clamp(1.5rem, 5vw, 2.5rem); letter-spacing: 2px; margin: 0; color: #facc15; text-shadow: 0 0 20px rgba(250, 204, 21, 0.3); }
     .pot-display { font-family: 'JetBrains Mono'; color: #4ade80; font-size: 1.2rem; margin-top: 5px; }
 
-    /* CARDS */
-    .hand, .community-area { display: flex; gap: 10px; justify-content: center; }
+    /* FLUID CARDS */
+    /* Calculate size: Min 60px, but shrink to 13vw on small screens (5 cards * 13 = 65% width) */
     .card { 
-        width: 60px; height: 90px; background: #fff; border-radius: 6px; 
+        --card-w: min(60px, 13vw);
+        --card-h: calc(var(--card-w) * 1.5);
+        
+        width: var(--card-w); 
+        height: var(--card-h); 
+        background: #fff; border-radius: 6px; 
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         box-shadow: 0 5px 15px rgba(0,0,0,0.5); position: relative; color: #000; font-weight: bold;
         transition: transform 0.3s;
     }
+    
+    .hand, .community-area { display: flex; gap: min(10px, 2vw); justify-content: center; width: 100%; }
+    
     .card.back { background: #1e293b; border: 2px solid #334155; }
     .card.back .pattern { width: 100%; height: 100%; background: repeating-linear-gradient(45deg, #1e293b, #1e293b 10px, #334155 10px, #334155 20px); opacity: 0.3; }
     .card.hidden { opacity: 0.2; background: #000; border: 1px dashed #333; }
-    .rank { font-size: 1.2rem; }
-    .suit { font-size: 1.5rem; }
+    
+    .rank { font-size: clamp(0.8rem, 2vw, 1.2rem); }
+    .suit { font-size: clamp(1rem, 2.5vw, 1.5rem); }
     .red { color: #ef4444; }
 
-    .player-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .player-area { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; }
     .chips { font-family: 'JetBrains Mono'; font-size: 0.9rem; color: #fbbf24; }
     
-    .status-msg { font-family: 'JetBrains Mono'; color: #fff; min-height: 24px; font-size: 1.1rem; text-shadow: 0 0 10px #fff; }
+    .status-msg { font-family: 'JetBrains Mono'; color: #fff; min-height: 24px; font-size: 1.1rem; text-shadow: 0 0 10px #fff; text-align: center; }
 
-    .controls { display: flex; gap: 15px; margin-top: 20px; }
+    .controls { display: flex; gap: 15px; margin-top: 10px; width: 100%; justify-content: center; flex-wrap: wrap; }
     .controls.disabled { opacity: 0.5; pointer-events: none; }
-    button { padding: 10px 20px; font-family: 'JetBrains Mono'; font-weight: bold; border: none; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+    
+    button { 
+        padding: 12px 24px; 
+        font-family: 'JetBrains Mono'; font-weight: bold; border: none; 
+        cursor: pointer; border-radius: 4px; transition: 0.2s; 
+        font-size: 1rem;
+    }
     .fold { background: #ef4444; color: #fff; }
     .check { background: #3b82f6; color: #fff; }
     .bet { background: #facc15; color: #000; }
-    button:hover { transform: translateY(-2px); box-shadow: 0 0 15px currentColor; }
+    
+    button:hover, button:active { transform: translateY(-2px); box-shadow: 0 0 15px currentColor; }
     
     .next-round { background: #fff; color: #000; margin-top: 10px; padding: 10px 40px; }
+
+    /* MOBILE TWEAKS */
+    @media (max-width: 600px) {
+        .controls { gap: 10px; }
+        button { padding: 12px 16px; font-size: 0.9rem; flex: 1; }
+        .next-round { width: 90%; }
+    }
 </style>

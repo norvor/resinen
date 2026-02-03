@@ -12,6 +12,9 @@
     let cpuHits = 0;
     const TOTAL_HITS_NEEDED = 17; // 5+4+3+3+2
 
+    // Mobile View State
+    let activeTab = $state<'RADAR' | 'FLEET'>('RADAR');
+
     // --- LOGIC ---
     async function startGame() {
         // Init Boards
@@ -29,6 +32,7 @@
         gameOver = false;
         playerHits = 0;
         cpuHits = 0;
+        activeTab = 'RADAR'; // Reset to radar on new game
     }
 
     function placeShips(board: number[][]) {
@@ -93,6 +97,9 @@
             myBoard[r][c] = 3; // HIT
             cpuHits++;
             msg = "WARNING: WE ARE HIT!";
+            // Auto-switch to fleet view on mobile if hit
+            if (window.innerWidth < 800) activeTab = 'FLEET';
+            
             if (cpuHits >= TOTAL_HITS_NEEDED) {
                 msg = "CRITICAL FAILURE. WE ARE SUNK.";
                 gameOver = true;
@@ -103,6 +110,8 @@
             myBoard[r][c] = 2; // MISS
             msg = "Enemy missed. Your turn.";
             turn = "PLAYER";
+            // Auto-switch back to radar
+            if (window.innerWidth < 800) activeTab = 'RADAR';
         }
     }
 
@@ -113,19 +122,25 @@
     <div class="bg-layer stars"></div>
     <div class="game-ui">
         <div class="header">
-            <a href="/" class="back-btn">← DOCK</a>
             <h1>NEON BATTLESHIP</h1>
-            <div class="status">{msg}</div>
+            <div class="status" class:alert={turn === 'CPU'}>{msg}</div>
+        </div>
+
+        <div class="mobile-tabs">
+            <button class:active={activeTab === 'RADAR'} onclick={() => activeTab = 'RADAR'}>ENEMY RADAR</button>
+            <button class:active={activeTab === 'FLEET'} onclick={() => activeTab = 'FLEET'}>MY FLEET</button>
         </div>
 
         <div class="boards">
-            <div class="board-container">
+            <div class="board-container" class:hidden-mobile={activeTab !== 'RADAR'}>
                 <h3>ENEMY SECTOR</h3>
                 <div class="grid">
                     {#each enemyBoard as row, r}
                         {#each row as cell, c}
                             <div 
                                 class="cell enemy" 
+                                role="button"
+                                tabindex="0"
                                 class:hit={cell === 3} 
                                 class:miss={cell === 2}
                                 onclick={() => handleFire(r, c)}
@@ -135,7 +150,7 @@
                 </div>
             </div>
 
-            <div class="board-container">
+            <div class="board-container" class:hidden-mobile={activeTab !== 'FLEET'}>
                 <h3>HOME FLEET</h3>
                 <div class="grid">
                     {#each myBoard as row, r}
@@ -159,26 +174,65 @@
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: manipulation; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none; }
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 900px; padding: 10px; }
+    
     .header { text-align: center; width: 100%; position: relative; }
-    .back-btn { position: absolute; left: -100px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; }
-    h1 { font-size: 2.5rem; margin: 0; color: #10b981; text-shadow: 0 0 20px #10b981; letter-spacing: 2px; }
-    .status { font-family: 'JetBrains Mono'; color: #fff; margin-top: 10px; }
+    h1 { font-size: 2rem; margin: 0; color: #10b981; text-shadow: 0 0 20px #10b981; letter-spacing: 2px; }
+    .status { font-family: 'JetBrains Mono'; color: #fff; margin-top: 10px; font-size: 0.9rem; min-height: 1.2rem;}
+    .status.alert { color: #ef4444; }
 
-    .boards { display: flex; gap: 50px; }
+    .boards { display: flex; gap: 50px; justify-content: center; width: 100%; flex-wrap: wrap; }
     .board-container { text-align: center; }
     h3 { font-family: 'JetBrains Mono'; font-size: 0.9rem; color: #64748b; margin-bottom: 10px; }
 
-    .grid { display: grid; grid-template-columns: repeat(10, 30px); gap: 2px; background: #0f172a; padding: 5px; border: 2px solid #334155; border-radius: 4px; }
-    .cell { width: 30px; height: 30px; background: #1e293b; cursor: crosshair; transition: 0.1s; }
-    .cell.enemy:hover { background: #334155; }
+    /* RESPONSIVE GRID */
+    .grid { 
+        /* Cell Size: Min of 30px OR 8.5vw (to fit 10 cols + gap in mobile width) */
+        --cell-size: min(30px, 8.5vw, 4vh);
+        
+        display: grid; 
+        grid-template-columns: repeat(10, var(--cell-size)); 
+        grid-template-rows: repeat(10, var(--cell-size));
+        gap: 2px; 
+        background: #0f172a; 
+        padding: 5px; 
+        border: 2px solid #334155; 
+        border-radius: 4px; 
+        margin: 0 auto;
+    }
+    
+    .cell { width: var(--cell-size); height: var(--cell-size); background: #1e293b; cursor: crosshair; transition: 0.1s; }
+    
+    /* Hover effects only on non-touch devices */
+    @media (hover: hover) {
+        .cell.enemy:hover { background: #334155; }
+    }
     
     .cell.ship { background: #3b82f6; }
     .cell.hit { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
     .cell.miss { background: #94a3b8; opacity: 0.5; }
     
-    .reset-btn { padding: 10px 30px; background: #10b981; color: #000; border: none; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono'; }
+    .reset-btn { padding: 10px 30px; background: #10b981; color: #000; border: none; font-weight: bold; cursor: pointer; font-family: 'JetBrains Mono'; margin-top: 10px; }
+
+    /* MOBILE TABS */
+    .mobile-tabs { display: none; gap: 10px; margin-bottom: 5px; }
+    .mobile-tabs button {
+        background: transparent; border: 1px solid #334155; color: #64748b;
+        padding: 8px 16px; font-family: 'JetBrains Mono'; font-weight: bold;
+        border-radius: 4px; flex: 1; transition: 0.2s;
+    }
+    .mobile-tabs button.active { background: #334155; color: #fff; border-color: #fff; }
+
+    /* MOBILE LAYOUT ADJUSTMENTS */
+    @media (max-width: 800px) {
+        h1 { font-size: 1.5rem; }
+        .boards { gap: 0; }
+        .mobile-tabs { display: flex; width: 100%; max-width: 400px; }
+        
+        /* Hide inactive board on mobile */
+        .hidden-mobile { display: none; }
+    }
 </style>

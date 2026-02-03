@@ -21,7 +21,7 @@
     // Timing Logic
     let bowlStartTime = 0;
     
-    // --- API CALLS ---
+    // --- API CALLS (Unchanged) ---
     async function startDelivery() {
         if (wickets >= 10) { resetGame(); return; }
         
@@ -56,7 +56,6 @@
         bowlStartTime = Date.now();
         
         // CSS Transition handles the visual movement
-        // We trigger it by changing the state variables
         requestAnimationFrame(() => {
             ballTop = 85; // Move to bat position
             ballSize = 40; // Get bigger (3D effect)
@@ -81,7 +80,6 @@
         const delta = hitTime - bowlStartTime;
         
         // Calculate Timing Score
-        // Perfect timing is usually around 80-90% of ballSpeed
         const perfectTime = ballSpeed * 0.9; 
         const diff = Math.abs(delta - perfectTime);
         
@@ -139,7 +137,7 @@
         wickets = 0;
         ballsFaced = 0;
         gameState = 'idle';
-        statusMsg = "Press SPACE to Start Match";
+        statusMsg = "Press START to Start Match";
     }
 
 </script>
@@ -148,8 +146,10 @@
 
 <div class="stadium">
     <div class="scoreboard">
-        <div class="score">{score}/{wickets}</div>
-        <div class="overs">{(ballsFaced/6).toFixed(1)} OVERS</div>
+        <div class="score-group">
+            <div class="score">{score}/{wickets}</div>
+            <div class="overs">{(ballsFaced/6).toFixed(1)} OVERS</div>
+        </div>
         <div class="last-comm">{commentary}</div>
     </div>
 
@@ -176,14 +176,25 @@
 
     <div class="controls-ui">
         {#if gameState === 'idle' || gameState === 'result'}
-            <button class="start-btn" onclick={startDelivery}>
-                {wickets >= 10 ? 'PLAY AGAIN' : 'BOWL NEXT BALL (SPACE)'}
+            <button class="start-btn" onclick={startDelivery} ontouchstart={startDelivery}>
+                {wickets >= 10 ? 'PLAY AGAIN' : 'BOWL (TAP HERE)'}
             </button>
         {:else}
-            <div class="shot-guide">
-                <span class="key">⬆ LOFT (6)</span>
-                <span class="key">⬇ DRIVE (4)</span>
-                <span class="key">SPACE DEFEND</span>
+            <div class="shot-buttons">
+                <button class="shot-btn loft" onclick={() => handleShot('loft')} ontouchstart={(e) => { e.preventDefault(); handleShot('loft'); }}>
+                    <span class="icon">⬆</span>
+                    <span class="label">LOFT</span>
+                </button>
+                
+                <button class="shot-btn defend" onclick={() => handleShot('defend')} ontouchstart={(e) => { e.preventDefault(); handleShot('defend'); }}>
+                    <span class="icon">●</span>
+                    <span class="label">DEFEND</span>
+                </button>
+
+                <button class="shot-btn drive" onclick={() => handleShot('drive')} ontouchstart={(e) => { e.preventDefault(); handleShot('drive'); }}>
+                    <span class="icon">⬇</span>
+                    <span class="label">DRIVE</span>
+                </button>
             </div>
         {/if}
         <div class="status">{statusMsg}</div>
@@ -191,10 +202,10 @@
 </div>
 
 <style>
-    :global(body) { margin: 0; background: #1e293b; color: white; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
+    :global(body) { margin: 0; background: #1e293b; color: white; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: none; }
 
     .stadium {
-        height: 100vh;
+        height: 100dvh; /* Dynamic viewport height for mobile browsers */
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -204,17 +215,20 @@
 
     .scoreboard {
         width: 100%;
-        padding: 20px;
-        background: rgba(0,0,0,0.5);
+        padding: 15px 20px;
+        background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 100%);
         display: flex;
-        justify-content: space-between;
+        flex-direction: column;
         align-items: center;
+        gap: 5px;
         font-family: 'JetBrains Mono';
         z-index: 10;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        box-sizing: border-box;
     }
-    .score { font-size: 2.5rem; color: #fbbf24; font-weight: bold; }
-    .last-comm { color: #fff; font-style: italic; animation: flash 0.5s; }
+    .score-group { display: flex; gap: 20px; align-items: baseline; }
+    .score { font-size: 2rem; color: #fbbf24; font-weight: bold; line-height: 1; }
+    .overs { font-size: 1rem; opacity: 0.8; }
+    .last-comm { color: #fff; font-style: italic; animation: flash 0.5s; font-size: 0.9rem; text-align: center; min-height: 1.2em; }
 
     .field-view {
         flex: 1;
@@ -223,13 +237,14 @@
         position: relative;
         display: flex;
         justify-content: center;
+        overflow: hidden; /* Prevent pitch overflow */
     }
 
     .pitch {
         width: 60%;
-        height: 100%;
-        background: #d97706; /* Mud color */
-        transform: rotateX(40deg) scale(0.8);
+        height: 120%; /* Extend closer to camera */
+        background: #d97706; 
+        transform: rotateX(40deg) scale(0.8) translateY(-10%);
         border-left: 10px solid rgba(255,255,255,0.2);
         border-right: 10px solid rgba(255,255,255,0.2);
         position: relative;
@@ -248,7 +263,7 @@
 
     .crease-line {
         position: absolute;
-        bottom: 15%;
+        bottom: 25%; /* Adjusted for better mobile perspective */
         width: 100%;
         height: 4px;
         background: white;
@@ -265,10 +280,10 @@
 
     .batsman {
         position: absolute;
-        bottom: 5%;
+        bottom: 15%;
         left: 50%;
         transform: translateX(-50%);
-        font-size: 80px;
+        font-size: min(80px, 15vh); /* Responsive size */
         transition: transform 0.1s;
     }
     .batsman.swing {
@@ -276,7 +291,8 @@
     }
 
     .controls-ui {
-        height: 150px;
+        height: auto;
+        min-height: 25vh; /* Ensure touch area is large enough */
         width: 100%;
         background: #0f172a;
         display: flex;
@@ -284,25 +300,59 @@
         justify-content: center;
         align-items: center;
         border-top: 4px solid #334155;
+        padding: 20px 0;
+        gap: 15px;
     }
 
-    .shot-guide { display: flex; gap: 20px; font-family: 'JetBrains Mono'; }
-    .key { background: #334155; padding: 10px 20px; border-radius: 8px; border: 1px solid #475569; }
+    /* New Interactive Buttons */
+    .shot-buttons {
+        display: flex;
+        gap: 10px;
+        width: 90%;
+        max-width: 400px;
+        height: 80px;
+    }
+
+    .shot-btn {
+        flex: 1;
+        background: #334155;
+        border: 1px solid #475569;
+        border-radius: 12px;
+        color: white;
+        font-family: 'JetBrains Mono';
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.1s;
+        touch-action: manipulation;
+    }
+    
+    .shot-btn:active { background: #475569; transform: scale(0.95); }
+    .shot-btn.loft { border-bottom: 4px solid #3b82f6; }
+    .shot-btn.drive { border-bottom: 4px solid #10b981; }
+    .shot-btn.defend { border-bottom: 4px solid #f59e0b; }
+
+    .shot-btn .icon { font-size: 1.5rem; margin-bottom: 4px; }
+    .shot-btn .label { font-size: 0.75rem; opacity: 0.8; }
 
     .start-btn {
         background: #fbbf24;
         color: #000;
-        font-size: 1.5rem;
-        padding: 15px 40px;
+        font-size: 1.2rem;
+        padding: 20px 60px;
         border: none;
-        border-radius: 8px;
+        border-radius: 50px;
         font-weight: bold;
         cursor: pointer;
         box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+        width: 80%;
+        max-width: 300px;
     }
-    .start-btn:hover { transform: scale(1.05); }
+    .start-btn:active { transform: scale(0.98); }
 
-    .status { margin-top: 10px; color: #94a3b8; letter-spacing: 2px; }
+    .status { color: #94a3b8; letter-spacing: 1px; font-size: 0.9rem; text-align: center; }
 
     @keyframes flash { 0% { opacity: 0; } 100% { opacity: 1; } }
 </style>

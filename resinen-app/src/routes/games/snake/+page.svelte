@@ -18,6 +18,10 @@
     let paused = $state(false);
     let gameInterval: any;
 
+    // --- TOUCH STATE ---
+    let touchStartX = 0;
+    let touchStartY = 0;
+
     // --- ENGINE ---
     function startGame() {
         snake = [{x: 10, y: 10}, {x: 10, y: 11}, {x: 10, y: 12}];
@@ -52,7 +56,7 @@
         direction = nextDirection; // Apply buffered input
         const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
-        // 1. Wall Collision (Wrap Around or Die? Let's do DIE for high stakes)
+        // 1. Wall Collision
         if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
             endGame();
             return;
@@ -102,6 +106,35 @@
         if (e.key === 'ArrowRight' && direction.x === 0) nextDirection = {x: 1, y: 0};
     }
 
+    // --- TOUCH HANDLERS ---
+    function handleTouchStart(e: TouchEvent) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+        if (gameOver || paused) return;
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+
+        // Threshold to prevent accidental micro-touches
+        if (Math.abs(diffX) < 20 && Math.abs(diffY) < 20) return;
+
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            // Horizontal
+            if (diffX > 0 && direction.x === 0) nextDirection = {x: 1, y: 0}; // Right
+            if (diffX < 0 && direction.x === 0) nextDirection = {x: -1, y: 0}; // Left
+        } else {
+            // Vertical
+            if (diffY > 0 && direction.y === 0) nextDirection = {x: 0, y: 1}; // Down
+            if (diffY < 0 && direction.y === 0) nextDirection = {x: 0, y: -1}; // Up
+        }
+    }
+
     onMount(() => {
         if(typeof localStorage !== 'undefined') {
             const saved = localStorage.getItem('resinen_snake_hiscore');
@@ -109,6 +142,11 @@
         }
         startGame();
         window.addEventListener('keydown', handleKey);
+        
+        // Prevent default touch actions (scrolling)
+        const container = document.querySelector('.game-container');
+        container?.addEventListener('touchmove', (e: Event) => e.preventDefault(), { passive: false });
+
         return () => {
             clearInterval(gameInterval);
             window.removeEventListener('keydown', handleKey);
@@ -116,7 +154,10 @@
     });
 </script>
 
-<div class="game-container">
+<div class="game-container"
+     ontouchstart={handleTouchStart} 
+     ontouchend={handleTouchEnd}>
+     
     <div class="bg-layer stars"></div>
     
     <div class="game-ui">
@@ -160,35 +201,44 @@
             </div>
         </div>
 
-        <div class="controls-hint">USE ARROW KEYS • P TO PAUSE</div>
+        <div class="controls-hint">
+            <span class="desktop-hint">USE ARROW KEYS • P TO PAUSE</span>
+            <span class="mobile-hint">SWIPE TO MOVE</span>
+        </div>
     </div>
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
+    :global(body) { margin: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: none; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none;}
     
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; }
     
-    .header { text-align: center; width: 100%; position: relative; margin-bottom: 10px; }
-    .back-btn { position: absolute; left: -100px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; }
+    .header { text-align: center; width: 100%; position: relative; margin-bottom: 5px; }
     h1 { font-size: 2.5rem; letter-spacing: 2px; margin: 0; color: #fff; text-shadow: 0 0 20px #4ade80; }
     
     .stats { display: flex; gap: 30px; justify-content: center; font-family: 'JetBrains Mono'; font-size: 1.2rem; color: #94a3b8; margin-top: 5px; }
     .val { color: #4ade80; font-weight: bold; }
     .hi { color: #facc15; }
 
-    .grid-wrapper { position: relative; border: 4px solid #334155; box-shadow: 0 0 50px rgba(74, 222, 128, 0.2); border-radius: 4px; }
+    .grid-wrapper { position: relative; border: 4px solid #334155; box-shadow: 0 0 50px rgba(74, 222, 128, 0.2); border-radius: 4px; touch-action: none; }
 
     .snake-grid { 
+        /* Responsive Grid Calculation:
+           - Base size: 25px
+           - Max width constraint: 4.5vw (so 20 columns fit in 90vw)
+           - Max height constraint: 3.5vh (so vertical fits on phones)
+        */
+        --cell-size: min(25px, 4.5vw, 3.5vh);
+
         display: grid; 
-        grid-template-columns: repeat(20, 25px); 
-        grid-template-rows: repeat(20, 25px);
+        grid-template-columns: repeat(20, var(--cell-size)); 
+        grid-template-rows: repeat(20, var(--cell-size));
         background: #020617;
     }
     
-    .cell { width: 25px; height: 25px; border: 1px solid rgba(255,255,255,0.02); }
+    .cell { width: var(--cell-size); height: var(--cell-size); border: 1px solid rgba(255,255,255,0.02); }
     
     .cell.head { background: #fff; box-shadow: 0 0 15px #fff; border-radius: 2px; z-index: 2; }
     .cell.body { background: #4ade80; box-shadow: 0 0 10px #4ade80; opacity: 0.8; transition: opacity 0.2s; }
@@ -216,6 +266,15 @@
     .overlay button:hover { background: #fff; color: #000; box-shadow: 0 0 20px #fff; }
 
     .controls-hint { font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #64748b; margin-top: 10px; letter-spacing: 1px; }
+    .mobile-hint { display: none; }
 
     @keyframes pulse { from { transform: scale(0.5); opacity: 0.7; } to { transform: scale(0.8); opacity: 1; } }
+
+    /* MOBILE TWEAKS */
+    @media (max-width: 600px) {
+        h1 { font-size: 1.8rem; }
+        .stats { font-size: 0.9rem; gap: 15px; }
+        .desktop-hint { display: none; }
+        .mobile-hint { display: block; }
+    }
 </style>

@@ -131,6 +131,8 @@
             {#each board as sq}
                 <div 
                     class="square {sq.color} {selectedSquare === sq.square ? 'selected' : ''} {validMoves.includes(sq.square) ? 'valid' : ''}"
+                    role="button"
+                    tabindex="0"
                     onclick={() => handleSquareClick(sq)}
                 >
                     {#if sq.piece}<span class="piece">{sq.piece}</span>{/if}
@@ -146,35 +148,56 @@
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
+    :global(body) { margin: 0; background-color: #020617; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: manipulation; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none;}
     
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .game-container { height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; padding: 10px; box-sizing: border-box; }
     
-    .header { text-align: center; width: 100%; position: relative; }
-    .back-btn { position: absolute; left: -120px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; transition: 0.2s; }
-    .back-btn:hover { color: #fff; border-color: #fff; }
+    .header { text-align: center; width: 100%; position: relative; margin-bottom: 5px; }
     h1 { font-size: 2rem; letter-spacing: -1px; margin: 0; color: #fff; text-shadow: 0 0 10px #fbbf24; }
     
-    .status { font-family: 'JetBrains Mono'; color: #2dd4bf; margin-top: 5px; min-height: 24px; }
+    .status { font-family: 'JetBrains Mono'; color: #2dd4bf; margin-top: 5px; min-height: 24px; font-size: 0.9rem; }
     .status.pulse { animation: pulse 1s infinite; color: #fbbf24; }
 
+    /* RESPONSIVE BOARD */
     .chess-board { 
-        display: grid; grid-template-columns: repeat(8, 60px); grid-template-rows: repeat(8, 60px); 
-        border: 10px solid #1e293b; border-radius: 4px; box-shadow: 0 0 50px rgba(0,0,0,0.5); 
+        /* Cell Size Logic:
+           1. Max 60px (Desktop)
+           2. 11vw (Fits 8 cols in mobile width)
+           3. 55vh (Fits in mobile landscape height)
+        */
+        --cell-size: min(60px, 11vw, 55vh);
+        
+        display: grid; 
+        grid-template-columns: repeat(8, var(--cell-size)); 
+        grid-template-rows: repeat(8, var(--cell-size)); 
+        border: 10px solid #1e293b; 
+        border-radius: 4px; 
+        box-shadow: 0 0 50px rgba(0,0,0,0.5); 
         transition: opacity 0.2s;
     }
     .chess-board.locked { opacity: 0.7; pointer-events: none; cursor: wait; }
     
-    .square { width: 60px; height: 60px; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer; position: relative; }
+    .square { 
+        width: var(--cell-size); 
+        height: var(--cell-size); 
+        display: flex; justify-content: center; align-items: center; 
+        font-size: calc(var(--cell-size) * 0.75); /* Pieces scale with cell */
+        cursor: pointer; 
+        position: relative; 
+    }
     .square.light { background-color: #475569; color: #e2e8f0; }
     .square.dark { background-color: #1e293b; color: #475569; }
     .square.selected { background-color: rgba(251, 191, 36, 0.5) !important; }
-    .square:hover { filter: brightness(1.2); }
+    
+    /* Touch devices don't hover well, so we only apply hover on non-touch */
+    @media (hover: hover) {
+        .square:hover { filter: brightness(1.2); }
+    }
     
     .piece { z-index: 2; user-select: none; }
-    .dot { width: 12px; height: 12px; background: rgba(45, 212, 191, 0.5); border-radius: 50%; position: absolute; }
+    .dot { width: 20%; height: 20%; background: rgba(45, 212, 191, 0.5); border-radius: 50%; position: absolute; }
 
     .controls button {
         background: transparent; border: 1px solid #fbbf24; color: #fbbf24; 
@@ -184,4 +207,10 @@
     .controls button:hover { background: #fbbf24; color: #000; box-shadow: 0 0 20px #fbbf24; }
 
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+    /* MOBILE TWEAKS */
+    @media (max-width: 500px) {
+        h1 { font-size: 1.5rem; }
+        .chess-board { border-width: 5px; }
+    }
 </style>

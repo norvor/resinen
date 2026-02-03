@@ -2,15 +2,15 @@
     import { onMount } from 'svelte';
     import { authState, login, logout as storeLogout } from '$lib/stores';
     import { api } from '$lib/api';
-    import { fade, fly } from 'svelte/transition';
+    import { fade, fly, slide } from 'svelte/transition'; // Added slide
     import { cubicOut } from 'svelte/easing';
     import logo from '$lib/assets/logo.svg';
 
     // --- CONFIGURATION ---
     const APPS = [
-        { name: 'Cinema', icon: '🎬', path: '/apps/cinema' },
-        { name: 'Studio', icon: '📷', path: '/apps/studio' },
-        { name: 'TimePass', icon: '😎', path: '/apps/timepass' }
+        { name: 'Cinema', icon: '🎹', path: '/apps/cinema' },
+        { name: 'Cosmos', icon: '🌌', path: '/apps/studio' },
+        { name: 'TimePass', icon: '📙', path: '/apps/timepass' },
     ];
 
     const GAMES = [
@@ -41,6 +41,9 @@
 
     // --- DOCK UI STATE ---
     let isMinimized = $state(false);
+    let activeDrawer = $state<string | null>(null); // 'apps' | 'games' | null
+    
+    // Drag Physics
     let orbX = $state(0);
     let orbY = $state(0);
     let isDragging = $state(false);
@@ -48,7 +51,15 @@
     let initialOrbX = 0, initialOrbY = 0;
     let hasDragged = $state(false); 
 
-    // --- AUTH ACTIONS ---
+    // --- ACTIONS ---
+    function toggleDrawer(drawerId: string) {
+        if (activeDrawer === drawerId) {
+            activeDrawer = null;
+        } else {
+            activeDrawer = drawerId;
+        }
+    }
+
     async function handleLogin() {
         loading = true; error = "";
         try {
@@ -87,7 +98,6 @@
 
     function onDragMove(e: MouseEvent | TouchEvent) {
         if (!isDragging) return;
-        // e.preventDefault(); // Prevent scrolling on mobile while dragging
         
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
@@ -111,6 +121,11 @@
 
     function handleOrbClick() {
         if (!hasDragged) isMinimized = false;
+    }
+
+    function handleMinimize() {
+        isMinimized = true;
+        activeDrawer = null; // Close drawers on minimize
     }
 
     onMount(() => {
@@ -148,7 +163,34 @@
     {/if}
 
     <div class="dock-wrapper" class:hidden={isMinimized}>
-        <button class="minimize-tab" onclick={() => isMinimized = true} aria-label="Minimize Dock">
+        
+        {#if activeDrawer}
+            <div class="dock-drawer" transition:fly={{ y: 20, duration: 300, easing: cubicOut }}>
+                <div class="drawer-header">
+                    <span>{activeDrawer === 'apps' ? 'APPLICATIONS' : 'ENTERTAINMENT'}</span>
+                    <button class="close-drawer" onclick={() => activeDrawer = null}>×</button>
+                </div>
+                <div class="drawer-grid">
+                    {#if activeDrawer === 'apps'}
+                        {#each APPS as app}
+                            <a href={app.path} class="drawer-item" onclick={() => activeDrawer = null}>
+                                <span class="d-icon">{app.icon}</span>
+                                <span class="d-name">{app.name}</span>
+                            </a>
+                        {/each}
+                    {:else}
+                        {#each GAMES as game}
+                            <a href={game.path} class="drawer-item" onclick={() => activeDrawer = null}>
+                                <span class="d-icon">{game.icon}</span>
+                                <span class="d-name">{game.name}</span>
+                            </a>
+                        {/each}
+                    {/if}
+                </div>
+            </div>
+        {/if}
+
+        <button class="minimize-tab" onclick={handleMinimize} aria-label="Minimize Dock">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
@@ -162,7 +204,7 @@
 
             <div class="divider"></div>
 
-            <div class="dock-scroll-area">
+            <div class="dock-scroll-area desktop-view">
                 <div class="dock-apps">
                     {#each APPS as app}
                         <a href={app.path} class="app-link">
@@ -182,10 +224,26 @@
                 </div>
             </div>
 
+            <div class="dock-mobile-controls mobile-view">
+                <button class="mobile-folder" 
+                    class:active={activeDrawer === 'apps'} 
+                    onclick={() => toggleDrawer('apps')}>
+                    <span class="icon">🚀</span>
+                    <span class="label">Apps</span>
+                </button>
+                
+                <button class="mobile-folder" 
+                    class:active={activeDrawer === 'games'}
+                    onclick={() => toggleDrawer('games')}>
+                    <span class="icon">🎮</span>
+                    <span class="label">Games</span>
+                </button>
+            </div>
+
             <div class="divider"></div>
 
             <div class="dock-auth">
-                <button class="logout-icon" onclick={handleLogout} title="Disconnect">⏻</button>
+                <button class="logout-icon" onclick={handleLogout} title="Disconnect">Logout</button>
             </div>
         </div>
     </div>
@@ -257,7 +315,6 @@
         display: flex; justify-content: center; align-items: center; z-index: 9990;
         backdrop-filter: blur(10px); box-shadow: 0 0 30px rgba(45, 212, 191, 0.2);
         touch-action: none;
-        /* Transition is handled inline to fix lag */
     }
     .dock-restore-btn img { width: 32px; filter: drop-shadow(0 0 5px var(--accent)); pointer-events: none; }
     .restore-glow { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; animation: pulse-ring 2s infinite; border: 1px solid var(--accent); opacity: 0; pointer-events: none; }
@@ -267,10 +324,43 @@
         position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999;
         display: flex; flex-direction: column; align-items: center;
         transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s;
-        max-width: 90vw;
+        max-width: 95vw;
     }
     .dock-wrapper.hidden { transform: translateX(-50%) translateY(160%); opacity: 0; pointer-events: none; }
 
+    /* --- DRAWER (Mobile) --- */
+    .dock-drawer {
+        position: absolute; bottom: 100%; margin-bottom: 12px;
+        width: 320px; max-width: 90vw;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        backdrop-filter: blur(20px);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        padding: 16px;
+        display: flex; flex-direction: column; gap: 10px;
+    }
+    .drawer-header {
+        display: flex; justify-content: space-between; align-items: center;
+        font-family: var(--mono); font-size: 0.7rem; color: #94a3b8; font-weight: bold;
+        border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;
+    }
+    .close-drawer { background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
+    
+    .drawer-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .drawer-item {
+        display: flex; flex-direction: column; align-items: center; gap: 5px;
+        text-decoration: none; color: #e2e8f0;
+        padding: 10px 5px; border-radius: 8px;
+        transition: 0.2s;
+    }
+    .drawer-item:hover { background: rgba(255,255,255,0.1); }
+    .drawer-item .d-icon { font-size: 1.8rem; }
+    .drawer-item .d-name { font-size: 0.65rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; opacity: 0.8; }
+
+    /* --- MINIMIZE TAB --- */
     .minimize-tab {
         background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255, 255, 255, 0.15); border-bottom: none;
         width: 60px; height: 24px; border-radius: 12px 12px 0 0; display: flex; justify-content: center; align-items: center;
@@ -278,6 +368,7 @@
     }
     .minimize-tab svg { width: 16px; height: 16px; }
 
+    /* --- MAIN DOCK --- */
     .command-dock { 
         background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 24px; padding: 10px 20px; display: flex; align-items: center; gap: 16px;
@@ -292,16 +383,12 @@
     .dock-item.home img { height: 28px; width: auto; }
     .dock-item.home .label { font-weight: bold; font-family: 'Space Grotesk'; }
 
-    /* Scrollable Area for Icons */
+    /* DESKTOP VIEW */
     .dock-scroll-area {
-        overflow-x: auto;
-        overflow-y: hidden;
-        max-width: 60vw; /* Prevents dock from being too wide */
-        padding-bottom: 4px; /* Space for scrollbar if needed */
-        scrollbar-width: none; /* Firefox */
+        overflow-x: auto; overflow-y: hidden;
+        max-width: 60vw; padding-bottom: 4px; scrollbar-width: none;
     }
-    .dock-scroll-area::-webkit-scrollbar { display: none; } /* Chrome/Safari */
-
+    .dock-scroll-area::-webkit-scrollbar { display: none; } 
     .dock-apps { display: flex; gap: 12px; align-items: center; padding: 0 5px; }
     
     .app-link { 
@@ -320,8 +407,30 @@
     }
     .app-link:hover .tooltip { opacity: 1; transform: translateX(-50%) translateY(-5px); }
 
+    /* MOBILE VIEW CONTROLS */
+    .dock-mobile-controls { display: none; gap: 10px; }
+    .mobile-folder {
+        background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; padding: 5px 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        cursor: pointer; transition: 0.2s; min-width: 60px;
+    }
+    .mobile-folder.active { background: rgba(45, 212, 191, 0.2); border-color: var(--accent); }
+    .mobile-folder .icon { font-size: 1.2rem; margin-bottom: 2px; }
+    .mobile-folder .label { font-size: 0.6rem; color: #cbd5e1; font-family: var(--mono); }
+
     .logout-icon { background: none; border: none; color: #ef4444; font-size: 1.1rem; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
     .logout-icon:hover { transform: scale(1.1); color: #f87171; }
+
+    /* RESPONSIVE SWITCHING */
+    @media (max-width: 768px) {
+        .desktop-view { display: none; }
+        .mobile-view { display: flex; }
+        .command-dock { padding: 10px 15px; }
+    }
+    @media (min-width: 769px) {
+        .desktop-view { display: block; }
+        .mobile-view { display: none; }
+    }
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes pulse-ring { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }

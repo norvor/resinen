@@ -76,6 +76,10 @@
     let dropInterval: any;
     let speed = 1000;
 
+    // --- TOUCH STATE ---
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
     // --- ENGINE ---
     function spawnPiece() {
         const keys = Object.keys(SHAPES);
@@ -238,10 +242,55 @@
         if (e.key === 'p') paused = !paused;
     }
 
+    // --- TOUCH HANDLERS ---
+    function handleTouchStart(e: TouchEvent) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+        if (gameOver || paused) return;
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+
+        // Threshold to consider it a swipe rather than a tap
+        const threshold = 30;
+
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            // Horizontal Swipe
+            if (Math.abs(diffX) > threshold) {
+                if (diffX > 0) move(1); // Right
+                else move(-1); // Left
+            }
+        } else {
+            // Vertical Swipe
+            if (Math.abs(diffY) > threshold) {
+                if (diffY > 0) drop(); // Down (Soft drop)
+                else hardDrop(); // Up (Hard drop)
+            } else {
+                // Tap (Minimal movement)
+                rotate();
+            }
+        }
+    }
+
     onMount(() => {
         spawnPiece();
         dropInterval = setInterval(gameLoop, speed);
         window.addEventListener('keydown', handleKey);
+        
+        // Prevent default touch actions (scrolling) to make game playable
+        window.addEventListener('touchstart', (e) => { 
+             // Only prevent default if touching inside game container to avoid locking whole page
+            if ((e.target as HTMLElement).closest('.game-container')) {
+                // optional: e.preventDefault() if you want to stop all scrolling
+            }
+        }, { passive: false });
+
         return () => {
             clearInterval(dropInterval);
             window.removeEventListener('keydown', handleKey);
@@ -249,7 +298,10 @@
     });
 </script>
 
-<div class="game-container">
+<div class="game-container" 
+     ontouchstart={handleTouchStart} 
+     ontouchend={handleTouchEnd}>
+     
     <div class="bg-layer stars"></div>
     
     <div class="game-ui">
@@ -303,35 +355,42 @@
         </div>
 
         <div class="controls-hint">
-            ARROWS TO MOVE • UP TO ROTATE • SPACE TO DROP • P TO PAUSE
+            <span class="desktop-hint">ARROWS TO MOVE • UP TO ROTATE • SPACE DROP</span>
+            <span class="mobile-hint">SWIPE TO MOVE • TAP TO ROTATE • SWIPE UP HARD DROP</span>
         </div>
     </div>
 </div>
 
 <style>
-    :global(body) { margin: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; }
-    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; }
+    :global(body) { margin: 0; background-color: #0f172a; color: #f8fafc; font-family: 'Space Grotesk', sans-serif; overflow: hidden; touch-action: none; }
+    .stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(#fff 1px, transparent 1px); background-size: 50px 50px; opacity: 0.1; pointer-events: none;}
     
-    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
-    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .game-container { height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; width: 100vw; overflow: hidden;}
+    .game-ui { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; }
     
-    .header { text-align: center; width: 100%; position: relative; margin-bottom: 10px; }
-    .back-btn { position: absolute; left: -100px; top: 50%; transform: translateY(-50%); text-decoration: none; color: #94a3b8; font-family: 'JetBrains Mono'; font-size: 0.8rem; border: 1px solid #334155; padding: 5px 10px; border-radius: 4px; transition: 0.2s; }
-    .back-btn:hover { color: #fff; border-color: #fff; }
+    .header { text-align: center; width: 100%; position: relative; margin-bottom: 5px; }
     h1 { font-size: 2.5rem; letter-spacing: 2px; margin: 0; color: #fff; text-shadow: 0 0 20px #2dd4bf; }
     
     .stats { display: flex; gap: 30px; justify-content: center; font-family: 'JetBrains Mono'; font-size: 1rem; color: #94a3b8; margin-top: 5px; }
     .val { color: #fff; font-weight: bold; }
 
+    /* RESPONSIVE GRID LOGIC */
     .tetris-board { 
-        display: grid; grid-template-rows: repeat(20, 30px); 
-        border: 2px solid #334155; background: rgba(15, 23, 42, 0.9); 
-        box-shadow: 0 0 50px rgba(0,0,0,0.5); position: relative;
+        /* Calculate cell size to fit 20 rows within 75% of viewport height, or max 35px */
+        --cell-size: min(35px, 3.8vh, 9vw);
+        
+        display: grid; 
+        grid-template-rows: repeat(20, var(--cell-size)); 
+        border: 2px solid #334155; 
+        background: rgba(15, 23, 42, 0.9); 
+        box-shadow: 0 0 50px rgba(0,0,0,0.5); 
+        position: relative;
+        touch-action: none; /* Crucial for swipe detection without scrolling */
     }
     
-    .row { display: grid; grid-template-columns: repeat(10, 30px); }
+    .row { display: grid; grid-template-columns: repeat(10, var(--cell-size)); }
     
-    .block { width: 30px; height: 30px; box-sizing: border-box; }
+    .block { width: var(--cell-size); height: var(--cell-size); box-sizing: border-box; }
     .block.empty { border: 1px solid rgba(255,255,255,0.05); }
     .block.active { border: 1px solid rgba(255,255,255,0.5); }
     .block.ghost { border: 2px dashed; opacity: 0.3; }
@@ -348,8 +407,19 @@
         background: #fff; color: #000; border: none; padding: 10px 30px; 
         font-family: 'JetBrains Mono'; font-weight: bold; cursor: pointer; 
         transition: 0.2s;
+        font-size: 1.2rem;
     }
     .overlay button:hover { transform: scale(1.1); }
 
-    .controls-hint { font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #64748b; margin-top: 10px; letter-spacing: 1px; }
+    .controls-hint { font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #64748b; margin-top: 10px; letter-spacing: 1px; text-align: center; padding: 0 10px; }
+    
+    .mobile-hint { display: none; }
+
+    /* MOBILE ADJUSTMENTS */
+    @media (max-width: 600px) {
+        h1 { font-size: 1.8rem; }
+        .stats { font-size: 0.9rem; gap: 15px; }
+        .desktop-hint { display: none; }
+        .mobile-hint { display: block; }
+    }
 </style>

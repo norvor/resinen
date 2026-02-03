@@ -34,6 +34,7 @@
 
         try {
             const res = await api.widgets.createTask(tempContent, tempPrio);
+            // Reassign array to trigger update
             tasks = [...tasks, res];
             saveLocal();
             // Reset
@@ -46,17 +47,27 @@
         }
     }
 
-    async function toggleTask(t: Task) {
-        // Optimistic
-        t.is_done = !t.is_done;
+    async function toggleTask(id: number) {
+        // 1. Find index of task
+        const index = tasks.findIndex(t => t.id === id);
+        if (index === -1) return;
+
+        // 2. Create new state (Immutable update ensures UI refresh)
+        const updatedTasks = [...tasks];
+        updatedTasks[index] = { ...updatedTasks[index], is_done: !updatedTasks[index].is_done };
+        tasks = updatedTasks;
+        
         saveLocal();
 
+        // 3. Sync API
         try {
-            await api.widgets.updateTask(t.id, { is_done: t.is_done });
+            await api.widgets.updateTask(id, { is_done: tasks[index].is_done });
         } catch(e) { 
             console.error("Sync failed");
             // Revert on fail
-            t.is_done = !t.is_done; 
+            const revertTasks = [...tasks];
+            revertTasks[index] = { ...revertTasks[index], is_done: !revertTasks[index].is_done };
+            tasks = revertTasks;
         }
     }
 
@@ -118,7 +129,7 @@
                     class="check-circle" 
                     style="border-color: {getPriorityColor(t.priority)}"
                     class:checked={t.is_done}
-                    onclick={() => toggleTask(t)}
+                    onclick={() => toggleTask(t.id)}
                     aria-label="Toggle Task"
                 >
                     {#if t.is_done}✓{/if}
@@ -147,7 +158,6 @@
         display: flex;
         flex-direction: column;
         gap: 15px;
-        /* Using fit-content with constraints instead of rigid min-height */
         width: 100%;
         box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
@@ -197,13 +207,11 @@
     /* === LIST & SCROLLING === */
     .task-list { 
         display: flex; flex-direction: column; gap: 6px; 
-        /* FIXED MAX HEIGHT for scrolling after ~4 items (approx 45px each) */
         max-height: 200px; 
         overflow-y: auto;
-        padding-right: 4px; /* Space for scrollbar */
+        padding-right: 4px;
     }
 
-    /* Scrollbar Styling */
     .task-list::-webkit-scrollbar { width: 4px; }
     .task-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 2px; }
     .task-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }

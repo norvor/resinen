@@ -1,338 +1,484 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { fly, scale, fade } from 'svelte/transition';
-    import { elasticOut, cubicOut } from 'svelte/easing';
+    import { onMount, onDestroy } from 'svelte';
+    import { fly, fade, scale } from 'svelte/transition';
+    import { elasticOut } from 'svelte/easing';
+    import * as THREE from 'three';
 
-    // --- 1. DATA (The "Film Rolls") ---
-    type Photo = {
-        id: string;
-        url: string;
-        category: 'SPACE' | 'NATURE' | 'CITIES' | 'ANIMALS';
-        title: string;
-        date: string; // Added date for retro feel
-        rotation: number; // For the "scattered" look
-    };
+    // --- 1. NASA / SPACE ARCHIVE (20 IMAGES) ---
+const NASA_ARCHIVE = [
+        // REEL 01: NEBULAS
+        { id: 'n1', title: 'PILLARS OF CREATION', date: 'HST-2014', url: 'https://images-assets.nasa.gov/image/PIA18906/PIA18906~medium.jpg' },
+        { id: 'n2', title: 'COSMIC CLIFFS', date: 'JWST-2022', url: 'https://images-assets.nasa.gov/image/PIA25287/PIA25287~medium.jpg' },
+        { id: 'n3', title: 'ORION NEBULA', date: 'SPITZER', url: 'https://images-assets.nasa.gov/image/PIA08653/PIA08653~medium.jpg' },
+        { id: 'n4', title: 'TARANTULA NEBULA', date: 'HST-2023', url: 'https://images-assets.nasa.gov/image/PIA25432/PIA25432~medium.jpg' },
+        { id: 'n5', title: 'HORSEHEAD NEBULA', date: 'EUCLID', url: 'https://images-assets.nasa.gov/image/PIA16839/PIA16839~medium.jpg' },
 
-    const RAW_DATA: Photo[] = [
-        // SPACE
-        { id: 's1', category: 'SPACE', title: 'Deep Nebula', date: 'AUG 1992', rotation: -2, url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1600&auto=format&fit=crop' },
-        { id: 's2', category: 'SPACE', title: 'The Void', date: 'SEP 1994', rotation: 3, url: 'https://images.unsplash.com/photo-1506318137071-a8bcbf6d2806?q=80&w=1600&auto=format&fit=crop' },
-        
-        // NATURE
-        { id: 'n1', category: 'NATURE', title: 'Alpine Peak', date: 'JAN 1988', rotation: 1, url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1600&auto=format&fit=crop' },
-        { id: 'n2', category: 'NATURE', title: 'Silent Forest', date: 'OCT 1995', rotation: -3, url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1600&auto=format&fit=crop' },
-        { id: 'n3', category: 'NATURE', title: 'Desert Storm', date: 'JUL 1985', rotation: 2, url: 'https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?q=80&w=1600&auto=format&fit=crop' },
+        // REEL 02: PLANETARY SYSTEMS
+        { id: 'p1', title: 'JUPITER ABYSS', date: 'JUNO', url: 'https://images-assets.nasa.gov/image/PIA22946/PIA22946~medium.jpg' },
+        { id: 'p2', title: 'SATURN & RINGS', date: 'CASSINI', url: 'https://images-assets.nasa.gov/image/PIA14922/PIA14922~medium.jpg' },
+        { id: 'p3', title: 'MARS PERSEVERANCE', date: 'ROVER', url: 'https://images-assets.nasa.gov/image/PIA25666/PIA25666~medium.jpg' },
+        { id: 'p4', title: 'BLUE MARBLE', date: 'EARTH', url: 'https://images-assets.nasa.gov/image/PIA18033/PIA18033~medium.jpg' },
+        { id: 'p5', title: 'LUNAR TERMINATOR', date: 'GALILEO', url: 'https://images-assets.nasa.gov/image/PIA00405/PIA00405~medium.jpg' },
 
-        // CITIES
-        { id: 'c1', category: 'CITIES', title: 'Neon Tokyo', date: 'NOV 2077', rotation: -1, url: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1600&auto=format&fit=crop' },
-        { id: 'c2', category: 'CITIES', title: 'NYC Rain', date: 'MAR 1999', rotation: 4, url: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?q=80&w=1600&auto=format&fit=crop' },
-        
-        // ANIMALS
-        { id: 'a1', category: 'ANIMALS', title: 'The King', date: 'FEB 2001', rotation: -2, url: 'https://images.unsplash.com/photo-1614027164847-1b28cfe1df60?q=80&w=1600&auto=format&fit=crop' },
+        // REEL 03: DEEP FIELD
+        { id: 'd1', title: 'ANDROMEDA GALAXY', date: 'GALEX', url: 'https://images-assets.nasa.gov/image/PIA15416/PIA15416~medium.jpg' },
+        { id: 'd2', title: 'MILKY WAY CORE', date: 'CHANDRA', url: 'https://images-assets.nasa.gov/image/PIA12348/PIA12348~medium.jpg' },
+        { id: 'd3', title: 'BLACK HOLE VIZ', date: 'SIM', url: 'https://images-assets.nasa.gov/image/PIA23465/PIA23465~medium.jpg' },
+        { id: 'd4', title: 'WESTERLUND CLUSTER', date: 'HUBBLE', url: 'https://images-assets.nasa.gov/image/PIA19343/PIA19343~medium.jpg' },
+        { id: 'd5', title: 'CRAB NEBULA', date: 'X-RAY', url: 'https://images-assets.nasa.gov/image/PIA03606/PIA03606~medium.jpg' },
+
+        // REEL 04: HUMAN EXPLORATION
+        { id: 'h1', title: 'THE UNTETHERED', date: '1984', url: 'https://images-assets.nasa.gov/image/s84-27017/s84-27017~medium.jpg' },
+        { id: 'h2', title: 'SPACE STATION', date: 'ISS', url: 'https://images-assets.nasa.gov/image/iss056e201262/iss056e201262~medium.jpg' },
+        { id: 'h3', title: 'ATLANTIS LAUNCH', date: 'STS-135', url: 'https://images-assets.nasa.gov/image/KSC-2011-4835/KSC-2011-4835~medium.jpg' },
+        { id: 'h4', title: 'CREW DRAGON', date: 'SPACEX', url: 'https://images-assets.nasa.gov/image/nhq202005300045/nhq202005300045~medium.jpg' },
+        { id: 'h5', title: 'ARTEMIS EARTHRISE', date: 'ORION', url: 'https://images-assets.nasa.gov/image/art001e000672/art001e000672~medium.jpg' }
     ];
 
-    // --- 2. STATE ---
-    let activeCategory = $state<string>('ALL');
-    let focusedPhoto = $state<Photo | null>(null);
-
-    // Filter Logic
-    let filteredPhotos = $derived(
-        activeCategory === 'ALL' 
-        ? RAW_DATA 
-        : RAW_DATA.filter(p => p.category === activeCategory)
-    );
-
-    function focusPhoto(photo: Photo) {
-        focusedPhoto = photo;
+    // Chunk slides into "Reels" of 5
+    function chunkArray(arr: any[], size: number) {
+        return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+            arr.slice(i * size, i * size + size)
+        );
     }
 
-    function closeFocus() {
-        focusedPhoto = null;
+    const chunks = chunkArray(NASA_ARCHIVE, 5);
+    const ARCHIVE = chunks.map((slides, i) => ({
+        id: `REEL-${i}`,
+        label: `REEL 0${i + 1}`,
+        // Color coding the reels: Green(Nebula), Amber(Planets), Blue(Deep Space), Pink(Human)
+        color: ['#10b981', '#f59e0b', '#3b82f6', '#ec4899'][i % 4], 
+        slides: slides
+    }));
+
+    // --- 2. STATE ---
+    let activeCartridge = $state<any>(null);
+    let slideIndex = $state(0);
+    let isProjectorOn = $state(false);
+    let isTransitioning = $state(false);
+    
+    // ThreeJS References
+    let canvasContainer: HTMLElement;
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
+    let renderer: THREE.WebGLRenderer;
+    let starSystem: THREE.Points;
+    let cloudSystem: THREE.Group;
+    let frameId: number;
+
+    // --- 3. THREE.JS COSMIC ENGINE ---
+    onMount(() => {
+        initThreeJS();
+        animate();
+        window.addEventListener('resize', onResize);
+    });
+
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('resize', onResize);
+            cancelAnimationFrame(frameId);
+            renderer?.dispose();
+        }
+    });
+
+    function initThreeJS() {
+        scene = new THREE.Scene();
+        // Fog for depth
+        scene.fog = new THREE.FogExp2(0x000000, 0.001);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.z = 1;
+        camera.rotation.x = 1.16;
+        camera.rotation.y = -0.12;
+        camera.rotation.z = 0.27;
+
+        renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        canvasContainer.appendChild(renderer.domElement);
+
+        // A. STARS
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 6000;
+        const positions = new Float32Array(starCount * 3);
+        const velocities = []; // Store velocity for warp effect
+
+        for(let i=0; i<starCount; i++) {
+            positions[i*3] = (Math.random() - 0.5) * 600;
+            positions[i*3+1] = (Math.random() - 0.5) * 600;
+            positions[i*3+2] = (Math.random() - 0.5) * 600;
+            velocities.push(0);
+        }
+        
+        starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const starMat = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.7,
+            transparent: true,
+            opacity: 0.8
+        });
+        starSystem = new THREE.Points(starGeo, starMat);
+        scene.add(starSystem);
+
+        // B. NEBULA CLOUDS (Procedural Texture)
+        cloudSystem = new THREE.Group();
+        const cloudTexture = createCloudTexture();
+        const cloudGeo = new THREE.PlaneGeometry(500, 500);
+        
+        // Add multiple cloud layers with different cosmic colors
+        const colors = [0x6366f1, 0xec4899, 0x10b981, 0x3b82f6]; // Indigo, Pink, Emerald, Blue
+
+        for(let p=0; p<15; p++) {
+            const material = new THREE.MeshLambertMaterial({
+                map: cloudTexture,
+                transparent: true,
+                opacity: 0.15, // Very subtle
+                color: colors[p % colors.length],
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const cloud = new THREE.Mesh(cloudGeo, material);
+            cloud.position.set(
+                Math.random()*800 - 400,
+                Math.random()*800 - 400,
+                Math.random()*800 - 600 // Push them back
+            );
+            cloud.rotation.z = Math.random() * 2 * Math.PI;
+            (cloud as any).rotationSpeed = Math.random() * 0.002 - 0.001; // Custom property
+            cloudSystem.add(cloud);
+        }
+        scene.add(cloudSystem);
+
+        // Ambient Light for clouds
+        const ambient = new THREE.AmbientLight(0x555555);
+        scene.add(ambient);
+        
+        // Directional Light (The "Sun")
+        const directionalLight = new THREE.DirectionalLight(0xff8c19);
+        directionalLight.position.set(0,0,1);
+        scene.add(directionalLight);
+    }
+
+    // Generate a smoke texture in memory (No assets needed!)
+    function createCloudTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 32;
+        const context = canvas.getContext('2d');
+        if(!context) return new THREE.Texture();
+
+        const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+        gradient.addColorStop(0, 'rgba(255,255,255,1)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        context.fillStyle = gradient;
+        context.fillRect(0,0,32,32);
+
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+        // Rotate Stars
+        starSystem.rotation.y -= 0.0005;
+        
+        // Warp Effect logic (if transitioning)
+        const positions = starSystem.geometry.attributes.position.array as Float32Array;
+        for(let i=0; i<positions.length; i+=3) {
+            // Slight movement towards camera
+            positions[i+2] += 0.1;
+            if (positions[i+2] > 200) positions[i+2] = -200;
+        }
+        starSystem.geometry.attributes.position.needsUpdate = true;
+
+        // Rotate Clouds
+        cloudSystem.children.forEach((cloud: any) => {
+            cloud.rotation.z += cloud.rotationSpeed;
+        });
+
+        renderer.render(scene, camera);
+        frameId = requestAnimationFrame(animate);
+    }
+
+    // --- ACTIONS ---
+    function loadCartridge(cart: any) {
+        activeCartridge = cart;
+        slideIndex = 0;
+        isProjectorOn = true;
+        // Warp speed effect could be added here by modifying star velocity
+    }
+
+    function ejectCartridge() {
+        isProjectorOn = false;
+        setTimeout(() => { activeCartridge = null; }, 500);
+    }
+
+    function nextSlide() {
+        if (!activeCartridge || isTransitioning) return;
+        triggerTransition(() => {
+            slideIndex = (slideIndex + 1) % activeCartridge.slides.length;
+        });
+    }
+
+    function prevSlide() {
+        if (!activeCartridge || isTransitioning) return;
+        triggerTransition(() => {
+            slideIndex = (slideIndex - 1 + activeCartridge.slides.length) % activeCartridge.slides.length;
+        });
+    }
+
+    function triggerTransition(callback: () => void) {
+        isTransitioning = true;
+        // Simulate projector "Dark" phase
+        setTimeout(() => callback(), 150);
+        setTimeout(() => isTransitioning = false, 300);
+    }
+
+    function handleKey(e: KeyboardEvent) {
+        if (!isProjectorOn) return;
+        if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+        if (e.key === 'ArrowLeft') prevSlide();
+        if (e.key === 'Escape') ejectCartridge();
     }
 </script>
 
-<svelte:head>
-    <title>Resinen Analog Studio</title>
-</svelte:head>
+<svelte:window onkeydown={handleKey} />
+<svelte:head><title>Cosmic Studio</title></svelte:head>
 
-<div class="desk-surface">
-    
-    <header class="studio-header">
-        <div class="brand-plate">
-            <h1>RESINEN STUDIO</h1>
-            <span class="est">EST. 2025</span>
+<div class="three-canvas" bind:this={canvasContainer}></div>
+
+<div class="studio-ui">
+
+    {#if !isProjectorOn}
+        <div class="shelf-container" in:fade>
+            <h1 class="shelf-title">
+                <span class="neon-text">COSMIC ARCHIVE</span>
+            </h1>
+            
+            <div class="cartridge-grid">
+                {#each ARCHIVE as cart, i}
+                    <button 
+                        class="cartridge-box"
+                        style="--accent: {cart.color}"
+                        onclick={() => loadCartridge(cart)}
+                        in:fly={{ y: 50, delay: i * 100, easing: elasticOut }}
+                    >
+                        <div class="energy-core"></div>
+                        <div class="holo-label">
+                            <span class="label-text">{cart.label}</span>
+                            <span class="count">{cart.slides.length} SLIDES</span>
+                        </div>
+                    </button>
+                {/each}
+            </div>
+            
+            <a href="/" class="exit-btn">ABORT SIMULATION</a>
         </div>
+    {/if}
 
-        <nav class="film-tabs">
-            {#each ['ALL', 'SPACE', 'NATURE', 'CITIES', 'ANIMALS'] as cat}
-                <button 
-                    class="tab {activeCategory === cat ? 'active' : ''}"
-                    onclick={() => activeCategory = cat}
-                >
-                    {cat}
-                </button>
-            {/each}
-        </nav>
-        
-        <a href="/" class="exit-link">CLOSE ALBUM ✕</a>
-    </header>
-
-    <main class="album-container">
-        <div class="photo-grid">
-            {#each filteredPhotos as photo (photo.id)}
-                <button 
-                    class="polaroid"
-                    style="transform: rotate({photo.rotation}deg)"
-                    onclick={() => focusPhoto(photo)}
-                    in:fly={{ y: 50, duration: 800, easing: elasticOut }}
-                >
-                    <div class="frame">
-                        <img src={photo.url} alt={photo.title} loading="lazy" />
-                        <div class="tape"></div>
+    {#if isProjectorOn && activeCartridge}
+        <div class="projector-scene" transition:fade={{ duration: 1000 }}>
+            
+            <div class="holo-screen">
+                {#if !isTransitioning}
+                    <div class="projector-beam"></div>
+                    
+                    <div class="slide-wrapper" in:scale={{ start: 0.9, duration: 400, easing: elasticOut }}>
+                        <img 
+                            src={activeCartridge.slides[slideIndex].url} 
+                            alt="Slide" 
+                            class="projected-img"
+                        />
+                        <div class="hex-grid"></div>
+                        <div class="scanline"></div>
                     </div>
-                    <div class="caption">
-                        <span class="handwritten">{photo.title}</span>
-                        <span class="stamp">{photo.date}</span>
-                    </div>
-                </button>
-            {/each}
-        </div>
-    </main>
-
-    {#if focusedPhoto}
-        <div class="overlay" transition:fade={{ duration: 200 }} onclick={closeFocus} role="presentation">
-            <div 
-                class="photo-inspection"
-                in:scale={{ start: 0.8, duration: 400, easing: cubicOut }}
-                onclick={(e) => e.stopPropagation()}
-                role="presentation"
-            >
-                <div class="large-polaroid">
-                    <img src={focusedPhoto.url} alt={focusedPhoto.title} />
-                    <div class="large-caption">
-                        <h2>{focusedPhoto.title}</h2>
-                        <div class="metadata">
-                            <span>CATEGORY: {focusedPhoto.category}</span>
-                            <span>CAPTURED: {focusedPhoto.date}</span>
+                    
+                    <div class="slide-info">
+                        <h2>{activeCartridge.slides[slideIndex].title}</h2>
+                        <div class="meta">
+                            <span class="pill" style="border-color: {activeCartridge.color}">
+                                {activeCartridge.slides[slideIndex].date}
+                            </span>
+                            <span class="pill">{slideIndex + 1} / {activeCartridge.slides.length}</span>
                         </div>
                     </div>
-                </div>
-                <button class="put-back-btn" onclick={closeFocus}>Put Back</button>
+                {:else}
+                    <div class="warp-flash"></div>
+                {/if}
             </div>
+
+            <div class="glass-dock">
+                <button class="dock-btn eject" onclick={ejectCartridge}>⏏</button>
+                <div class="nav-cluster">
+                    <button class="dock-btn" onclick={prevSlide}>◀</button>
+                    <div class="dots">
+                        {#each activeCartridge.slides as _, i}
+                            <div class="dot {i === slideIndex ? 'active' : ''}" style="background-color: {i === slideIndex ? activeCartridge.color : '#555'}"></div>
+                        {/each}
+                    </div>
+                    <button class="dock-btn" onclick={nextSlide}>▶</button>
+                </div>
+            </div>
+
         </div>
     {/if}
 
 </div>
 
 <style>
-    /* --- FONTS & TEXTURES --- */
-    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Permanent+Marker&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700;900&display=swap');
 
     /* --- LAYOUT --- */
-    .desk-surface {
-        min-height: 100vh;
-        background-color: #2a2320;
-        /* Wood Texture Pattern */
-        background-image: 
-            linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)),
-            url("https://www.transparenttextures.com/patterns/wood-pattern.png");
-        display: flex; flex-direction: column;
-        overflow-x: hidden;
-        color: #e2e8f0;
-    }
-
-    /* --- HEADER --- */
-    .studio-header {
-        padding: 20px 40px;
-        display: flex; justify-content: space-between; align-items: center;
-        background: rgba(0,0,0,0.4);
-        border-bottom: 2px solid rgba(255,255,255,0.05);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-
-    .brand-plate {
-        border: 2px solid #eab308;
-        padding: 8px 16px;
-        border-radius: 4px;
-        color: #eab308;
-        text-align: center;
-        background: rgba(0,0,0,0.6);
-    }
-    .brand-plate h1 {
-        margin: 0; font-family: 'Courier Prime', monospace; 
-        font-weight: 700; font-size: 1.2rem; letter-spacing: 2px;
-    }
-    .brand-plate .est {
-        font-size: 0.7rem; opacity: 0.8; font-family: 'Courier Prime', monospace;
-    }
-
-    .film-tabs {
-        display: flex; gap: 10px;
-        background: #1c1917;
-        padding: 5px; border-radius: 50px;
-        box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
-    }
-    .tab {
-        background: transparent; border: none;
-        color: #78716c;
-        font-family: 'Courier Prime', monospace; font-weight: 700; font-size: 0.9rem;
-        padding: 8px 16px; border-radius: 20px;
-        cursor: pointer; transition: 0.3s;
-    }
-    .tab:hover { color: #d6d3d1; }
-    .tab.active {
-        background: #eab308; color: #2a2320;
-        box-shadow: 0 2px 10px rgba(234, 179, 8, 0.3);
-    }
-
-    .exit-link {
-        color: #ef4444; text-decoration: none; 
-        font-family: 'Courier Prime', monospace; font-weight: 700;
-        font-size: 0.9rem; border: 1px solid rgba(239, 68, 68, 0.3);
-        padding: 8px 16px; border-radius: 4px;
-        transition: 0.3s;
-    }
-    .exit-link:hover { background: rgba(239, 68, 68, 0.1); }
-
-    /* --- PHOTO GRID --- */
-    .album-container {
-        flex: 1; padding: 60px;
-        display: flex; justify-content: center;
-    }
-
-    .photo-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 60px;
-        width: 100%; max-width: 1600px;
-    }
-
-    /* --- POLAROID STYLE --- */
-    .polaroid {
-        background: #fdfbf7; /* Off-white paper */
-        padding: 15px 15px 50px 15px; /* Big bottom padding for caption */
-        box-shadow: 
-            2px 8px 15px rgba(0,0,0,0.4),
-            0 1px 3px rgba(0,0,0,0.2);
-        border: none;
-        cursor: pointer;
-        transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
-        position: relative;
-        display: flex; flex-direction: column;
-    }
-
-    .polaroid:hover {
-        transform: scale(1.05) rotate(0deg) !important; /* Straighten on hover */
-        box-shadow: 
-            5px 20px 30px rgba(0,0,0,0.5),
-            0 5px 10px rgba(0,0,0,0.3);
-        z-index: 10;
-    }
-
-    .frame {
-        width: 100%; aspect-ratio: 1/1;
-        background: #000;
-        overflow: hidden;
-        position: relative;
-        filter: sepia(20%); /* Slight vintage tint */
-    }
-    
-    .frame img {
-        width: 100%; height: 100%; object-fit: cover;
-        opacity: 0.9;
-    }
-
-    /* Tape Effect */
-    .tape {
-        position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
-        width: 80px; height: 30px;
-        background: rgba(255,255,255,0.4);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        transform: translateX(-50%) rotate(-2deg);
-        pointer-events: none;
-    }
-
-    .caption {
-        margin-top: 15px;
-        display: flex; justify-content: space-between; align-items: flex-end;
-        color: #2a2320;
-    }
-    
-    .handwritten {
-        font-family: 'Permanent Marker', cursive;
-        font-size: 1.3rem;
-        transform: rotate(-2deg);
-    }
-    
-    .stamp {
-        font-family: 'Courier Prime', monospace;
-        font-size: 0.7rem;
-        opacity: 0.6;
-        border: 1px solid #2a2320;
-        padding: 2px 4px;
-        transform: rotate(2deg);
-    }
-
-    /* --- INSPECTION OVERLAY --- */
-    .overlay {
+    .three-canvas {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85);
-        backdrop-filter: blur(8px);
-        z-index: 100;
+        background: radial-gradient(circle at bottom, #111827 0%, #000000 100%);
+        z-index: 0;
+    }
+
+    .studio-ui {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10;
+        display: flex; justify-content: center; align-items: center;
+        font-family: 'Rajdhani', sans-serif;
+        color: #fff;
+    }
+
+    /* --- SHELF --- */
+    .shelf-container { text-align: center; }
+    
+    .shelf-title {
+        font-size: 4rem; letter-spacing: 10px; margin-bottom: 60px;
+        text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+    }
+    .neon-text { font-weight: 900; background: linear-gradient(to right, #fff, #a5f3fc); -webkit-background-clip: text; color: transparent; }
+
+    .cartridge-grid { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; }
+
+    .cartridge-box {
+        width: 160px; height: 220px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        cursor: pointer; position: relative;
+        backdrop-filter: blur(10px);
+        transition: 0.4s;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .cartridge-box:hover {
+        transform: translateY(-20px) scale(1.05);
+        border-color: var(--accent);
+        box-shadow: 0 0 40px var(--accent);
+    }
+
+    .energy-core {
+        width: 60px; height: 60px; border-radius: 50%;
+        background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+        opacity: 0.5; filter: blur(10px);
+        animation: pulse 2s infinite alternate;
+    }
+
+    .holo-label { margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
+    .label-text { font-size: 1.5rem; font-weight: 700; color: #fff; text-shadow: 0 0 10px var(--accent); }
+    .count { font-size: 0.8rem; color: #aaa; letter-spacing: 2px; margin-top: 5px; }
+
+    .exit-btn {
+        display: inline-block; margin-top: 60px;
+        color: #ef4444; text-decoration: none; border: 1px solid rgba(239, 68, 68, 0.4);
+        padding: 10px 30px; border-radius: 30px; font-weight: 700; letter-spacing: 2px;
+        transition: 0.2s; backdrop-filter: blur(5px);
+    }
+    .exit-btn:hover { background: rgba(239, 68, 68, 0.2); box-shadow: 0 0 20px #ef4444; }
+
+    /* --- PROJECTOR MODE --- */
+    .projector-scene {
+        width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+
+    .holo-screen {
+        width: 80vw; max-width: 1200px;
+        aspect-ratio: 16/9;
+        position: relative;
         display: flex; justify-content: center; align-items: center;
     }
 
-    .photo-inspection {
-        display: flex; flex-direction: column; align-items: center; gap: 30px;
+    /* The "Beam" coming from camera direction */
+    .projector-beam {
+        position: absolute; width: 100%; height: 100%;
+        background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 60%);
+        filter: blur(20px); pointer-events: none;
     }
 
-    .large-polaroid {
-        background: #fff;
-        padding: 20px 20px 80px 20px;
-        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-        transform: rotate(1deg);
-        max-width: 600px; width: 90vw;
+    .slide-wrapper {
+        width: 100%; height: 100%;
+        border-radius: 12px; overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 0 50px rgba(0,100,255,0.1);
+        position: relative;
+    }
+    .projected-img {
+        width: 100%; height: 100%; object-fit: contain;
+        /* Sci-fi tint */
+        filter: contrast(1.1) brightness(1.1) saturate(1.2); 
     }
 
-    .large-polaroid img {
-        width: 100%; height: auto;
-        border: 1px solid #eee;
+    .hex-grid {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 0L20 10L10 20L0 10Z' fill='none' stroke='rgba(255,255,255,0.05)' stroke-width='1'/%3E%3C/svg%3E");
+        pointer-events: none;
+    }
+    .scanline {
+        position: absolute; top: 0; left: 0; width: 100%; height: 10px;
+        background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.2), transparent);
+        animation: scan 5s linear infinite; pointer-events: none;
     }
 
-    .large-caption {
-        margin-top: 30px;
-        color: #333;
-        font-family: 'Courier Prime', monospace;
+    .slide-info {
+        position: absolute; bottom: -80px; left: 0;
+        width: 100%; display: flex; justify-content: space-between; align-items: center;
+    }
+    .slide-info h2 {
+        font-size: 2.5rem; margin: 0; letter-spacing: 2px;
+        text-shadow: 0 0 20px rgba(255,255,255,0.5);
+    }
+    .meta { display: flex; gap: 15px; }
+    .pill {
+        background: rgba(255,255,255,0.1); padding: 5px 15px;
+        border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);
+        font-size: 1rem;
     }
 
-    .large-caption h2 {
-        font-family: 'Permanent Marker', cursive;
-        font-size: 2.5rem; margin: 0 0 10px 0;
-        color: #1a1a1a;
+    .warp-flash {
+        width: 100%; height: 100%; background: #fff;
+        mix-blend-mode: overlay; opacity: 0.5;
     }
 
-    .metadata {
-        display: flex; gap: 20px;
-        font-size: 0.9rem; color: #666;
-        border-top: 1px dashed #ccc;
-        padding-top: 10px;
+    /* --- DOCK --- */
+    .glass-dock {
+        position: fixed; bottom: 40px;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.1);
+        padding: 15px 40px; border-radius: 60px;
+        display: flex; gap: 40px; align-items: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     }
 
-    .put-back-btn {
-        background: transparent;
-        border: 2px solid #fff; color: #fff;
-        padding: 12px 30px; font-size: 1.1rem;
-        font-family: 'Courier Prime', monospace; font-weight: 700;
-        cursor: pointer; transition: 0.2s;
-        border-radius: 50px;
+    .dock-btn {
+        background: transparent; border: none; color: #fff;
+        font-size: 1.5rem; cursor: pointer; opacity: 0.7; transition: 0.2s;
     }
-    .put-back-btn:hover { background: #fff; color: #000; }
+    .dock-btn:hover { opacity: 1; transform: scale(1.2); text-shadow: 0 0 10px #fff; }
+    
+    .nav-cluster { display: flex; align-items: center; gap: 20px; }
+    .dots { display: flex; gap: 8px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; transition: 0.3s; }
+    .dot.active { transform: scale(1.5); box-shadow: 0 0 10px currentColor; }
 
-    /* RESPONSIVE */
-    @media (max-width: 768px) {
-        .studio-header { flex-direction: column; gap: 15px; }
-        .film-tabs { width: 100%; overflow-x: auto; justify-content: flex-start; }
-        .album-container { padding: 30px 15px; }
-        .photo-grid { gap: 30px; }
-    }
+    @keyframes pulse { from { opacity: 0.3; transform: scale(0.9); } to { opacity: 0.6; transform: scale(1.1); } }
+    @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
 </style>
